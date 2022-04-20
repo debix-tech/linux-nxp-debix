@@ -197,7 +197,9 @@ struct rpi_touchscreen {
 	//const struct rpi_platform_data *pdata;
 };
 
+int panel_not_i2c = 0;
 struct rpi_touchscreen *panel;
+
 //John_gao add modes 
 const int cc = 33000;
 const int hp = 210;
@@ -366,7 +368,7 @@ static int rpi_touchscreen_get_modes(struct drm_panel *panel,
 {
 	unsigned int i, num = 0;
 	static const u32 bus_format = MEDIA_BUS_FMT_RGB888_1X24;
-
+	if(panel_not_i2c) return 0;
 	for (i = 0; i < ARRAY_SIZE(rpi_touchscreen_modes); i++) {
 		const struct drm_display_mode *m = &rpi_touchscreen_modes[i];
 		struct drm_display_mode *mode;
@@ -428,7 +430,6 @@ static int rpi_touchscreen_probe(struct i2c_client *i2c,
 	i2c_set_clientdata(i2c, ts);
 
 	ts->i2c = i2c;
-	panel = ts;
 
 	ver = rpi_touchscreen_i2c_read(ts, REG_ID);
 	if (ver < 0) {
@@ -444,6 +445,8 @@ static int rpi_touchscreen_probe(struct i2c_client *i2c,
 		dev_err(dev, "Unknown Atmel firmware revision: 0x%02x\n", ver);
 		return -ENODEV;
 	}
+
+	panel = ts;
 
 	/* Turn off at boot, so we can cleanly sequence powering on. */
 	rpi_touchscreen_i2c_write(ts, REG_POWERON, 0);
@@ -542,16 +545,14 @@ static int rpi_touchscreen_dsi_probe(struct mipi_dsi_device *dsi)
 	struct device_node *np = dev->of_node;
 	int i; 
 //John_gao  add dsi to drm
-	for (i = 0 ; i < 10 ; i++){
-		if( panel == NULL){
-			printk("GSL panel is null try : %d \n", i);
-			msleep(1000);
-		}else{
-			break;	
-		}
-	}
-	if (i == 10){
-		return -1;	
+	if( panel == NULL){
+		struct rpi_touchscreen *ts;
+		ts = devm_kzalloc(&dsi->dev, sizeof(*panel), GFP_KERNEL);
+		if (!ts) return -ENOMEM;
+		panel = ts;
+
+		panel_not_i2c = 1;
+		printk("GSL panel is null maybe mipi panel err \n", i);
 	}
 
 	mipi_dsi_set_drvdata(dsi, panel);
