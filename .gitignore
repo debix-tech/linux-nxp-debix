@@ -157,5 +157,7 @@ x509.genkey
 # Documentation toolchain
 sphinx_*/
 !imx/sdma/*.bin
-!extra/*.ko
-!extra/**/*.ko
+#!extra/*.ko
+#!extra/**/*.ko
+extra
+!.extra.tar
