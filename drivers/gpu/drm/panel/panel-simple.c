@@ -2494,6 +2494,75 @@ static const struct panel_desc debix_HC050IG40029_D58= {
         .connector_type = DRM_MODE_CONNECTOR_LVDS,
 };
 
+static const struct display_timing debix_HC101IK25050_D59_mode = {
+
+#if 1
+	.pixelclock = { 42500000, 49500000, 67200000 },
+	.hactive = { 1024, 1024, 1024 },
+	.hfront_porch = { 80, 160, 200 },
+	.hback_porch = { 20, 85, 116 },
+	.hsync_len = { 20, 30, 60 },
+	.vactive = { 600, 600, 600 },
+	.vfront_porch = { 4, 20, 100 },
+	.vback_porch = { 4, 10, 80 },
+	.vsync_len = { 2, 5, 20 },
+	//.flags = DISPLAY_FLAGS_DE_HIGH,
+	.flags = DISPLAY_FLAGS_HSYNC_HIGH | DISPLAY_FLAGS_VSYNC_HIGH ,
+	//.flags = DISPLAY_FLAGS_HSYNC_LOW | DISPLAY_FLAGS_VSYNC_LOW |
+	//	 DISPLAY_FLAGS_DE_HIGH | DISPLAY_FLAGS_PIXDATA_POSEDGE |
+	//	 DISPLAY_FLAGS_SYNC_POSEDGE,
+
+#else
+	.pixelclock = { 42500000, 49500000, 67200000 },
+	.hactive = { 1024, 1024, 1024 },
+	.hfront_porch = { 80, 190, 200 },
+	.hback_porch = { 20, 100, 116 },
+	.hsync_len = { 20, 30, 60 },
+	.vactive = { 600, 600, 600 },
+	.vfront_porch = { 4, 20, 100 },
+	.vback_porch = { 4, 10, 80 },
+	.vsync_len = { 2, 5, 20 },
+	.flags = DISPLAY_FLAGS_DE_HIGH,
+	//.flags = DISPLAY_FLAGS_HSYNC_LOW | DISPLAY_FLAGS_VSYNC_LOW |
+	//	 DISPLAY_FLAGS_DE_HIGH | DISPLAY_FLAGS_PIXDATA_POSEDGE |
+	//	 DISPLAY_FLAGS_SYNC_POSEDGE,
+
+#endif
+};
+static const struct panel_desc debix_HC101IK25050_D59= {
+        .timings = &debix_HC101IK25050_D59_mode,
+        .num_timings = 1,
+        .bpc = 8,
+        .size = {
+                .width = 223,
+                .height = 125,
+        },
+        .delay = {
+                /*
+                 * The panel spec recommends one second delay
+                 * to the below items.  However, it's a bit too
+                 * long in pratice.  Based on tests, it turns
+                 * out 100 milliseconds is fine.
+                 */
+                .prepare = 100,
+                .enable = 100,
+                .unprepare = 100,
+                .disable = 100,
+        },
+        //.bus_format = MEDIA_BUS_FMT_RGB666_1X18,
+        //.bus_format = MEDIA_BUS_FMT_RGB666_1X7X3_SPWG,
+        .bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_SPWG,
+	//.bus_format = MEDIA_BUS_FMT_RGB888_3X8,
+	//.bus_format = MEDIA_BUS_FMT_RBG888_1X24,
+        //.bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_JEIDA,
+        //.bus_flags = DRM_BUS_FLAG_DE_HIGH,
+        //.bus_flags = DISPLAY_FLAGS_HSYNC_LOW | DISPLAY_FLAGS_VSYNC_LOW |
+        //       DISPLAY_FLAGS_DE_HIGH | DISPLAY_FLAGS_PIXDATA_POSEDGE |
+        //       DISPLAY_FLAGS_SYNC_POSEDGE,
+        .connector_type = DRM_MODE_CONNECTOR_LVDS,
+};
+
+
 static const struct display_timing polyhex_HSD272WQVGA_mode = {
 
 	.pixelclock = { 8000000, 12500000, 12000000 },
@@ -2515,7 +2584,7 @@ static const struct display_timing polyhex_HSD272WQVGA_mode = {
 static const struct panel_desc polyhex_HSD272WQVGA = {
 	.timings = &polyhex_HSD272WQVGA_mode,
 	.num_timings = 1,
-	.bpc = 8,
+	.bpc = 6,
 	.size = {
 		.width = 105,
 		.height = 67,
@@ -2533,9 +2602,9 @@ static const struct panel_desc polyhex_HSD272WQVGA = {
 		.disable = 100,
 	},
 	//.bus_format = MEDIA_BUS_FMT_RGB666_1X18,
-	//.bus_format = MEDIA_BUS_FMT_RGB666_1X7X3_SPWG,
+	.bus_format = MEDIA_BUS_FMT_RGB666_1X7X3_SPWG,
 	//.bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_SPWG,
-	.bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_JEIDA,
+	//.bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_JEIDA,
 	.bus_flags = DRM_BUS_FLAG_DE_HIGH,
 	//.bus_flags = DISPLAY_FLAGS_HSYNC_LOW | DISPLAY_FLAGS_VSYNC_LOW |
 	//	 DISPLAY_FLAGS_DE_HIGH | DISPLAY_FLAGS_PIXDATA_POSEDGE |
@@ -4259,6 +4328,10 @@ static const struct of_device_id platform_of_match[] = {
 		//John_gao polyhex 800x480
 		.compatible = "debix,HC050IG40029-D58V.C",
 		.data = &debix_HC050IG40029_D58,
+	}, {
+		//John_gao polyhex 1024x600
+		.compatible = "debix,HC101IK25050-D59V.C",
+		.data = &debix_HC101IK25050_D59,
 
 	}, {
 		.compatible = "jdi,tx26d202vm0bwa",

@@ -97,13 +97,16 @@ dtb-$(CONFIG_ARCH_MXC) += imx8mp-evk.dtb \
 			  imx8mp-debix-core-board.dtb \
 			  imx8mp-debix-core-HC050IG40029-D58V.C.dtb \
 			  imx8mp-debix-core-HC080IY28026-D60V.C.dtb \
+			  imx8mp-debix-core-HC101IK25050-D59V.C.dtb \
 			  imx8mp-debix-io-board.dtb \
 			  imx8mp-debix-io-HC050IG40029-D58V.C.dtb \
 			  imx8mp-debix-io-HC080IY28026-D60V.C.dtb \
 			  imx8mp-debix-io-raspberrypi-touchscreen.dtb \
+			  imx8mp-debix-io-HC101IK25050-D59V.C.dtb \
 			  imx8mp-debix-lora-board.dtb \
 			  imx8mp-debix-lora-HC050IG40029-D58V.C.dtb \
-			  imx8mp-debix-lora-HC080IY28026-D60V.C.dtb 
+			  imx8mp-debix-lora-HC080IY28026-D60V.C.dtb \
+			  imx8mp-debix-lora-HC101IK25050-D59V.C.dtb 
 #dtb-$(CONFIG_ARCH_MXC) += imx8mq-evk.dtb imx8mq-evk-rpmsg.dtb
 #dtb-$(CONFIG_ARCH_MXC) += imx8mq-evk.dtb imx8mq-evk-rpmsg.dtb imx8mq-evk-pcie1-m2.dtb imx8mq-evk-usd-wifi.dtb \
 			  imx8mq-evk-usdhc2-m2.dtb

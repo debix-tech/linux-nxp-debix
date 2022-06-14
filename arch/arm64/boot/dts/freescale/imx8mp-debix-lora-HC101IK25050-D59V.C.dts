@@ -1,0 +1,51 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright 2020 NXP
+ */
+
+#include "imx8mp-debix-lora-board.dts"
+
+/ {
+	lvds0_panel {
+		compatible = "debix,HC101IK25050-D59V.C";
+		pinctrl-names = "default";
+		//pinctrl-0 = <&pinctrl_lvds_en>;
+		//enable-gpios = <&gpio1 11 GPIO_ACTIVE_HIGH>;
+		
+		//backlight = <&lvds_backlight>;
+
+		port {
+			panel_lvds_in: endpoint {
+				remote-endpoint = <&lvds_out>;
+			};
+		};
+	};
+};
+
+///delete-node/ &lvds_bridge;
+
+&ldb {
+	status = "okay";
+
+	lvds-channel@0 {
+		//fsl,data-mapping = "jeida";
+                fsl,data-mappin  = "spwg";
+		//fsl,data-width = <18>;
+		fsl,data-width = <24>;
+		status = "okay";
+
+		/delete-node/ port@1;
+
+		port@1 {
+			reg = <1>;
+
+			lvds_out: endpoint {
+				remote-endpoint = <&panel_lvds_in>;
+			};
+		};
+	};
+};
+
+&ldb_phy {
+	status = "okay"; 
+};
