@@ -2497,7 +2497,7 @@ static const struct panel_desc debix_HC050IG40029_D58= {
 static const struct display_timing debix_HC101IK25050_D59_mode = {
 
 #if 1
-	.pixelclock = { 42500000, 49500000, 67200000 },
+	.pixelclock = { 42500000, 74900000, 67200000 },
 	.hactive = { 1024, 1024, 1024 },
 	.hfront_porch = { 80, 160, 200 },
 	.hback_porch = { 20, 85, 116 },
