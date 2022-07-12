@@ -168,10 +168,10 @@ imx8mp_ldb_encoder_atomic_check(struct drm_encoder *encoder,
 	struct imx8mp_ldb_channel *imx8mp_ldb_ch =
 						enc_to_imx8mp_ldb_ch(encoder);
 	struct ldb_channel *ldb_ch = &imx8mp_ldb_ch->base;
-	struct imx8mp_ldb *imx8mp_ldb = imx8mp_ldb_ch->imx8mp_ldb;
-	struct ldb *ldb = &imx8mp_ldb->base;
+	//struct imx8mp_ldb *imx8mp_ldb = imx8mp_ldb_ch->imx8mp_ldb;
+//	struct ldb *ldb = &imx8mp_ldb->base;
 	struct drm_display_info *di = &conn_state->connector->display_info;
-	struct drm_display_mode *mode = &crtc_state->adjusted_mode;
+//	struct drm_display_mode *mode = &crtc_state->adjusted_mode;
 	u32 bus_format = ldb_ch->bus_format;
 
 	/* Bus format description in DT overrides connector display info. */
@@ -214,8 +214,8 @@ imx8mp_ldb_encoder_mode_valid(struct drm_encoder *encoder,
 	struct imx8mp_ldb_channel *imx8mp_ldb_ch =
 						enc_to_imx8mp_ldb_ch(encoder);
 	struct ldb_channel *ldb_ch = &imx8mp_ldb_ch->base;
-	struct imx8mp_ldb *imx8mp_ldb = imx8mp_ldb_ch->imx8mp_ldb;
-	struct ldb *ldb = &imx8mp_ldb->base;
+	//struct imx8mp_ldb *imx8mp_ldb = imx8mp_ldb_ch->imx8mp_ldb;
+	//struct ldb *ldb = &imx8mp_ldb->base;
 
 	/* it should be okay with a panel */
 	if (ldb_ch->panel)

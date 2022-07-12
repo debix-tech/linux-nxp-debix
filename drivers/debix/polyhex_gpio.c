@@ -347,7 +347,7 @@ static int polyhex_gpio_probe(struct platform_device *pdev)
 	int ret = 0;
 	char gpio_name[20];
 	int i;
-	enum of_gpio_flags gpio_flag;
+	//enum of_gpio_flags gpio_flag;
 
 	gpio_data = devm_kzalloc(dev, sizeof(struct polyhex_gpio_data), GFP_KERNEL);
 

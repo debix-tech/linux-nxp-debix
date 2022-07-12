@@ -417,11 +417,11 @@ static int rpi_touchscreen_probe(struct i2c_client *i2c,
 //	struct device_node *endpoint, *dsi_host_node;
 //	struct mipi_dsi_host *host;
 	int ver;
-	struct mipi_dsi_device_info info = {
+/*	struct mipi_dsi_device_info info = {
 		.type = RPI_DSI_DRIVER_NAME,
 		.channel = 0,
 		.node = NULL,
-	};
+	}; */
 
 	ts = devm_kzalloc(dev, sizeof(*ts), GFP_KERNEL);
 	if (!ts)
@@ -490,9 +490,9 @@ static int rpi_touchscreen_probe(struct i2c_client *i2c,
 #endif
 	return 0;
 
-error:
+//error:
 //	of_node_put(endpoint);
-	return -ENODEV;
+//	return -ENODEV;
 }
 
 static int rpi_touchscreen_remove(struct i2c_client *i2c)
@@ -515,6 +515,7 @@ static int rpi_touchscreen_remove(struct i2c_client *i2c)
 #define COL_FMT_24BPP 0x77
 
 
+#if 0
 static int color_format_from_dsi_format(enum mipi_dsi_pixel_format format)
 {
 	switch (format) {
@@ -529,7 +530,7 @@ static int color_format_from_dsi_format(enum mipi_dsi_pixel_format format)
 		return COL_FMT_24BPP; /* for backward compatibility */
 	}
 };
- 
+#endif 
 
 static const struct of_device_id rpi_touchscreen_of_ids[] = {
 	{ .compatible = "raspberrypi,7inch-touchscreen-panel"},
@@ -541,9 +542,8 @@ static int rpi_touchscreen_dsi_probe(struct mipi_dsi_device *dsi)
 {
 	int ret;
 	struct device *dev = &dsi->dev;
-        const struct of_device_id *of_id = of_match_device(rpi_touchscreen_of_ids, dev);
-	struct device_node *np = dev->of_node;
-	int i; 
+        //const struct of_device_id *of_id = of_match_device(rpi_touchscreen_of_ids, dev);
+//	struct device_node *np = dev->of_node;
 //John_gao  add dsi to drm
 	if( panel == NULL){
 		struct rpi_touchscreen *ts;
@@ -552,7 +552,7 @@ static int rpi_touchscreen_dsi_probe(struct mipi_dsi_device *dsi)
 		panel = ts;
 
 		panel_not_i2c = 1;
-		printk("GSL panel is null maybe mipi panel err \n", i);
+		printk("GSL panel is null maybe mipi panel err \n");
 	}
 
 	mipi_dsi_set_drvdata(dsi, panel);

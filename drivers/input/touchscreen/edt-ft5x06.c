@@ -273,7 +273,7 @@ static irqreturn_t edt_ft5x06_ts_isr(int irq, void *dev_id)
 
 		input_mt_slot(tsdata->input, id);
 		if (input_mt_report_slot_state(tsdata->input, MT_TOOL_FINGER,
-					       type != TOUCH_EVENT_UP))
+					       type != TOUCH_EVENT_UP)){
 						  // printk("GLS x=%d y=%d \n",x , y);
 	//John_gao add for 7inch-touchscreen-panel
 			if(tsdata->max_x && tsdata->max_x){
@@ -286,6 +286,7 @@ static irqreturn_t edt_ft5x06_ts_isr(int irq, void *dev_id)
 
 			touchscreen_report_pos(tsdata->input, &tsdata->prop,
 					       x, y, true);
+		}
 	}
 
 	input_mt_report_pointer_emulation(tsdata->input, true);

@@ -93,6 +93,7 @@ struct es8316_priv {
 };
 //struct snd_soc_component *component_es8316;
 
+#if 0
 static int gpio_open(struct inode *inode, struct file *filp)
 {
     return 0;
@@ -203,7 +204,7 @@ gpio_class_create_fail:
 
 	return -1;
 }
-
+#endif
 /*
  * es8316_reset
  * write value 0xff to reg0x00, the chip will be in reset mode

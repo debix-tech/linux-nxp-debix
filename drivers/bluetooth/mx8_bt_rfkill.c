@@ -41,7 +41,7 @@
 #include <linux/gpio.h>
 #include <linux/slab.h>
 
-static int system_in_suspend;
+//static int system_in_suspend;
 
 struct mxc_bt_rfkill_data {
 	int bt_power_gpio;
@@ -76,8 +76,8 @@ static int mxc_bt_set_block(void *rfkdata, bool blocked)
 	/* Bluetooth stack will reset the bluetooth chip during
 	 * resume, since we keep bluetooth's power during suspend,
 	 * don't let rfkill to actually reset the chip. */
-	if (system_in_suspend)
-		return 0;
+//	if (system_in_suspend)
+//		return 0;
 	pr_info("rfkill: BT RF going to : %s\n", blocked ? "off" : "on");
 	if (!blocked)
 		ret = mxc_bt_rfkill_power_change(rfkdata, 1);
@@ -91,6 +91,7 @@ static const struct rfkill_ops mxc_bt_rfkill_ops = {
 	.set_block = mxc_bt_set_block,
 };
 
+#if 0
 static int mxc_bt_power_event(struct notifier_block *this,
 							unsigned long event, void *dummy)
 {
@@ -112,7 +113,7 @@ static int mxc_bt_power_event(struct notifier_block *this,
 static struct notifier_block mxc_bt_power_notifier = {
 	.notifier_call = mxc_bt_power_event,
 };
-
+#endif
 #if defined(CONFIG_OF)
 static const struct of_device_id mxc_bt_rfkill_dt_ids[] = {
 	{ .compatible = "fsl,mxc_bt_rfkill", },
@@ -255,8 +256,8 @@ error_rfkill:
 	rfkill_destroy(rfk);
 	#endif
 error_request_gpio:
-error_rfk_alloc:
-error_check_func:
+//error_rfk_alloc:
+//error_check_func:
 	kfree(data);
 	return rc;
 }
