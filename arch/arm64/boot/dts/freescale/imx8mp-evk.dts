@@ -225,7 +225,7 @@
 &pwm2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_pwm2>;
-	status = "okay";
+	status = "disable";
 };
 
 &ecspi1 {
@@ -893,7 +893,8 @@
 
 &usb_dwc3_0 {
 	//dr_mode = "device"; //otg
-	dr_mode = "host"; 
+	//dr_mode = "host"; 
+	dr_mode = "otg"; 
 	hnp-disable;
 	srp-disable;
 	adp-disable;

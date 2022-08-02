@@ -729,7 +729,7 @@ static int es8316_set_dai_fmt(struct snd_soc_dai *codec_dai,
 	/* set master/slave audio interface */
 	switch (fmt & SND_SOC_DAIFMT_MASTER_MASK) {
 	case SND_SOC_DAIFMT_CBM_CFM:
-		printk("es8316 %s 0x9:%x", __func__, iface);
+		//printk("es8316 %s 0x9:%x", __func__, iface);
 		iface = 0x88; //John_gao 0x84 -> 0x88
 		break;
 	case SND_SOC_DAIFMT_CBS_CFS:

@@ -1351,6 +1351,7 @@ void drm_connector_list_update(struct drm_connector *connector)
 			if (!drm_mode_equal(pmode, mode))
 				continue;
 
+	printk("GLS_HDMI " DRM_MODE_FMT "\n", DRM_MODE_ARG(mode));
 			found_it = true;
 
 			/*
