@@ -116,6 +116,11 @@ struct imx6_pcie {
 	int			clkreq_gpio;
 	int			dis_gpio;
 	int			reset_gpio;
+/*Debix add for 4G AIO*/
+	int			vdd2v5_en;
+	int			vdd1v1_en;
+	int			vdd3v3_en;
+/*end Debix add for 4G AIO*/
 	bool			gpio_active_high;
 	struct clk		*pcie_bus;
 	struct clk		*pcie_phy;
@@ -1186,13 +1191,17 @@ static void imx6_pcie_deassert_core_reset(struct imx6_pcie *imx6_pcie)
 		break;
 	}
 
+	printk("Debix_4g reset gpio\n");
 	/* Some boards don't have PCIe reset GPIO. */
 	if (gpio_is_valid(imx6_pcie->reset_gpio)) {
+
 		gpio_set_value_cansleep(imx6_pcie->reset_gpio,
 					imx6_pcie->gpio_active_high);
+	printk("Debix_4g reset gpio down\n");
 		msleep(20);
 		gpio_set_value_cansleep(imx6_pcie->reset_gpio,
 					!imx6_pcie->gpio_active_high);
+	printk("Debix_4g reset gpio up\n");
 	}
 
 	switch (imx6_pcie->drvdata->variant) {
@@ -2395,14 +2404,17 @@ static int imx6_pcie_probe(struct platform_device *pdev)
 	struct regmap_config regconfig = imx6_pcie_regconfig;
 	int ret;
 
+	printk("Debix_4g %s 001 \n", __func__);
 	imx6_pcie = devm_kzalloc(dev, sizeof(*imx6_pcie), GFP_KERNEL);
 	if (!imx6_pcie)
 		return -ENOMEM;
 
+	printk("Debix_4g %s 002 \n", __func__);
 	pci = devm_kzalloc(dev, sizeof(*pci), GFP_KERNEL);
 	if (!pci)
 		return -ENOMEM;
 
+	printk("Debix_4g %s 003 \n", __func__);
 	pci->dev = dev;
 	pci->ops = &dw_pcie_ops;
 
@@ -2426,6 +2438,7 @@ static int imx6_pcie_probe(struct platform_device *pdev)
 		}
 	}
 
+	printk("Debix_4g %s 004 \n", __func__);
 	imx6_pcie->phy = devm_phy_get(dev, "pcie-phy");
 	if (IS_ERR(imx6_pcie->phy)) {
 		if (PTR_ERR(imx6_pcie->phy) == -EPROBE_DEFER)
@@ -2434,6 +2447,7 @@ static int imx6_pcie_probe(struct platform_device *pdev)
 		imx6_pcie->phy = NULL;
 	}
 
+	printk("Debix_4g %s 005 \n", __func__);
 	/* Find the HSIO MIX if one is defined, only imx8mp uses it */
 	np = of_parse_phandle(node, "fsl,imx8mp-hsio-mix", 0);
 	if (np) {
@@ -2451,11 +2465,13 @@ static int imx6_pcie_probe(struct platform_device *pdev)
 		}
 	}
 
+	printk("Debix_4g %s 006 \n", __func__);
 	dbi_base = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	pci->dbi_base = devm_ioremap_resource(dev, dbi_base);
 	if (IS_ERR(pci->dbi_base))
 		return PTR_ERR(pci->dbi_base);
 
+	printk("Debix_4g %s 007 \n", __func__);
 	if (of_property_read_u32(node, "hsio-cfg", &imx6_pcie->hsio_cfg))
 		imx6_pcie->hsio_cfg = 0;
 	if (of_property_read_u32(node, "ext_osc", &imx6_pcie->ext_osc) < 0)
@@ -2476,6 +2492,7 @@ static int imx6_pcie_probe(struct platform_device *pdev)
 		return imx6_pcie->clkreq_gpio;
 	}
 
+	printk("Debix_4g %s 008 \n", __func__);
 	imx6_pcie->dis_gpio = of_get_named_gpio(node, "disable-gpio", 0);
 	if (gpio_is_valid(imx6_pcie->dis_gpio)) {
 		ret = devm_gpio_request_one(&pdev->dev, imx6_pcie->dis_gpio,
@@ -2487,6 +2504,7 @@ static int imx6_pcie_probe(struct platform_device *pdev)
 	} else if (imx6_pcie->dis_gpio == -EPROBE_DEFER) {
 		return imx6_pcie->dis_gpio;
 	}
+	printk("Debix_4g %s 009 \n", __func__);
 	imx6_pcie->epdev_on = devm_regulator_get(&pdev->dev, "epdev_on");
 	if (IS_ERR(imx6_pcie->epdev_on))
 		return -EPROBE_DEFER;
@@ -2506,7 +2524,34 @@ static int imx6_pcie_probe(struct platform_device *pdev)
 	} else if (imx6_pcie->reset_gpio == -EPROBE_DEFER) {
 		return imx6_pcie->reset_gpio;
 	}
+	printk("Debix_4g %s 010 \n", __func__);
+/*Debix add for 4G AIO*/
+	imx6_pcie->vdd2v5_en = of_get_named_gpio(node, "vdd2v5_en", 0);
+	if (gpio_is_valid(imx6_pcie->vdd2v5_en)) {
+		printk("Debix_4g vdd2v5\n");
+		ret = devm_gpio_request_one(dev, imx6_pcie->vdd2v5_en,
+					GPIOF_OUT_INIT_HIGH ,
+				"PCIe vdd2v5");
 
+		gpio_set_value_cansleep(imx6_pcie->vdd2v5_en,1);
+	}
+	imx6_pcie->vdd1v1_en = of_get_named_gpio(node, "vdd1v1_en", 0);
+	if (gpio_is_valid(imx6_pcie->vdd1v1_en)) {
+		printk("Debix_4g vdd1v1\n");
+		ret = devm_gpio_request_one(dev, imx6_pcie->vdd1v1_en,
+					GPIOF_OUT_INIT_HIGH ,
+				"PCIe vdd1v1");
+		gpio_set_value_cansleep(imx6_pcie->vdd1v1_en,1);
+	}
+	imx6_pcie->vdd3v3_en = of_get_named_gpio(node, "vdd3v3_en", 0);
+	if (gpio_is_valid(imx6_pcie->vdd3v3_en)) {
+		printk("Debix_4g vdd3v3\n");
+		ret = devm_gpio_request_one(dev, imx6_pcie->vdd3v3_en,
+					GPIOF_OUT_INIT_HIGH ,
+				"PCIe vdd3v3");
+		gpio_set_value_cansleep(imx6_pcie->vdd3v3_en,1);
+	}
+/*end Debix add for 4G AIO*/
 	/* Fetch clocks */
 	imx6_pcie->pcie_phy = devm_clk_get(dev, "pcie_phy");
 	if (IS_ERR(imx6_pcie->pcie_phy))
@@ -2716,6 +2761,7 @@ static int imx6_pcie_probe(struct platform_device *pdev)
 
 	imx6_pcie_assert_core_reset(imx6_pcie);
 	imx6_pcie_init_phy(imx6_pcie);
+	printk("Debix_4g reset gpio in \n");
 	imx6_pcie_deassert_core_reset(imx6_pcie);
 	imx6_setup_phy_mpll(imx6_pcie);
 

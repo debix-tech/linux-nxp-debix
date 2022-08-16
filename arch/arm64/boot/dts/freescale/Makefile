@@ -98,6 +98,7 @@ dtb-$(CONFIG_ARCH_MXC) += imx8mp-evk.dtb \
 			  imx8mp-debix-core-HC050IG40029-D58V.C.dtb \
 			  imx8mp-debix-core-HC080IY28026-D60V.C.dtb \
 			  imx8mp-debix-core-HC101IK25050-D59V.C.dtb \
+			  imx8mp-debix-4g-board.dtb \
 			  imx8mp-debix-io-board.dtb \
 			  imx8mp-debix-io-HC050IG40029-D58V.C.dtb \
 			  imx8mp-debix-io-HC080IY28026-D60V.C.dtb \
