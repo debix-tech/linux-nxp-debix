@@ -30,12 +30,12 @@
 		reset_4g {
 			label = "reset_4g";
 			gpios = <&gpio1 11 GPIO_ACTIVE_HIGH>;
-			default-state = "on";
+			default-state = "off";
 		};
 		disable_4g {
 			label = "disable_4g";
 			gpios = <&gpio1 12 GPIO_ACTIVE_HIGH>;
-			default-state = "on";
+			default-state = "off";
 		};
 
 	};
