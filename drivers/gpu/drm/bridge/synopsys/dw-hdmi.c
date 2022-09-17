@@ -2469,6 +2469,7 @@ static struct edid *dw_hdmi_get_edid(struct dw_hdmi *hdmi,
 				     struct drm_connector *connector)
 {
 	struct edid *edid;
+ 
 printk("GLS_HDMI, %s \n", __func__);
 	if (!hdmi->ddc)
 		return NULL;

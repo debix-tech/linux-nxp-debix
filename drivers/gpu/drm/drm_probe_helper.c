@@ -513,16 +513,23 @@ retry:
 	 * Fallback for when DDC probe failed in drm_get_edid() and thus skipped
 	 * override/firmware EDID.
 	 */
-	if (count == 0 && connector->status == connector_status_connected)
+	if (count == 0 && connector->status == connector_status_connected){
+		printk("GLS_HDMI, count=0 drm_add_override_edid_modes \n");
 		count = drm_add_override_edid_modes(connector);
+	}
 
-	if (count == 0 && connector->status == connector_status_connected)
-		count = drm_add_modes_noedid(connector, 1024, 768);
+	printk("GLS_HDMI, %s count=%d 02 \n", __func__, count);
+	if (count == 0 && connector->status == connector_status_connected){
+		printk("GLS_HDMI, count=0 drm_add_modes_noedid \n");
+		//count = drm_add_modes_noedid(connector, 1024, 768);
+		count = drm_add_modes_noedid(connector, 1280, 720);
+	}
+	printk("GLS_HDMI, %s count=%d 03 \n", __func__, count);
 	count += drm_helper_probe_add_cmdline_mode(connector);
 	if (count == 0)
 		goto prune;
 
-	printk("GLS_HDMI, %s count=%d 02 \n", __func__, count);
+	printk("GLS_HDMI, %s count=%d 04 \n", __func__, count);
 	drm_connector_list_update(connector);
 
 	if (connector->interlace_allowed)

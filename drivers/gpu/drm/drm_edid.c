@@ -2502,7 +2502,7 @@ drm_mode_std(struct drm_connector *connector, struct edid *edid,
 		mode->hsync_end = mode->hsync_end - 1;
 		return mode;
 	}
-
+printk("GLS_HDMI %s def mode 001 \n",__func__);
 	/* check whether it can be found in default mode table */
 	if (drm_monitor_supports_rb(edid)) {
 		mode = drm_mode_find_dmt(dev, hsize, vsize, vrefresh_rate,
@@ -2510,6 +2510,7 @@ drm_mode_std(struct drm_connector *connector, struct edid *edid,
 		if (mode)
 			return mode;
 	}
+printk("GLS_HDMI %s def mode 002 \n",__func__);
 	mode = drm_mode_find_dmt(dev, hsize, vsize, vrefresh_rate, false);
 	if (mode)
 		return mode;
@@ -2954,6 +2955,7 @@ drm_est3_modes(struct drm_connector *connector, struct detailed_timing *timing)
 			if (m >= ARRAY_SIZE(est3_modes))
 				break;
 			if (est[i] & (1 << j)) {
+printk("GLS_HDMI %s def mode 003 \n",__func__);
 				mode = drm_mode_find_dmt(connector->dev,
 							 est3_modes[m].w,
 							 est3_modes[m].h,

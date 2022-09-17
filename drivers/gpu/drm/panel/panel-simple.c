@@ -2435,17 +2435,19 @@ static const struct panel_desc jdi_tx26d202vm0bwa = {
 
 static const struct display_timing debix_HC050IG40029_D58_mode = {
 
-#if 0
-	.pixelclock = { 26400000, 50000000, 50000000 },
-	.hactive = { 800, 800, 800 },
-	.hfront_porch = { 16, 354, 354 },
-	.hback_porch = { 46, 46, 46 },
-	.hsync_len = { 1, 40, 40 },
-	.vactive = { 480, 480, 480 },
-	.vfront_porch = { 7, 147, 147 },
-	.vback_porch = { 23, 23, 23 },
-	.vsync_len = { 1, 20, 20 },
-	.flags = DISPLAY_FLAGS_DE_HIGH,
+#if 1
+	//.pixelclock = { 26400000, 33300000, 46800000 },
+	.pixelclock = { 26400000, 29700000, 46800000 },
+        .hactive = { 800, 800, 800 },
+        .hfront_porch = { 16, 210, 354 },
+        .hback_porch = { 46, 46, 46 },
+        .hsync_len = { 1, 1, 1 },
+        .vactive = { 480, 480, 480 },
+        .vfront_porch = { 7, 22, 147 },
+        .vback_porch = { 23, 23, 23 },
+        .vsync_len = { 1, 1, 1 },
+        .flags = DISPLAY_FLAGS_DE_HIGH,
+
 #else
 	.pixelclock =   { 26400000, 49500000, 50000000 },
 	.hactive =      { 800, 800, 800 },
@@ -2457,6 +2459,7 @@ static const struct display_timing debix_HC050IG40029_D58_mode = {
 	.vback_porch =  { 23, 23, 23 },
 	.vsync_len =    { 1, 20, 20 },
 
+//	.flags = DISPLAY_FLAGS_HSYNC_HIGH | DISPLAY_FLAGS_VSYNC_HIGH ,
 	.flags = DISPLAY_FLAGS_HSYNC_LOW | DISPLAY_FLAGS_VSYNC_LOW |
 		 DISPLAY_FLAGS_DE_HIGH | DISPLAY_FLAGS_PIXDATA_POSEDGE |
 		 DISPLAY_FLAGS_SYNC_POSEDGE,
@@ -2496,7 +2499,7 @@ static const struct panel_desc debix_HC050IG40029_D58= {
 
 static const struct display_timing debix_HC101IK25050_D59_mode = {
 
-#if 1
+#if 0
 	.pixelclock = { 42500000, 74900000, 67200000 },
 	.hactive = { 1024, 1024, 1024 },
 	.hfront_porch = { 80, 160, 200 },
@@ -2515,13 +2518,13 @@ static const struct display_timing debix_HC101IK25050_D59_mode = {
 #else
 	.pixelclock = { 42500000, 49500000, 67200000 },
 	.hactive = { 1024, 1024, 1024 },
-	.hfront_porch = { 80, 190, 200 },
-	.hback_porch = { 20, 100, 116 },
-	.hsync_len = { 20, 30, 60 },
-	.vactive = { 600, 600, 600 },
+	.hfront_porch = { 80, 140, 200 },
+	.hback_porch =  { 20, 100, 116 },
+	.hsync_len =    { 20, 30, 60 },
+	.vactive =    { 600, 600, 600 },
 	.vfront_porch = { 4, 20, 100 },
-	.vback_porch = { 4, 10, 80 },
-	.vsync_len = { 2, 5, 20 },
+	.vback_porch =  { 4, 10, 80 },
+	.vsync_len =    { 2, 5 , 20 },
 	.flags = DISPLAY_FLAGS_DE_HIGH,
 	//.flags = DISPLAY_FLAGS_HSYNC_LOW | DISPLAY_FLAGS_VSYNC_LOW |
 	//	 DISPLAY_FLAGS_DE_HIGH | DISPLAY_FLAGS_PIXDATA_POSEDGE |
@@ -2551,10 +2554,10 @@ static const struct panel_desc debix_HC101IK25050_D59= {
         },
         //.bus_format = MEDIA_BUS_FMT_RGB666_1X18,
         //.bus_format = MEDIA_BUS_FMT_RGB666_1X7X3_SPWG,
-        .bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_SPWG,
+        //.bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_SPWG,
 	//.bus_format = MEDIA_BUS_FMT_RGB888_3X8,
 	//.bus_format = MEDIA_BUS_FMT_RBG888_1X24,
-        //.bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_JEIDA,
+        .bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_JEIDA,
         //.bus_flags = DRM_BUS_FLAG_DE_HIGH,
         //.bus_flags = DISPLAY_FLAGS_HSYNC_LOW | DISPLAY_FLAGS_VSYNC_LOW |
         //       DISPLAY_FLAGS_DE_HIGH | DISPLAY_FLAGS_PIXDATA_POSEDGE |
