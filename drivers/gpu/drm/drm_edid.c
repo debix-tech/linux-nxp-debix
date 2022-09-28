@@ -722,14 +722,31 @@ static const struct drm_display_mode edid_cea_modes_1[] = {
 		   DRM_MODE_FLAG_NHSYNC | DRM_MODE_FLAG_NVSYNC),
 	  .picture_aspect_ratio = HDMI_PICTURE_ASPECT_4_3, },
 	/* 2 - 720x480@60Hz 4:3 */
-	{ DRM_MODE("720x480", DRM_MODE_TYPE_DRIVER, 27000, 720, 736,
-		   798, 858, 0, 480, 489, 495, 525, 0,
-		   DRM_MODE_FLAG_NHSYNC | DRM_MODE_FLAG_NVSYNC),
-	  .picture_aspect_ratio = HDMI_PICTURE_ASPECT_4_3, },
+//	{ DRM_MODE("720x480", DRM_MODE_TYPE_DRIVER, 27000, 720, 736,
+//		   798, 858, 0, 480, 489, 495, 525, 0,
+//		   DRM_MODE_FLAG_NHSYNC | DRM_MODE_FLAG_NVSYNC),
+//
+//	{ DRM_MODE("1280x800", DRM_MODE_TYPE_DRIVER, 72000, 1280, 1328,
+//		   1360, 1449, 0, 800, 803, 809, 829, 0,
+//		   DRM_MODE_FLAG_NHSYNC | DRM_MODE_FLAG_PVSYNC),
+
+	{ DRM_MODE("1280x800", DRM_MODE_TYPE_DRIVER, 106500, 1280, 1360,
+		   1488, 1696, 0, 800, 803, 809, 838, 0,
+	//{ DRM_MODE("1280x800", DRM_MODE_TYPE_DRIVER, 71000, 1280, 1328,
+	//	   1360, 1440, 0, 800, 803, 809, 823, 0,
+		   DRM_MODE_FLAG_NHSYNC | DRM_MODE_FLAG_PVSYNC),
+	  .picture_aspect_ratio = HDMI_PICTURE_ASPECT_16_9, },
 	/* 3 - 720x480@60Hz 16:9 */
 	{ DRM_MODE("720x480", DRM_MODE_TYPE_DRIVER, 27000, 720, 736,
 		   798, 858, 0, 480, 489, 495, 525, 0,
 		   DRM_MODE_FLAG_NHSYNC | DRM_MODE_FLAG_NVSYNC),
+	
+//	{ DRM_MODE("1280x800", DRM_MODE_TYPE_DRIVER, 74250, 1280, 1352,
+//		   1480, 1490, 0, 800, 803, 809, 830, 0,
+
+	//{ DRM_MODE("1280x800", DRM_MODE_TYPE_DRIVER, 83500, 1280, 1352,
+	//	   1480, 1680, 0, 800, 803, 809, 831, 0,
+		 //  DRM_MODE_FLAG_NHSYNC | DRM_MODE_FLAG_PVSYNC),
 	  .picture_aspect_ratio = HDMI_PICTURE_ASPECT_16_9, },
 	/* 4 - 1280x720@60Hz 16:9 */
 	{ DRM_MODE("1280x720", DRM_MODE_TYPE_DRIVER, 74250, 1280, 1390,
@@ -1571,6 +1588,7 @@ int drm_edid_header_is_valid(const u8 *raw_edid)
 {
 	int i, score = 0;
 
+//printk("GLS_HDMI drm_edid_header_is_valid\n");
 	for (i = 0; i < sizeof(edid_header); i++)
 		if (raw_edid[i] == edid_header[i])
 			score++;
@@ -1591,6 +1609,7 @@ static int drm_edid_block_checksum(const u8 *raw_edid)
 	int i;
 	u8 csum = 0, crc = 0;
 
+//printk("GLS_HDMI drm_edid_block_checksum\n");
 	for (i = 0; i < EDID_LENGTH - 1; i++)
 		csum += raw_edid[i];
 
@@ -1601,6 +1620,7 @@ static int drm_edid_block_checksum(const u8 *raw_edid)
 
 static bool drm_edid_block_checksum_diff(const u8 *raw_edid, u8 real_checksum)
 {
+//printk("GLS_HDMI drm_edid_block_checksum_diff\n");
 	if (raw_edid[EDID_LENGTH - 1] != real_checksum)
 		return true;
 	else
@@ -1609,6 +1629,7 @@ static bool drm_edid_block_checksum_diff(const u8 *raw_edid, u8 real_checksum)
 
 static bool drm_edid_is_zero(const u8 *in_edid, int length)
 {
+//printk("GLS_HDMI drm_edid_is_zero\n");
 	if (memchr_inv(in_edid, 0, length))
 		return false;
 
@@ -1628,6 +1649,7 @@ bool drm_edid_are_equal(const struct edid *edid1, const struct edid *edid2)
 	bool edid1_present = edid1 != NULL;
 	bool edid2_present = edid2 != NULL;
 
+//printk("GLS_HDMI drm_edid_are_equal\n");
 	if (edid1_present != edid2_present)
 		return false;
 
@@ -1664,6 +1686,7 @@ bool drm_edid_block_valid(u8 *raw_edid, int block, bool print_bad_edid,
 	u8 csum;
 	struct edid *edid = (struct edid *)raw_edid;
 
+//printk("GLS_HDMI drm_edid_block_valid\n");
 	if (WARN_ON(!raw_edid))
 		return false;
 
@@ -1756,6 +1779,7 @@ bool drm_edid_is_valid(struct edid *edid)
 	int i;
 	u8 *raw = (u8 *)edid;
 
+//printk("GLS_HDMI SSS drm_edid_is_valid\n");
 	if (!edid)
 		return false;
 
@@ -1788,6 +1812,7 @@ drm_do_probe_ddc_edid(void *data, u8 *buf, unsigned int block, size_t len)
 	unsigned char xfers = segment ? 3 : 2;
 	int ret, retries = 5;
 
+//printk("GLS_HDMI SSS drm_do_probe_ddc_edid\n");
 	/*
 	 * The core I2C driver will automatically retry the transfer if the
 	 * adapter reports EAGAIN. However, we find that bit-banging transfers
@@ -1837,6 +1862,7 @@ static void connector_bad_edid(struct drm_connector *connector,
 	int i;
 	u8 num_of_ext = edid[0x7e];
 
+//printk("GLS_HDMI SSS connector_bad_edid\n");
 	/* Calculate real checksum for the last edid extension block data */
 	connector->real_edid_checksum =
 		drm_edid_block_checksum(edid + num_of_ext * EDID_LENGTH);
@@ -1867,6 +1893,7 @@ static struct edid *drm_get_override_edid(struct drm_connector *connector)
 {
 	struct edid *override = NULL;
 
+//printk("GLS_HDMI SSS drm_get_override_edid\n");
 	if (connector->override_edid)
 		override = drm_edid_duplicate(connector->edid_blob_ptr->data);
 
@@ -1892,6 +1919,7 @@ int drm_add_override_edid_modes(struct drm_connector *connector)
 	struct edid *override;
 	int num_modes = 0;
 
+//printk("GLS_HDMI SSS drm_add_override_edid_modes\n");
 	override = drm_get_override_edid(connector);
 	if (override) {
 		drm_connector_update_edid_property(connector, override);
@@ -1935,6 +1963,7 @@ struct edid *drm_do_get_edid(struct drm_connector *connector,
 	u8 *edid, *new;
 	struct edid *override;
 
+//printk("GLS_HDMI SSS drm_do_get_edid\n");
 	override = drm_get_override_edid(connector);
 	if (override)
 		return override;
@@ -2030,6 +2059,7 @@ drm_probe_ddc(struct i2c_adapter *adapter)
 {
 	unsigned char out;
 
+//printk("GLS_HDMI SSS drm_probe_ddc\n");
 	return (drm_do_probe_ddc_edid(adapter, &out, 0, 1) == 0);
 }
 EXPORT_SYMBOL(drm_probe_ddc);
@@ -2049,6 +2079,7 @@ struct edid *drm_get_edid(struct drm_connector *connector,
 {
 	struct edid *edid;
 
+//printk("GLS_HDMI SSS drm_get_edid\n");
 	if (connector->force == DRM_FORCE_OFF)
 		return NULL;
 
@@ -2078,6 +2109,7 @@ struct edid *drm_get_edid_switcheroo(struct drm_connector *connector,
 	struct pci_dev *pdev = connector->dev->pdev;
 	struct edid *edid;
 
+//printk("GLS_HDMI SSS drm_get_edid\n");
 	vga_switcheroo_lock_ddc(pdev);
 	edid = drm_get_edid(connector, adapter);
 	vga_switcheroo_unlock_ddc(pdev);
@@ -2094,6 +2126,7 @@ EXPORT_SYMBOL(drm_get_edid_switcheroo);
  */
 struct edid *drm_edid_duplicate(const struct edid *edid)
 {
+//printk("GLS_HDMI SSS %s\n",__func__);
 	return kmemdup(edid, (edid->extensions + 1) * EDID_LENGTH, GFP_KERNEL);
 }
 EXPORT_SYMBOL(drm_edid_duplicate);
@@ -2130,6 +2163,7 @@ static u32 edid_get_quirks(const struct edid *edid)
 	const struct edid_quirk *quirk;
 	int i;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	for (i = 0; i < ARRAY_SIZE(edid_quirk_list); i++) {
 		quirk = &edid_quirk_list[i];
 
@@ -2159,6 +2193,7 @@ static void edid_fixup_preferred(struct drm_connector *connector,
 	int target_refresh = 0;
 	int cur_vrefresh, preferred_vrefresh;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	if (list_empty(&connector->probed_modes))
 		return;
 
@@ -2220,6 +2255,7 @@ struct drm_display_mode *drm_mode_find_dmt(struct drm_device *dev,
 {
 	int i;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	for (i = 0; i < ARRAY_SIZE(drm_dmt_modes); i++) {
 		const struct drm_display_mode *ptr = &drm_dmt_modes[i];
 
@@ -2241,12 +2277,14 @@ EXPORT_SYMBOL(drm_mode_find_dmt);
 
 static bool is_display_descriptor(const u8 d[18], u8 tag)
 {
+//printk("GLS_HDMI SSS %s\n",__func__);
 	return d[0] == 0x00 && d[1] == 0x00 &&
 		d[2] == 0x00 && d[3] == tag;
 }
 
 static bool is_detailed_timing_descriptor(const u8 d[18])
 {
+//printk("GLS_HDMI SSS %s\n",__func__);
 	return d[0] != 0x00 || d[1] != 0x00;
 }
 
@@ -2259,10 +2297,12 @@ cea_for_each_detailed_block(u8 *ext, detailed_cb *cb, void *closure)
 	u8 d = ext[0x02];
 	u8 *det_base = ext + d;
 
+//printk("GLS_HDMI SSS %s d=0x%02x\n",__func__,d);
 	if (d < 4 || d > 127)
 		return;
 
 	n = (127 - d) / 18;
+//printk("GLS_HDMI SSS %s d=0x%02x n=%d\n",__func__,d,n);
 	for (i = 0; i < n; i++)
 		cb((struct detailed_timing *)(det_base + 18 * i), closure);
 }
@@ -2273,6 +2313,7 @@ vtb_for_each_detailed_block(u8 *ext, detailed_cb *cb, void *closure)
 	unsigned int i, n = min((int)ext[0x02], 6);
 	u8 *det_base = ext + 5;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	if (ext[0x01] != 1)
 		return; /* unknown version */
 
@@ -2286,6 +2327,7 @@ drm_for_each_detailed_block(u8 *raw_edid, detailed_cb *cb, void *closure)
 	int i;
 	struct edid *edid = (struct edid *)raw_edid;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	if (edid == NULL)
 		return;
 
@@ -2313,6 +2355,7 @@ is_rb(struct detailed_timing *t, void *data)
 {
 	u8 *r = (u8 *)t;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	if (!is_display_descriptor(r, EDID_DETAIL_MONITOR_RANGE))
 		return;
 
@@ -2324,6 +2367,7 @@ is_rb(struct detailed_timing *t, void *data)
 static bool
 drm_monitor_supports_rb(struct edid *edid)
 {
+//printk("GLS_HDMI SSS %s\n",__func__);
 	if (edid->revision >= 4) {
 		bool ret = false;
 
@@ -2339,6 +2383,7 @@ find_gtf2(struct detailed_timing *t, void *data)
 {
 	u8 *r = (u8 *)t;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	if (!is_display_descriptor(r, EDID_DETAIL_MONITOR_RANGE))
 		return;
 
@@ -2352,6 +2397,7 @@ drm_gtf2_hbreak(struct edid *edid)
 {
 	u8 *r = NULL;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	drm_for_each_detailed_block((u8 *)edid, find_gtf2, &r);
 	return r ? (r[12] * 2) : 0;
 }
@@ -2361,6 +2407,7 @@ drm_gtf2_2c(struct edid *edid)
 {
 	u8 *r = NULL;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	drm_for_each_detailed_block((u8 *)edid, find_gtf2, &r);
 	return r ? r[13] : 0;
 }
@@ -2370,6 +2417,7 @@ drm_gtf2_m(struct edid *edid)
 {
 	u8 *r = NULL;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	drm_for_each_detailed_block((u8 *)edid, find_gtf2, &r);
 	return r ? (r[15] << 8) + r[14] : 0;
 }
@@ -2379,6 +2427,7 @@ drm_gtf2_k(struct edid *edid)
 {
 	u8 *r = NULL;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	drm_for_each_detailed_block((u8 *)edid, find_gtf2, &r);
 	return r ? r[16] : 0;
 }
@@ -2388,6 +2437,7 @@ drm_gtf2_2j(struct edid *edid)
 {
 	u8 *r = NULL;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	drm_for_each_detailed_block((u8 *)edid, find_gtf2, &r);
 	return r ? r[17] : 0;
 }
@@ -2398,6 +2448,7 @@ drm_gtf2_2j(struct edid *edid)
  */
 static int standard_timing_level(struct edid *edid)
 {
+//printk("GLS_HDMI SSS %s\n",__func__);
 	if (edid->revision >= 2) {
 		if (edid->revision >= 4 && (edid->features & DRM_EDID_FEATURE_DEFAULT_GTF))
 			return LEVEL_CVT;
@@ -2416,6 +2467,7 @@ static int standard_timing_level(struct edid *edid)
 static int
 bad_std_timing(u8 a, u8 b)
 {
+//printk("GLS_HDMI SSS %s\n",__func__);
 	return (a == 0x00 && b == 0x00) ||
 	       (a == 0x01 && b == 0x01) ||
 	       (a == 0x20 && b == 0x20);
@@ -2423,12 +2475,33 @@ bad_std_timing(u8 a, u8 b)
 
 static int drm_mode_hsync(const struct drm_display_mode *mode)
 {
+//printk("GLS_HDMI SSS %s\n",__func__);
 	if (mode->htotal <= 0)
 		return 0;
 
 	return DIV_ROUND_CLOSEST(mode->clock, mode->htotal);
 }
 
+static int isRTK27(struct edid *edid){
+	u8 *p = (u8 *) edid;
+	printk("GLS_HDMI p8=0x%02x", p[8]);	
+	printk("GLS_HDMI p9=0x%02x", p[9]);	
+	printk("GLS_HDMI p10=0x%02x", p[10]);	
+	printk("GLS_HDMI p11=0x%02x", p[11]);	
+	printk("GLS_HDMI p20=0x%02x", p[20]);	
+	printk("GLS_HDMI p21=0x%02x", p[21]);	
+	printk("GLS_HDMI p22=0x%02x", p[22]);	
+	if(p[8] == 0x4a &&
+	   p[9] == 0x8b &&
+	   p[10]== 0x3b &&
+	   p[11]== 0x2a &&
+	   p[20]== 0x80 &&
+	   p[21]== 0x3c &&
+	   p[22]== 0x22){
+		return 1;	
+	}
+	return 0;
+}
 /**
  * drm_mode_std - convert standard mode info (width, height, refresh) into mode
  * @connector: connector of for the EDID block
@@ -2452,6 +2525,7 @@ drm_mode_std(struct drm_connector *connector, struct edid *edid,
 		>> EDID_TIMING_VFREQ_SHIFT;
 	int timing_level = standard_timing_level(edid);
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	if (bad_std_timing(t->hsize, t->vfreq_aspect))
 		return NULL;
 
@@ -2480,6 +2554,7 @@ drm_mode_std(struct drm_connector *connector, struct edid *edid,
 		vsize = 768;
 	}
 
+printk("GLS_HDMI %s def mode 000 hsize(%d) vsize(%d) \n",__func__, hsize, vsize);
 	/*
 	 * If this connector already has a mode for this size and refresh
 	 * rate (because it came from detailed or CVT info), use that
@@ -2502,7 +2577,21 @@ drm_mode_std(struct drm_connector *connector, struct edid *edid,
 		mode->hsync_end = mode->hsync_end - 1;
 		return mode;
 	}
-printk("GLS_HDMI %s def mode 001 \n",__func__);
+
+	if(isRTK27(edid)){
+		if(hsize == 1920 && vsize == 1080 ){
+			return NULL;
+		}else if(hsize == 1600 && vsize == 1200 ){
+			return NULL;
+		}else if(hsize == 1280 && vsize == 1024 ){
+			return NULL;
+		}else if(hsize == 1152 && vsize == 864 ){
+			hsize = 1280;
+			vsize = 800;
+		} 
+	}
+	
+printk("GLS_HDMI %s def mode 001 hsize(%d) vsize(%d) \n",__func__, hsize, vsize);
 	/* check whether it can be found in default mode table */
 	if (drm_monitor_supports_rb(edid)) {
 		mode = drm_mode_find_dmt(dev, hsize, vsize, vrefresh_rate,
@@ -2510,11 +2599,12 @@ printk("GLS_HDMI %s def mode 001 \n",__func__);
 		if (mode)
 			return mode;
 	}
-printk("GLS_HDMI %s def mode 002 \n",__func__);
+printk("GLS_HDMI %s def mode 002 hsize(%d) vsize(%d) \n",__func__, hsize, vsize);
 	mode = drm_mode_find_dmt(dev, hsize, vsize, vrefresh_rate, false);
 	if (mode)
 		return mode;
 
+printk("GLS_HDMI %s def mode 103 hsize(%d) vsize(%d) \n",__func__, hsize, vsize);
 	/* okay, generate it */
 	switch (timing_level) {
 	case LEVEL_DMT:
@@ -2574,6 +2664,7 @@ drm_mode_do_interlace_quirk(struct drm_display_mode *mode,
 		{ 2880,  576 },
 	};
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	if (!(pt->misc & DRM_EDID_PT_INTERLACED))
 		return;
 
@@ -2617,6 +2708,7 @@ static struct drm_display_mode *drm_mode_detailed(struct drm_device *dev,
 	unsigned vsync_offset = (pt->hsync_vsync_offset_pulse_width_hi & 0xc) << 2 | pt->vsync_offset_pulse_width_lo >> 4;
 	unsigned vsync_pulse_width = (pt->hsync_vsync_offset_pulse_width_hi & 0x3) << 4 | (pt->vsync_offset_pulse_width_lo & 0xf);
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	/* ignore tiny modes */
 	if (hactive < 64 || vactive < 64)
 		return NULL;
@@ -2706,6 +2798,7 @@ mode_in_hsync_range(const struct drm_display_mode *mode,
 {
 	int hsync, hmin, hmax;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	hmin = t[7];
 	if (edid->revision >= 4)
 	    hmin += ((t[4] & 0x04) ? 255 : 0);
@@ -2723,6 +2816,7 @@ mode_in_vsync_range(const struct drm_display_mode *mode,
 {
 	int vsync, vmin, vmax;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	vmin = t[5];
 	if (edid->revision >= 4)
 	    vmin += ((t[4] & 0x01) ? 255 : 0);
@@ -2737,6 +2831,7 @@ mode_in_vsync_range(const struct drm_display_mode *mode,
 static u32
 range_pixel_clock(struct edid *edid, u8 *t)
 {
+//printk("GLS_HDMI SSS %s\n",__func__);
 	/* unspecified */
 	if (t[9] == 0 || t[9] == 255)
 		return 0;
@@ -2756,6 +2851,7 @@ mode_in_range(const struct drm_display_mode *mode, struct edid *edid,
 	u32 max_clock;
 	u8 *t = (u8 *)timing;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	if (!mode_in_hsync_range(mode, edid, t))
 		return false;
 
@@ -2783,6 +2879,7 @@ static bool valid_inferred_mode(const struct drm_connector *connector,
 	const struct drm_display_mode *m;
 	bool ok = false;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	list_for_each_entry(m, &connector->probed_modes, head) {
 		if (mode->hdisplay == m->hdisplay &&
 		    mode->vdisplay == m->vdisplay &&
@@ -2803,6 +2900,7 @@ drm_dmt_modes_for_range(struct drm_connector *connector, struct edid *edid,
 	struct drm_display_mode *newmode;
 	struct drm_device *dev = connector->dev;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	for (i = 0; i < ARRAY_SIZE(drm_dmt_modes); i++) {
 		if (mode_in_range(drm_dmt_modes + i, edid, timing) &&
 		    valid_inferred_mode(connector, drm_dmt_modes + i)) {
@@ -2838,6 +2936,7 @@ drm_gtf_modes_for_range(struct drm_connector *connector, struct edid *edid,
 	struct drm_display_mode *newmode;
 	struct drm_device *dev = connector->dev;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	for (i = 0; i < ARRAY_SIZE(extra_modes); i++) {
 		const struct minimode *m = &extra_modes[i];
 
@@ -2868,6 +2967,7 @@ drm_cvt_modes_for_range(struct drm_connector *connector, struct edid *edid,
 	struct drm_device *dev = connector->dev;
 	bool rb = drm_monitor_supports_rb(edid);
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	for (i = 0; i < ARRAY_SIZE(extra_modes); i++) {
 		const struct minimode *m = &extra_modes[i];
 
@@ -2896,6 +2996,7 @@ do_inferred_modes(struct detailed_timing *timing, void *c)
 	struct detailed_non_pixel *data = &timing->data.other_data;
 	struct detailed_data_monitor_range *range = &data->data.range;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	if (!is_display_descriptor((const u8 *)timing, EDID_DETAIL_MONITOR_RANGE))
 		return;
 
@@ -2935,6 +3036,7 @@ add_inferred_modes(struct drm_connector *connector, struct edid *edid)
 		.edid = edid,
 	};
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	if (version_greater(edid, 1, 0))
 		drm_for_each_detailed_block((u8 *)edid, do_inferred_modes,
 					    &closure);
@@ -2949,13 +3051,14 @@ drm_est3_modes(struct drm_connector *connector, struct detailed_timing *timing)
 	struct drm_display_mode *mode;
 	u8 *est = ((u8 *)timing) + 6;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	for (i = 0; i < 6; i++) {
 		for (j = 7; j >= 0; j--) {
 			m = (i * 8) + (7 - j);
 			if (m >= ARRAY_SIZE(est3_modes))
 				break;
 			if (est[i] & (1 << j)) {
-printk("GLS_HDMI %s def mode 003 \n",__func__);
+//printk("GLS_HDMI %s def mode 003 \n",__func__);
 				mode = drm_mode_find_dmt(connector->dev,
 							 est3_modes[m].w,
 							 est3_modes[m].h,
@@ -2977,6 +3080,7 @@ do_established_modes(struct detailed_timing *timing, void *c)
 {
 	struct detailed_mode_closure *closure = c;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	if (!is_display_descriptor((const u8 *)timing, EDID_DETAIL_EST_TIMINGS))
 		return;
 
@@ -3004,6 +3108,7 @@ add_established_modes(struct drm_connector *connector, struct edid *edid)
 		.edid = edid,
 	};
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	for (i = 0; i <= EDID_EST_TIMINGS; i++) {
 		if (est_bits & (1<<i)) {
 			struct drm_display_mode *newmode;
@@ -3032,6 +3137,7 @@ do_standard_modes(struct detailed_timing *timing, void *c)
 	struct edid *edid = closure->edid;
 	int i;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	if (!is_display_descriptor((const u8 *)timing, EDID_DETAIL_STD_MODES))
 		return;
 
@@ -3064,6 +3170,7 @@ add_standard_modes(struct drm_connector *connector, struct edid *edid)
 		.edid = edid,
 	};
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	for (i = 0; i < EDID_STD_TIMINGS; i++) {
 		struct drm_display_mode *newmode;
 
@@ -3094,6 +3201,7 @@ static int drm_cvt_modes(struct drm_connector *connector,
 	const int rates[] = { 60, 85, 75, 60, 50 };
 	const u8 empty[3] = { 0, 0, 0 };
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	for (i = 0; i < 4; i++) {
 		int width, height;
 
@@ -3141,6 +3249,7 @@ do_cvt_mode(struct detailed_timing *timing, void *c)
 {
 	struct detailed_mode_closure *closure = c;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	if (!is_display_descriptor((const u8 *)timing, EDID_DETAIL_CVT_3BYTE))
 		return;
 
@@ -3155,6 +3264,7 @@ add_cvt_modes(struct drm_connector *connector, struct edid *edid)
 		.edid = edid,
 	};
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	if (version_greater(edid, 1, 2))
 		drm_for_each_detailed_block((u8 *)edid, do_cvt_mode, &closure);
 
@@ -3171,6 +3281,7 @@ do_detailed_mode(struct detailed_timing *timing, void *c)
 	struct detailed_mode_closure *closure = c;
 	struct drm_display_mode *newmode;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	if (!is_detailed_timing_descriptor((const u8 *)timing))
 		return;
 
@@ -3212,6 +3323,7 @@ add_detailed_modes(struct drm_connector *connector, struct edid *edid,
 		.quirks = quirks,
 	};
 
+//printk("GLS_HDMI TTT %s\n",__func__);
 	if (closure.preferred && !version_greater(edid, 1, 3))
 		closure.preferred =
 		    (edid->features & DRM_EDID_FEATURE_PREFERRED_TIMING);
@@ -3244,6 +3356,7 @@ static u8 *drm_find_edid_extension(const struct edid *edid,
 	u8 *edid_ext = NULL;
 	int i;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	/* No EDID or EDID extensions */
 	if (edid == NULL || edid->extensions == 0)
 		return NULL;
@@ -3272,6 +3385,7 @@ static u8 *drm_find_displayid_extension(const struct edid *edid,
 	struct displayid_hdr *base;
 	int ret;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	if (!displayid)
 		return NULL;
 
@@ -3297,6 +3411,7 @@ static u8 *drm_find_cea_extension(const struct edid *edid)
 	u8 *displayid;
 	int ext_index;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	/* Look for a top level CEA extension block */
 	/* FIXME: make callers iterate through multiple CEA ext blocks? */
 	ext_index = 0;
@@ -3412,6 +3527,7 @@ static u8 drm_match_cea_mode_clock_tolerance(const struct drm_display_mode *to_m
 	unsigned int match_flags = DRM_MODE_MATCH_TIMINGS | DRM_MODE_MATCH_FLAGS;
 	u8 vic;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	if (!to_match->clock)
 		return 0;
 
@@ -3451,9 +3567,10 @@ u8 drm_match_cea_mode(const struct drm_display_mode *to_match)
 	unsigned int match_flags = DRM_MODE_MATCH_TIMINGS | DRM_MODE_MATCH_FLAGS;
 	u8 vic;
 
+
 	if (!to_match->clock)
 		return 0;
-
+//printk("GLS_HDMI SSS %s   (%dx%d)\n",__func__,to_match->hdisplay,to_match->vdisplay);
 	if (to_match->picture_aspect_ratio)
 		match_flags |= DRM_MODE_MATCH_ASPECT_RATIO;
 
@@ -3496,6 +3613,7 @@ static enum hdmi_picture_aspect drm_get_cea_aspect_ratio(const u8 video_code)
 
 static enum hdmi_picture_aspect drm_get_hdmi_aspect_ratio(const u8 video_code)
 {
+//printk("GLS_HDMI SSS %s\n",__func__);
 	return edid_4k_modes[video_code].picture_aspect_ratio;
 }
 
@@ -3521,6 +3639,7 @@ static u8 drm_match_hdmi_mode_clock_tolerance(const struct drm_display_mode *to_
 	if (to_match->picture_aspect_ratio)
 		match_flags |= DRM_MODE_MATCH_ASPECT_RATIO;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	for (vic = 1; vic < ARRAY_SIZE(edid_4k_modes); vic++) {
 		const struct drm_display_mode *hdmi_mode = &edid_4k_modes[vic];
 		unsigned int clock1, clock2;
@@ -3559,6 +3678,7 @@ static u8 drm_match_hdmi_mode(const struct drm_display_mode *to_match)
 	if (to_match->picture_aspect_ratio)
 		match_flags |= DRM_MODE_MATCH_ASPECT_RATIO;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	for (vic = 1; vic < ARRAY_SIZE(edid_4k_modes); vic++) {
 		const struct drm_display_mode *hdmi_mode = &edid_4k_modes[vic];
 		unsigned int clock1, clock2;
@@ -3577,6 +3697,7 @@ static u8 drm_match_hdmi_mode(const struct drm_display_mode *to_match)
 
 static bool drm_valid_hdmi_vic(u8 vic)
 {
+//printk("GLS_HDMI SSS %s\n",__func__);
 	return vic > 0 && vic < ARRAY_SIZE(edid_4k_modes);
 }
 
@@ -3588,6 +3709,7 @@ add_alternate_cea_modes(struct drm_connector *connector, struct edid *edid)
 	LIST_HEAD(list);
 	int modes = 0;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	/* Don't add CEA modes if the CEA extension block is missing */
 	if (!drm_find_cea_extension(edid))
 		return 0;
@@ -3673,15 +3795,18 @@ drm_display_mode_from_vic_index(struct drm_connector *connector,
 	if (video_db == NULL || video_index >= video_len)
 		return NULL;
 
+//printk("GLS_HDMI TTT %s video_index(%d) = (%d)\n",__func__,video_index,video_db[video_index]);
 	/* CEA modes are numbered 1..127 */
 	vic = svd_to_vic(video_db[video_index]);
 	if (!drm_valid_cea_vic(vic))
 		return NULL;
 
+//printk("GLS_HDMI TTT %s vic[%d]\n",__func__, vic);
 	newmode = drm_mode_duplicate(dev, cea_mode_for_vic(vic));
 	if (!newmode)
 		return NULL;
 
+//printk("GLS_HDMI SSS %s (%dx%d)\n",__func__, newmode->vdisplay, newmode->hdisplay);
 	return newmode;
 }
 
@@ -3703,6 +3828,7 @@ static int do_y420vdb_modes(struct drm_connector *connector,
 	struct drm_display_info *info = &connector->display_info;
 	struct drm_hdmi_info *hdmi = &info->hdmi;
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	for (i = 0; i < svds_len; i++) {
 		u8 vic = svd_to_vic(svds[i]);
 		struct drm_display_mode *newmode;
@@ -3735,6 +3861,7 @@ drm_add_cmdb_modes(struct drm_connector *connector, u8 svd)
 {
 	u8 vic = svd_to_vic(svd);
 	struct drm_hdmi_info *hdmi = &connector->display_info.hdmi;
+//printk("GLS_HDMI SSS %s\n",__func__);
 
 	if (!drm_valid_cea_vic(vic))
 		return;
@@ -3875,6 +4002,7 @@ static int add_hdmi_mode(struct drm_connector *connector, u8 vic)
 		return 0;
 	}
 
+//printk("GLS_HDMI SSS %s\n",__func__);
 	newmode = drm_mode_duplicate(dev, &edid_4k_modes[vic]);
 	if (!newmode)
 		return 0;
@@ -4268,14 +4396,22 @@ add_cea_modes(struct drm_connector *connector, struct edid *edid)
 
 	if (cea && cea_revision(cea) >= 3) {
 		int i, start, end;
+		//printk("GLS_HDMI OOO ext01 %s \n",__func__);
 
 		if (cea_db_offsets(cea, &start, &end))
 			return 0;
 
+		//printk("GLS_HDMI OOO ext02 %s start(%d) end(%d)\n",__func__,start,end);
 		for_each_cea_db(cea, i, start, end) {
 			db = &cea[i];
 			dbl = cea_db_payload_len(db);
-
+			//John_gao GLS
+			if(0){
+				int j = 0 ; 
+				for(j = 0 ; j < dbl ; j++){
+					printk("GLS_HDMI %d 0x%02x ", j, db[j]);	
+				}	
+			}
 			if (cea_db_tag(db) == VIDEO_BLOCK) {
 				video = db + 1;
 				video_len = dbl;
@@ -4316,9 +4452,11 @@ static void fixup_detailed_cea_mode_clock(struct drm_display_mode *mode)
 	 * allow 5kHz clock difference either way to account for
 	 * the 10kHz clock resolution limit of detailed timings.
 	 */
+//printk("GLS_HDMI SSS %s\n",__func__);
 	vic = drm_match_cea_mode_clock_tolerance(mode, 5);
 	if (drm_valid_cea_vic(vic)) {
 		type = "CEA";
+printk("GLS_HDMI SSS CEA %s\n",__func__);
 		cea_mode = cea_mode_for_vic(vic);
 		clock1 = cea_mode->clock;
 		clock2 = cea_mode_alternate_clock(cea_mode);
@@ -4326,6 +4464,7 @@ static void fixup_detailed_cea_mode_clock(struct drm_display_mode *mode)
 		vic = drm_match_hdmi_mode_clock_tolerance(mode, 5);
 		if (drm_valid_hdmi_vic(vic)) {
 			type = "HDMI";
+printk("GLS_HDMI SSS HDMI %s\n",__func__);
 			cea_mode = &edid_4k_modes[vic];
 			clock1 = cea_mode->clock;
 			clock2 = hdmi_mode_alternate_clock(cea_mode);
@@ -5044,6 +5183,8 @@ void get_monitor_range(struct detailed_timing *timing,
 	const struct detailed_non_pixel *data = &timing->data.other_data;
 	const struct detailed_data_monitor_range *range = &data->data.range;
 
+//printk("GLS_HDMI TTT %s \n",__func__);
+
 	if (!is_display_descriptor((const u8 *)timing, EDID_DETAIL_MONITOR_RANGE))
 		return;
 
@@ -5125,6 +5266,7 @@ u32 drm_add_display_info(struct drm_connector *connector, const struct edid *edi
 	if (!(edid->input & DRM_EDID_INPUT_DIGITAL))
 		return quirks;
 
+printk("GLS_HDMI TTT %s revision(%d) bpc(%d)\n",__func__,edid->revision,info->bpc);
 	drm_parse_cea_ext(connector, edid);
 
 	/*
@@ -5137,6 +5279,7 @@ u32 drm_add_display_info(struct drm_connector *connector, const struct edid *edi
 	if (info->bpc == 0 && edid->revision == 3 &&
 	    edid->input & DRM_EDID_DIGITAL_DFP_1_X) {
 		info->bpc = 8;
+printk("GLS_HDMI TTT %s usr bpc 8 \n",__func__);
 		DRM_DEBUG("%s: Assigning DFP sink color depth as %d bpc.\n",
 			  connector->name, info->bpc);
 	}
@@ -5962,7 +6105,7 @@ void drm_update_tile_info(struct drm_connector *connector,
 	const void *displayid = NULL;
 	int ext_index = 0;
 	int length, idx;
-
+//printk("GLS_HDMI drm_update_tile_info\n");
 	connector->has_tile = false;
 	for (;;) {
 		displayid = drm_find_displayid_extension(edid, &length, &idx,

@@ -15,6 +15,8 @@ static inline int _soc_card_ret(struct snd_soc_card *card,
 	switch (ret) {
 	case -EPROBE_DEFER:
 	case -ENOTSUPP:
+	/*Debix GLS John_gao*/
+	case -6:
 	case 0:
 		break;
 	default:

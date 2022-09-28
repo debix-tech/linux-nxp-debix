@@ -2251,6 +2251,7 @@ static int dw_hdmi_setup(struct dw_hdmi *hdmi,
 
 	hdmi->vic = drm_match_cea_mode(mode);
 
+	//printk("GLS_HDMI 999 setup vic(%d)\n",hdmi->vic);
 	if (!hdmi->vic) {
 		dev_dbg(hdmi->dev, "Non-CEA mode used in HDMI\n");
 	} else {
@@ -2392,6 +2393,7 @@ static void dw_hdmi_poweron(struct dw_hdmi *hdmi)
 	 * The curr_conn field is guaranteed to be valid here, as this function
 	 * is only be called when !hdmi->disabled.
 	 */
+	//printk("GLS_HDMI 999 poweron\n");
 	dw_hdmi_setup(hdmi, hdmi->curr_conn, &hdmi->previous_mode);
 }
 
@@ -2487,6 +2489,20 @@ printk("GLS_HDMI, %s width[%d] x height[%d]\n", __func__,edid->width_cm, edid->h
 
 	hdmi->sink_is_hdmi = drm_detect_hdmi_monitor(edid);
 	hdmi->sink_has_audio = drm_detect_monitor_audio(edid);
+
+
+	/*{
+		int esize = sizeof(struct edid);	
+		char *pp = (char *)edid;
+		int i = 0;
+		printk("GLS_HDMI edid size=%d\n", esize);
+		for (i=0; i < esize; i++){
+			printk(" %02x ", pp[i]);	
+			//if(i > 0 && i%9 == 0) printk("\n");
+		}
+		printk("GLS_HDMI edid end\n");
+
+	}	*/
 
 	return edid;
 }
@@ -2961,6 +2977,7 @@ static void dw_hdmi_bridge_mode_set(struct drm_bridge *bridge,
 
 	mutex_lock(&hdmi->mutex);
 
+	printk("GLS_HDMI %s (%dx%d)\n",__func__, mode->hdisplay, mode->vdisplay);
 	/* Store the display mode for plugin/DKMS poweron events */
 	memcpy(&hdmi->previous_mode, mode, sizeof(hdmi->previous_mode));
 

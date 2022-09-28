@@ -1024,6 +1024,17 @@ EXPORT_SYMBOL(drm_mode_match);
 bool drm_mode_equal(const struct drm_display_mode *mode1,
 		    const struct drm_display_mode *mode2)
 {
+
+/*	if(mode1->hdisplay==1280 && mode2->hdisplay==1280 &&
+		mode1->vdisplay==800 && mode2->vdisplay==800){
+	printk("GLS_HDMI DDD mode1->hdisplay(%d) mode1->vdisplay(%d)\n", mode1->hdisplay,mode1->vdisplay);
+			return true;
+	}
+	if(mode1->hdisplay==1152 && mode2->hdisplay==1152 &&
+		mode1->vdisplay==864 && mode2->vdisplay==864){
+	printk("GLS_HDMI DDD mode1->hdisplay(%d) mode1->vdisplay(%d)\n", mode1->hdisplay,mode1->vdisplay);
+			return true;
+	}*/
 	return drm_mode_match(mode1, mode2,
 			      DRM_MODE_MATCH_TIMINGS |
 			      DRM_MODE_MATCH_CLOCK |
@@ -1346,13 +1357,26 @@ void drm_connector_list_update(struct drm_connector *connector)
 		struct drm_display_mode *mode;
 		bool found_it = false;
 
+	//printk("GLS_HDMI PPP " DRM_MODE_FMT "\n", DRM_MODE_ARG(pmode));
 		/* go through current modes checking for the new probed mode */
 		list_for_each_entry(mode, &connector->modes, head) {
+
+	//if(mode->hdisplay == 1280 && mode->vdisplay == 800)
+	//printk("GLS_HDMI AAA " DRM_MODE_FMT "\n", DRM_MODE_ARG(mode));
 			if (!drm_mode_equal(pmode, mode))
 				continue;
 
-	printk("GLS_HDMI " DRM_MODE_FMT "\n", DRM_MODE_ARG(mode));
 			found_it = true;
+	printk("GLS_HDMI ABC Mode  " DRM_MODE_FMT "\n", DRM_MODE_ARG(mode));
+	/*if(mode->hdisplay==1280 &&
+		mode->vdisplay==800 ){
+		 mode->type = 0x40;
+		 mode->flags = 0x5;
+		drm_mode_copy(mode, pmode);
+	}else{
+				continue;
+	
+	}*/
 
 			/*
 			 * If the old matching mode is stale (ie. left over
@@ -1367,15 +1391,19 @@ void drm_connector_list_update(struct drm_connector *connector)
 			 * the mode added to the probed_modes list first.
 			 */
 			if (mode->status == MODE_STALE) {
+	//printk("GLS_HDMI ABC 001" DRM_MODE_FMT "\n", DRM_MODE_ARG(mode));
 				drm_mode_copy(mode, pmode);
 			} else if ((mode->type & DRM_MODE_TYPE_PREFERRED) == 0 &&
 				   (pmode->type & DRM_MODE_TYPE_PREFERRED) != 0) {
 				pmode->type |= mode->type;
+	//printk("GLS_HDMI ABC 002" DRM_MODE_FMT "\n", DRM_MODE_ARG(mode));
 				drm_mode_copy(mode, pmode);
 			} else {
+	//printk("GLS_HDMI ABC 003" DRM_MODE_FMT "\n", DRM_MODE_ARG(mode));
 				mode->type |= pmode->type;
 			}
 
+	//printk("GLS_HDMI ABC AMode " DRM_MODE_FMT "\n", DRM_MODE_ARG(mode));
 			list_del(&pmode->head);
 			drm_mode_destroy(connector->dev, pmode);
 			break;

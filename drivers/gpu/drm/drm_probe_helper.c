@@ -588,11 +588,13 @@ prune:
 
 	DRM_DEBUG_KMS("[CONNECTOR:%d:%s] probed modes :\n", connector->base.id,
 			connector->name);
+	printk("GLS_HDMI [CONNECTOR:%d:%s] probed modes :\n", connector->base.id,
+			connector->name);
 	list_for_each_entry(mode, &connector->modes, head) {
 		drm_mode_set_crtcinfo(mode, CRTC_INTERLACE_HALVE_V);
 		drm_mode_debug_printmodeline(mode);
 	}
-
+	printk("GLS_HDMI count=%d\n", count);
 	return count;
 }
 EXPORT_SYMBOL(drm_helper_probe_single_connector_modes);

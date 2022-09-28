@@ -20,6 +20,8 @@ static inline int _soc_link_ret(struct snd_soc_pcm_runtime *rtd,
 	switch (ret) {
 	case -EPROBE_DEFER:
 	case -ENOTSUPP:
+	/*Debix GLS John_gao*/
+	case -6:
 		break;
 	default:
 		dev_err(rtd->dev,

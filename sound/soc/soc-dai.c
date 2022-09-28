@@ -22,6 +22,8 @@ static inline int _soc_dai_ret(struct snd_soc_dai *dai,
 	switch (ret) {
 	case -EPROBE_DEFER:
 	case -ENOTSUPP:
+	/*Debix GLS John_gao*/
+	case -6:
 		break;
 	default:
 		dev_err(dai->dev,

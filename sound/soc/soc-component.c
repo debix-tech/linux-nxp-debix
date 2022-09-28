@@ -24,6 +24,8 @@ static inline int _soc_component_ret(struct snd_soc_component *component,
 	switch (ret) {
 	case -EPROBE_DEFER:
 	case -ENOTSUPP:
+	/*Debix GLS John_gao*/
+	case -6:
 		break;
 	default:
 		dev_err(component->dev,
