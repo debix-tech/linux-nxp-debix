@@ -932,6 +932,31 @@ static void stmmac_mac_link_down(struct phylink_config *config,
 	stmmac_set_eee_pls(priv, priv->hw, false);
 }
 
+//John_gao
+static int phy_rtl8211f_led_fixup(struct phy_device *phydev)
+{
+	int ret = 0;
+	int ret2 = 0;
+	//page 0
+        phy_write(phydev, 0x1f, 0);
+
+	ret = phy_read(phydev, 0x02);
+	//printk("GLS_PHY 02 id=0x%x\n", ret);
+	ret2 = phy_read(phydev, 0x03);
+	//printk("GLS_PHY 03 id=0x%x\n", ret);
+	if(ret == 0x1c && ret2 == 0xc916){
+		/*switch to extension page44*/
+		phy_write(phydev, 0x1f, 0xd04);
+		phy_write(phydev, 0x10, 0x6d60);
+
+		/*set led1(yellow) act*/
+		phy_write(phydev, 0x11, 0x8);
+		phy_write(phydev, 0x1f, 0);
+
+	}
+       return 0;
+}
+
 static void stmmac_mac_link_up(struct phylink_config *config,
 			       struct phy_device *phy,
 			       unsigned int mode, phy_interface_t interface,
@@ -1028,6 +1053,8 @@ static void stmmac_mac_link_up(struct phylink_config *config,
 		priv->tx_lpi_enabled = priv->eee_enabled;
 		stmmac_set_eee_pls(priv, priv->hw, true);
 	}
+//John_gao
+	phy_rtl8211f_led_fixup(phy);
 }
 
 static const struct phylink_mac_ops stmmac_phylink_mac_ops = {
