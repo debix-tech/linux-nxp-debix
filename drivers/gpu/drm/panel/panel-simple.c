@@ -2497,6 +2497,208 @@ static const struct panel_desc debix_HC050IG40029_D58= {
         .connector_type = DRM_MODE_CONNECTOR_LVDS,
 };
 
+static const struct display_timing debix_JW050R0320I01_mode = {
+
+#if 1
+	//.pixelclock = { 26400000, 33300000, 46800000 },
+	.pixelclock = { 26400000, 29700000, 46800000 },
+        .hactive = { 800, 800, 800 },
+        .hfront_porch = { 16, 210, 354 },
+        .hback_porch = { 46, 46, 46 },
+        .hsync_len = { 1, 1, 1 },
+        .vactive = { 480, 480, 480 },
+        .vfront_porch = { 7, 22, 147 },
+        .vback_porch = { 23, 23, 23 },
+        .vsync_len = { 1, 1, 1 },
+        .flags = DISPLAY_FLAGS_DE_HIGH,
+
+#else
+	.pixelclock =   { 26400000, 49500000, 50000000 },
+	.hactive =      { 800, 800, 800 },
+	.hfront_porch = { 16, 354, 354 },
+	.hback_porch =  { 46, 46, 46 },
+	.hsync_len =    { 1, 40, 40 },
+	.vactive =      { 480, 480, 480 },
+	.vfront_porch = { 7, 147, 147 },
+	.vback_porch =  { 23, 23, 23 },
+	.vsync_len =    { 1, 20, 20 },
+
+//	.flags = DISPLAY_FLAGS_HSYNC_HIGH | DISPLAY_FLAGS_VSYNC_HIGH ,
+	.flags = DISPLAY_FLAGS_HSYNC_LOW | DISPLAY_FLAGS_VSYNC_LOW |
+		 DISPLAY_FLAGS_DE_HIGH | DISPLAY_FLAGS_PIXDATA_POSEDGE |
+		 DISPLAY_FLAGS_SYNC_POSEDGE,
+#endif
+
+};
+static const struct panel_desc debix_JW050R0320I01= {
+        .timings = &debix_JW050R0320I01_mode,
+        .num_timings = 1,
+        .bpc = 8,
+        .size = {
+                .width = 130,
+                .height = 85,
+        },
+        .delay = {
+                /*
+                 * The panel spec recommends one second delay
+                 * to the below items.  However, it's a bit too
+                 * long in pratice.  Based on tests, it turns
+                 * out 100 milliseconds is fine.
+                 */
+                .prepare = 100,
+                .enable = 100,
+                .unprepare = 100,
+                .disable = 100,
+        },
+        //.bus_format = MEDIA_BUS_FMT_RGB666_1X18,
+        //.bus_format = MEDIA_BUS_FMT_RGB666_1X7X3_SPWG,
+        .bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_SPWG,
+        //.bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_JEIDA,
+        .bus_flags = DRM_BUS_FLAG_DE_HIGH,
+        //.bus_flags = DISPLAY_FLAGS_HSYNC_LOW | DISPLAY_FLAGS_VSYNC_LOW |
+        //       DISPLAY_FLAGS_DE_HIGH | DISPLAY_FLAGS_PIXDATA_POSEDGE |
+        //       DISPLAY_FLAGS_SYNC_POSEDGE,
+        .connector_type = DRM_MODE_CONNECTOR_LVDS,
+};
+
+
+static const struct display_timing debix_JW070R0520B02_mode = {
+	.pixelclock = { 42500000, 49500000, 67200000 },
+	.hactive = { 1024, 1024, 1024 },
+	.hfront_porch = { 80, 140, 200 },
+	.hback_porch =  { 20, 100, 116 },
+	.hsync_len =    { 20, 30, 60 },
+	.vactive =    { 600, 600, 600 },
+	.vfront_porch = { 4, 20, 100 },
+	.vback_porch =  { 4, 10, 80 },
+	.vsync_len =    { 2, 5 , 20 },
+	.flags = DISPLAY_FLAGS_DE_HIGH,
+};
+static const struct panel_desc debix_JW070R0520B02= {
+        .timings = &debix_JW070R0520B02_mode,
+        .num_timings = 1,
+        .bpc = 8,
+        .size = {
+                .width = 223,
+                .height = 125,
+        },
+        .delay = {
+                /*
+                 * The panel spec recommends one second delay
+                 * to the below items.  However, it's a bit too
+                 * long in pratice.  Based on tests, it turns
+                 * out 100 milliseconds is fine.
+                 */
+                .prepare = 100,
+                .enable = 100,
+                .unprepare = 100,
+                .disable = 100,
+        },
+        //.bus_format = MEDIA_BUS_FMT_RGB666_1X18,
+        //.bus_format = MEDIA_BUS_FMT_RGB666_1X7X3_SPWG,
+        .bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_SPWG,
+	//.bus_format = MEDIA_BUS_FMT_RGB888_3X8,
+	//.bus_format = MEDIA_BUS_FMT_RBG888_1X24,
+        //.bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_JEIDA,
+        //.bus_flags = DRM_BUS_FLAG_DE_HIGH,
+        //.bus_flags = DISPLAY_FLAGS_HSYNC_LOW | DISPLAY_FLAGS_VSYNC_LOW |
+        //       DISPLAY_FLAGS_DE_HIGH | DISPLAY_FLAGS_PIXDATA_POSEDGE |
+        //       DISPLAY_FLAGS_SYNC_POSEDGE,
+        .connector_type = DRM_MODE_CONNECTOR_LVDS,
+};
+
+static const struct display_timing debix_JW080R1120B02_mode = {
+	.pixelclock = { 57500000, 74250000, 80000000 },
+	.hactive = { 800, 800, 800 },
+	.hfront_porch = { 24, 24, 4 },
+	.hback_porch =  { 3, 3, 4 },
+	.hsync_len =    { 5, 4, 4 },
+	.vactive =    { 1280, 1280, 1280 },
+	.vfront_porch = { 80, 80, 20 },
+	.vback_porch =  { 48, 48, 20 },
+	.vsync_len =    { 32, 32 , 10 },
+	.flags = DISPLAY_FLAGS_DE_HIGH,
+};
+static const struct panel_desc debix_JW080R1120B02= {
+        .timings = &debix_JW080R1120B02_mode,
+        .num_timings = 1,
+        .bpc = 8,
+        .size = {
+                .width = 223,
+                .height = 125,
+        },
+        .delay = {
+                /*
+                 * The panel spec recommends one second delay
+                 * to the below items.  However, it's a bit too
+                 * long in pratice.  Based on tests, it turns
+                 * out 100 milliseconds is fine.
+                 */
+                .prepare = 100,
+                .enable = 100,
+                .unprepare = 100,
+                .disable = 100,
+        },
+        //.bus_format = MEDIA_BUS_FMT_RGB666_1X18,
+        //.bus_format = MEDIA_BUS_FMT_RGB666_1X7X3_SPWG,
+        .bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_SPWG,
+	//.bus_format = MEDIA_BUS_FMT_RGB888_3X8,
+	//.bus_format = MEDIA_BUS_FMT_RBG888_1X24,
+        //.bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_JEIDA,
+        //.bus_flags = DRM_BUS_FLAG_DE_HIGH,
+        //.bus_flags = DISPLAY_FLAGS_HSYNC_LOW | DISPLAY_FLAGS_VSYNC_LOW |
+        //       DISPLAY_FLAGS_DE_HIGH | DISPLAY_FLAGS_PIXDATA_POSEDGE |
+        //       DISPLAY_FLAGS_SYNC_POSEDGE,
+        .connector_type = DRM_MODE_CONNECTOR_LVDS,
+};
+static const struct display_timing debix_JW101HD_X00_mode = {
+	.pixelclock = { 57500000, 74250000, 80000000 },
+	.hactive =    { 1280, 1280, 1280 },
+	.hfront_porch = { 80, 80, 20 },
+	.hback_porch =  { 48, 48, 20 },
+	.hsync_len =    { 32, 32 , 10 },
+	.vactive = { 800, 800, 800 },
+	.vfront_porch = { 24, 24, 4 },
+	.vback_porch =  { 3, 3, 4 },
+	.vsync_len =    { 5, 4, 4 },
+	.flags = DISPLAY_FLAGS_DE_HIGH,
+};
+static const struct panel_desc debix_JW101HD_X00= {
+        .timings = &debix_JW101HD_X00_mode,
+        .num_timings = 1,
+        .bpc = 8,
+        .size = {
+                .width = 223,
+                .height = 125,
+        },
+        .delay = {
+                /*
+                 * The panel spec recommends one second delay
+                 * to the below items.  However, it's a bit too
+                 * long in pratice.  Based on tests, it turns
+                 * out 100 milliseconds is fine.
+                 */
+                .prepare = 100,
+                .enable = 100,
+                .unprepare = 100,
+                .disable = 100,
+        },
+        //.bus_format = MEDIA_BUS_FMT_RGB666_1X18,
+        //.bus_format = MEDIA_BUS_FMT_RGB666_1X7X3_SPWG,
+        .bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_SPWG,
+	//.bus_format = MEDIA_BUS_FMT_RGB888_3X8,
+	//.bus_format = MEDIA_BUS_FMT_RBG888_1X24,
+        //.bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_JEIDA,
+        //.bus_flags = DRM_BUS_FLAG_DE_HIGH,
+        //.bus_flags = DISPLAY_FLAGS_HSYNC_LOW | DISPLAY_FLAGS_VSYNC_LOW |
+        //       DISPLAY_FLAGS_DE_HIGH | DISPLAY_FLAGS_PIXDATA_POSEDGE |
+        //       DISPLAY_FLAGS_SYNC_POSEDGE,
+        .connector_type = DRM_MODE_CONNECTOR_LVDS,
+};
+
+
+
+
 static const struct display_timing debix_HC101IK25050_D59_mode = {
 
 #if 0
@@ -4335,6 +4537,23 @@ static const struct of_device_id platform_of_match[] = {
 		//John_gao polyhex 1024x600
 		.compatible = "debix,HC101IK25050-D59V.C",
 		.data = &debix_HC101IK25050_D59,
+	}, {
+		//John_gao polyhex 1024x600
+		.compatible = "debix,JW070R0520B02",
+		.data = &debix_JW070R0520B02,
+
+	}, {
+		//John_gao polyhex 800x480
+		.compatible = "debix,JW050R0320I01",
+		.data = &debix_JW050R0320I01,
+	}, {
+		//John_gao polyhex 800x1280
+		.compatible = "debix,JW080R1120B02",
+		.data = &debix_JW080R1120B02,
+	}, {
+		//John_gao polyhex 1280x800
+		.compatible = "debix,JW101HD_X00",
+		.data = &debix_JW101HD_X00,
 
 	}, {
 		.compatible = "jdi,tx26d202vm0bwa",
