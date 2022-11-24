@@ -2501,16 +2501,27 @@ static const struct display_timing debix_JW050R0320I01_mode = {
 
 #if 1
 	//.pixelclock = { 26400000, 33300000, 46800000 },
-	.pixelclock = { 26400000, 29700000, 46800000 },
+	//.pixelclock = { 23000000, 24700000, 27000000 },
+	.pixelclock = { 23000000, 24750000, 27000000 },
         .hactive = { 800, 800, 800 },
-        .hfront_porch = { 16, 210, 354 },
-        .hback_porch = { 46, 46, 46 },
-        .hsync_len = { 1, 1, 1 },
+        .hfront_porch = { 4, 3, 48 },
+        .hback_porch = { 4, 8, 48 },
+        .hsync_len = { 8, 1, 8 },
         .vactive = { 480, 480, 480 },
-        .vfront_porch = { 7, 22, 147 },
-        .vback_porch = { 23, 23, 23 },
-        .vsync_len = { 1, 1, 1 },
-        .flags = DISPLAY_FLAGS_DE_HIGH,
+        .vfront_porch = { 4, 8, 12 },
+        .vback_porch = { 4, 15, 12 },
+        .vsync_len = { 2, 5, 8 },
+        //.flags = DISPLAY_FLAGS_DE_HIGH,
+	//.flags = DISPLAY_FLAGS_HSYNC_HIGH | DISPLAY_FLAGS_VSYNC_HIGH ,
+#if 0
+	.flags = DISPLAY_FLAGS_HSYNC_HIGH | DISPLAY_FLAGS_VSYNC_HIGH |
+		 DISPLAY_FLAGS_DE_HIGH | DISPLAY_FLAGS_PIXDATA_POSEDGE |
+		 DISPLAY_FLAGS_SYNC_POSEDGE,
+#else
+	.flags = DISPLAY_FLAGS_HSYNC_LOW | DISPLAY_FLAGS_VSYNC_LOW |
+		 DISPLAY_FLAGS_DE_HIGH | DISPLAY_FLAGS_PIXDATA_POSEDGE |
+		 DISPLAY_FLAGS_SYNC_POSEDGE,
+#endif
 
 #else
 	.pixelclock =   { 26400000, 49500000, 50000000 },
@@ -2608,6 +2619,19 @@ static const struct panel_desc debix_JW070R0520B02= {
 };
 
 static const struct display_timing debix_JW080R1120B02_mode = {
+#if 1
+	.pixelclock = { 57500000, 74250000, 80000000 },
+	.hactive = { 800, 800, 800 },
+	.hfront_porch = { 24, 3, 4 },
+	.hback_porch =  { 3, 5, 4 },
+	.hsync_len =    { 5, 24, 4 },
+	.vactive =    { 1280, 1280, 1280 },
+	.vfront_porch = { 80, 48, 20 },
+	.vback_porch =  { 48, 32, 20 },
+	.vsync_len =    { 32, 80 , 10 },
+	.flags = DISPLAY_FLAGS_DE_HIGH,
+
+#else
 	.pixelclock = { 57500000, 74250000, 80000000 },
 	.hactive = { 800, 800, 800 },
 	.hfront_porch = { 24, 24, 4 },
@@ -2618,6 +2642,7 @@ static const struct display_timing debix_JW080R1120B02_mode = {
 	.vback_porch =  { 48, 48, 20 },
 	.vsync_len =    { 32, 32 , 10 },
 	.flags = DISPLAY_FLAGS_DE_HIGH,
+#endif
 };
 static const struct panel_desc debix_JW080R1120B02= {
         .timings = &debix_JW080R1120B02_mode,
@@ -2652,6 +2677,20 @@ static const struct panel_desc debix_JW080R1120B02= {
         .connector_type = DRM_MODE_CONNECTOR_LVDS,
 };
 static const struct display_timing debix_JW101HD_X00_mode = {
+#if 1
+	.pixelclock = { 57500000, 74250000, 80000000 },
+	.hactive =    { 1280, 1280, 1280 },
+	.hfront_porch = { 80, 48, 20 },
+	.hback_porch =  { 48, 32, 20 },
+	.hsync_len =    { 32, 80 , 10 },
+	.vactive = { 800, 800, 800 },
+	.vfront_porch = { 24, 3, 4 },
+	.vback_porch =  { 3, 5, 4 },
+	.vsync_len =    { 5, 24, 4 },
+	.flags = DISPLAY_FLAGS_DE_HIGH,
+
+#else
+
 	.pixelclock = { 57500000, 74250000, 80000000 },
 	.hactive =    { 1280, 1280, 1280 },
 	.hfront_porch = { 80, 80, 20 },
@@ -2662,6 +2701,7 @@ static const struct display_timing debix_JW101HD_X00_mode = {
 	.vback_porch =  { 3, 3, 4 },
 	.vsync_len =    { 5, 4, 4 },
 	.flags = DISPLAY_FLAGS_DE_HIGH,
+#endif
 };
 static const struct panel_desc debix_JW101HD_X00= {
         .timings = &debix_JW101HD_X00_mode,
