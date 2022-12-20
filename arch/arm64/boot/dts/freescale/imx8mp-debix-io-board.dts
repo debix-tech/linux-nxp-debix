@@ -653,7 +653,35 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_rtc_int>;
 	};
-	
+	ads1115: ads1115@48 {
+		 compatible = "ti,ads1115";
+		 status = "okay";
+		 #address-cells = <1>;
+		 #size-cells = <0>;
+		 reg = <0x48>;
+
+		 channel@4 {
+			 reg = <4>;
+			 ti,gain = <1>;
+			 ti,datarate = <7>;
+		 };
+		 channel@5 {
+			 reg = <5>;
+			 ti,gain = <1>;
+			 ti,datarate = <7>;
+		 };
+		 channel@6 {
+			 reg = <6>;
+			 ti,gain = <1>;
+			 ti,datarate = <7>;
+		 };
+		 channel@7 {
+			 reg = <7>;
+			 ti,gain = <1>;
+			 ti,datarate = <7>;
+		 };
+	 };
+
 };
 
 &i2c6 {

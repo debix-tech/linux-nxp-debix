@@ -942,10 +942,12 @@ static int ads1015_probe(struct i2c_client *client,
 	enum chip_ids chip;
 	int i;
 
+	printk("GLS_ADS 001 \n");
 	indio_dev = devm_iio_device_alloc(&client->dev, sizeof(*data));
 	if (!indio_dev)
 		return -ENOMEM;
 
+	printk("GLS_ADS 002 \n");
 	data = iio_priv(indio_dev);
 	i2c_set_clientdata(client, indio_dev);
 
@@ -959,12 +961,14 @@ static int ads1015_probe(struct i2c_client *client,
 		chip = id->driver_data;
 	switch (chip) {
 	case ADS1015:
+	printk("GLS_ADS 003 \n");
 		indio_dev->channels = ads1015_channels;
 		indio_dev->num_channels = ARRAY_SIZE(ads1015_channels);
 		indio_dev->info = &ads1015_info;
 		data->data_rate = (unsigned int *) &ads1015_data_rate;
 		break;
 	case ADS1115:
+	printk("GLS_ADS 004 \n");
 		indio_dev->channels = ads1115_channels;
 		indio_dev->num_channels = ARRAY_SIZE(ads1115_channels);
 		indio_dev->info = &ads1115_info;
