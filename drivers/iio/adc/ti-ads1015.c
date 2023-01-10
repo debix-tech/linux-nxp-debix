@@ -346,16 +346,53 @@ static int ads1015_set_power_state(struct ads1015_data *data, bool on)
 static
 int ads1015_get_adc_result(struct ads1015_data *data, int chan, int *val)
 {
-	int ret, pga, dr, dr_old, conv_time;
+	int ret, pga, dr;//, dr_old, conv_time;
 	unsigned int old, mask, cfg;
+	int getRegTime = 10;
 
 	if (chan < 0 || chan >= ADS1015_CHANNELS)
 		return -EINVAL;
 
+/*	if(chan == 3){
+		ret = regmap_write(data->regmap, ADS1015_CFG_REG, 0xB383);
+	}
+
+	if(chan == 5){
+		ret = regmap_write(data->regmap, ADS1015_CFG_REG, 0xD383);
+	}
+*/
+#if 1
+	pga = data->channel_data[chan].pga;
+	dr = data->channel_data[chan].data_rate;
+	mask = ADS1015_CFG_MUX_MASK | ADS1015_CFG_PGA_MASK |
+		ADS1015_CFG_DR_MASK;
+	cfg = chan << ADS1015_CFG_MUX_SHIFT | pga << ADS1015_CFG_PGA_SHIFT |
+		dr << ADS1015_CFG_DR_SHIFT;
+
+	cfg |= 0x8103;
+
+	//printk("GLS_ADS chan=%d 0x%x cfg=( 0x%x ) in \n", chan,ADS1015_CFG_REG, cfg);
+	ret = regmap_write(data->regmap, ADS1015_CFG_REG, cfg);
+	if (ret)
+		return ret;
+
+	while(getRegTime--){
+			//printk("GLS_ADS in\n");
+		ret = regmap_read(data->regmap, ADS1015_CFG_REG, &old);
+		if (ret)
+			return ret;
+		//printk("GLS_ADS chan=%d 0x%x cfg=( 0x%x == 0x%x )\n", chan,ADS1015_CFG_REG, cfg, old);
+		if(cfg == old) {
+		//	printk("GLS_ADS out\n");
+			break;
+		}
+	}
+#else
 	ret = regmap_read(data->regmap, ADS1015_CFG_REG, &old);
 	if (ret)
 		return ret;
 
+	printk("GLS_ADS chan=%d 0x%x old=0x%x\n", chan,ADS1015_CFG_REG, old);
 	pga = data->channel_data[chan].pga;
 	dr = data->channel_data[chan].data_rate;
 	mask = ADS1015_CFG_MUX_MASK | ADS1015_CFG_PGA_MASK |
@@ -371,7 +408,14 @@ int ads1015_get_adc_result(struct ads1015_data *data, int chan, int *val)
 				ADS1015_CFG_COMP_MODE_SHIFT;
 	}
 
-	cfg = (old & ~mask) | (cfg & mask);
+	cfg = (old & ~mask) | (cfg & mask); 
+	printk("GLS_ADS chan=%d 0x%x old=0x%x net=0x%x\n", chan,ADS1015_CFG_REG,old, cfg);
+	//if(chan == 6 || chan == 7){
+	//if(chan == 3){
+		//cfg=0x32e3;
+		//cfg=0x36e3;
+	//	cfg=0xb383;
+	//}
 	if (old != cfg) {
 		ret = regmap_write(data->regmap, ADS1015_CFG_REG, cfg);
 		if (ret)
@@ -386,7 +430,7 @@ int ads1015_get_adc_result(struct ads1015_data *data, int chan, int *val)
 		usleep_range(conv_time, conv_time + 1);
 		data->conv_invalid = false;
 	}
-
+#endif
 	return regmap_read(data->regmap, ADS1015_CONV_REG, val);
 }
 
@@ -489,7 +533,11 @@ static int ads1015_read_raw(struct iio_dev *indio_dev,
 			goto release_direct;
 		}
 
+		//printk("GLS_ADS chan=%d val0=%d \n", chan->address, val[0]);
+		//printk("GLS_ADS chan=%d val1=%d \n", chan->address, val[1]);
 		*val = sign_extend32(*val >> shift, 15 - shift);
+		//printk("GLS_ADS chan=%d val0=%d \n", chan->address, val[0]);
+		//printk("GLS_ADS chan=%d val1=%d \n", chan->address, val[1]);
 
 		ret = ads1015_set_power_state(data, false);
 		if (ret < 0)
@@ -717,6 +765,7 @@ static int ads1015_disable_event_config(struct ads1015_data *data,
 			comp_mode == ADS1015_CFG_COMP_MODE_WINDOW)
 		return 0;
 
+	//printk("GLS_ADS 01 001 \n");
 	ret = regmap_update_bits(data->regmap, ADS1015_CFG_REG,
 				ADS1015_CFG_COMP_QUE_MASK,
 				ADS1015_CFG_COMP_DISABLE <<
@@ -928,9 +977,14 @@ static void ads1015_get_channels_config(struct i2c_client *client)
 
 static int ads1015_set_conv_mode(struct ads1015_data *data, int mode)
 {
+#if 0
+	printk("GLS_ADS 01 002 \n");
 	return regmap_update_bits(data->regmap, ADS1015_CFG_REG,
 				  ADS1015_CFG_MOD_MASK,
 				  mode << ADS1015_CFG_MOD_SHIFT);
+#else
+	return 0;
+#endif
 }
 
 static int ads1015_probe(struct i2c_client *client,
@@ -942,12 +996,10 @@ static int ads1015_probe(struct i2c_client *client,
 	enum chip_ids chip;
 	int i;
 
-	printk("GLS_ADS 001 \n");
 	indio_dev = devm_iio_device_alloc(&client->dev, sizeof(*data));
 	if (!indio_dev)
 		return -ENOMEM;
 
-	printk("GLS_ADS 002 \n");
 	data = iio_priv(indio_dev);
 	i2c_set_clientdata(client, indio_dev);
 
@@ -961,14 +1013,12 @@ static int ads1015_probe(struct i2c_client *client,
 		chip = id->driver_data;
 	switch (chip) {
 	case ADS1015:
-	printk("GLS_ADS 003 \n");
 		indio_dev->channels = ads1015_channels;
 		indio_dev->num_channels = ARRAY_SIZE(ads1015_channels);
 		indio_dev->info = &ads1015_info;
 		data->data_rate = (unsigned int *) &ads1015_data_rate;
 		break;
 	case ADS1115:
-	printk("GLS_ADS 004 \n");
 		indio_dev->channels = ads1115_channels;
 		indio_dev->num_channels = ARRAY_SIZE(ads1115_channels);
 		indio_dev->info = &ads1115_info;
@@ -1043,7 +1093,8 @@ static int ads1015_probe(struct i2c_client *client,
 			return ret;
 	}
 
-	ret = ads1015_set_conv_mode(data, ADS1015_CONTINUOUS);
+	//John_gao set single-shot ret = ads1015_set_conv_mode(data, ADS1015_CONTINUOUS);
+	ret = ads1015_set_conv_mode(data, ADS1015_SINGLESHOT);
 	if (ret)
 		return ret;
 
@@ -1076,6 +1127,7 @@ static int ads1015_remove(struct i2c_client *client)
 	pm_runtime_set_suspended(&client->dev);
 	pm_runtime_put_noidle(&client->dev);
 
+	//printk("GLS_ADS 999 01 002 \n");
 	/* power down single shot mode */
 	return ads1015_set_conv_mode(data, ADS1015_SINGLESHOT);
 }
@@ -1095,7 +1147,8 @@ static int ads1015_runtime_resume(struct device *dev)
 	struct ads1015_data *data = iio_priv(indio_dev);
 	int ret;
 
-	ret = ads1015_set_conv_mode(data, ADS1015_CONTINUOUS);
+	//John_gao set single-shot ret = ads1015_set_conv_mode(data, ADS1015_CONTINUOUS);
+	ret = ads1015_set_conv_mode(data, ADS1015_SINGLESHOT);
 	if (!ret)
 		data->conv_invalid = true;
 
