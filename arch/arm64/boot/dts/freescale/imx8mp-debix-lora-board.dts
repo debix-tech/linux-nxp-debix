@@ -692,7 +692,7 @@
 };
 
 &i2c4 {
-	clock-frequency = <100000>;
+	clock-frequency = <50000>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_i2c4>;
 	status = "okay";
@@ -719,7 +719,41 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_rtc_int>;
 	};
-	
+	ads1115: ads1115@48 {
+		 compatible = "ti,ads1115";
+		 status = "okay";
+		 #address-cells = <1>;
+		 #size-cells = <0>;
+		 reg = <0x48>;
+
+		 channel@4 {
+			 reg = <4>;
+			 ti,gain = <1>;
+			 ti,datarate = <4>;
+		 };
+		 channel@5 {
+			 reg = <5>;
+			 ti,gain = <1>;
+			 ti,datarate = <4>;
+		 };
+		 channel@3 {
+			 reg = <3>;
+			 ti,gain = <1>;
+			 ti,datarate = <4>;
+		 };
+		 channel@6 {
+			 reg = <6>;
+			 ti,gain = <1>;
+			 ti,datarate = <4>;
+		 };
+
+		 channel@7 {
+			 reg = <7>;
+			 ti,gain = <1>;
+			 ti,datarate = <4>;
+		 };
+	 };
+
 };
 
 &i2c6 {
