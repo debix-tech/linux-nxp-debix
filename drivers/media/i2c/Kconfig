@@ -835,6 +835,15 @@ config VIDEO_OV2640
 	  To compile this driver as a module, choose M here: the
 	  module will be called ov2640.
 
+config VIDEO_GC2145
+        tristate "gc2145 sensor support"
+        depends on VIDEO_V4L2 && I2C
+        help
+          This is a Video4Linux2 sensor driver for the gl2145 camera.
+
+          To compile this driver as a module, choose M here: the
+          module will be called gc2145.
+
 config VIDEO_OV2659
 	tristate "OmniVision OV2659 sensor support"
 	depends on VIDEO_V4L2 && I2C && GPIOLIB

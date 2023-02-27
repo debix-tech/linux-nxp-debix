@@ -363,6 +363,104 @@ static const struct reg_value ov5640_init_setting_30fps_VGA[] = {
 	{0x302c, 0xc2, 0, 0},
 };
 
+//John_gao add new ov5640 偏红调节
+static struct reg_value ov5640_setting_new[] = {
+	{0x5180 ,0xff ,0 ,0},
+	{0x5181 ,0xf2 ,0 ,0},
+	{0x5182 ,0x0  ,0 ,0},
+	{0x5183 ,0x14 ,0 ,0},
+	{0x5184 ,0x25 ,0 ,0},
+	{0x5185 ,0x24 ,0 ,0},
+	{0x5186 ,0x10 ,0 ,0},
+	{0x5187 ,0x10 ,0 ,0},
+	{0x5188 ,0x10 ,0 ,0},
+	{0x5189 ,0x6d ,0 ,0},
+	{0x518a ,0x53 ,0 ,0},
+	{0x518b ,0x90 ,0 ,0},
+	{0x518c ,0x8c ,0 ,0},
+	{0x518d ,0x3b ,0 ,0},
+	{0x518e ,0x2c ,0 ,0},
+	{0x518f ,0x59 ,0 ,0},
+	{0x5190 ,0x42 ,0 ,0},
+	{0x5191 ,0xf8 ,0 ,0},
+	{0x5192 ,0x4  ,0 ,0},
+	{0x5193 ,0x70 ,0 ,0},
+	{0x5194 ,0xf0 ,0 ,0},
+	{0x5195 ,0xf0 ,0 ,0},
+	{0x5196 ,0x3  ,0 ,0},
+	{0x5197 ,0x1  ,0 ,0},
+	{0x5198 ,0x4  ,0 ,0},
+	{0x5199 ,0x0  ,0 ,0},
+	{0x519a ,0x4  ,0 ,0},
+	{0x519b ,0x13 ,0 ,0},
+	{0x519c ,0x6  ,0 ,0},
+	{0x519d ,0x9e ,0 ,0},
+	{0x519e ,0x38 ,0 ,0},
+	{0x5800 ,0x2a ,0 ,0},
+	{0x5801 ,0x1a ,0 ,0},
+	{0x5802 ,0x13 ,0 ,0},
+	{0x5803 ,0x13 ,0 ,0},
+	{0x5804 ,0x1b ,0 ,0},
+	{0x5805 ,0x2b ,0 ,0},
+	{0x5806 ,0x10 ,0 ,0},
+	{0x5807 ,0x9  ,0 ,0},
+	{0x5808 ,0x7  ,0 ,0},
+	{0x5809 ,0x7  ,0 ,0},
+	{0x580a ,0xa  ,0 ,0},
+	{0x580b ,0x10 ,0 ,0},
+	{0x580c ,0x8  ,0 ,0},
+	{0x580d ,0x3  ,0 ,0},
+	{0x580e ,0x0  ,0 ,0},
+	{0x580f ,0x0  ,0 ,0},
+	{0x5810 ,0x4  ,0 ,0},
+	{0x5811 ,0x9  ,0 ,0},
+	{0x5812 ,0x9  ,0 ,0},
+	{0x5813 ,0x3  ,0 ,0},
+	{0x5814 ,0x0  ,0 ,0},
+	{0x5815 ,0x0  ,0 ,0},
+	{0x5816 ,0x4  ,0 ,0},
+	{0x5817 ,0x9  ,0 ,0},
+	{0x5818 ,0xd  ,0 ,0},
+	{0x5819 ,0x6  ,0 ,0},
+	{0x581a ,0x3  ,0 ,0},
+	{0x581b ,0x4  ,0 ,0},
+	{0x581c ,0x6  ,0 ,0},
+	{0x581d ,0xd  ,0 ,0},
+	{0x581e ,0x21 ,0 ,0},
+	{0x581f ,0x11 ,0 ,0},
+	{0x5820 ,0xa  ,0 ,0},
+	{0x5821 ,0xa  ,0 ,0},
+	{0x5822 ,0x13 ,0 ,0},
+	{0x5823 ,0x23 ,0 ,0},
+	{0x5824 ,0x13 ,0 ,0},
+	{0x5825 ,0x24 ,0 ,0},
+	{0x5826 ,0x24 ,0 ,0},
+	{0x5827 ,0x22 ,0 ,0},
+	{0x5828 ,0x4  ,0 ,0},
+	{0x5829 ,0x10 ,0 ,0},
+	{0x582a ,0x22 ,0 ,0},
+	{0x582b ,0x22 ,0 ,0},
+	{0x582c ,0x22 ,0 ,0},
+	{0x582d ,0x22 ,0 ,0},
+	{0x582e ,0x10 ,0 ,0},
+	{0x582f ,0x22 ,0 ,0},
+	{0x5830 ,0x42 ,0 ,0},
+	{0x5831 ,0x22 ,0 ,0},
+	{0x5832 ,0x22 ,0 ,0},
+	{0x5833 ,0x10 ,0 ,0},
+	{0x5834 ,0x22 ,0 ,0},
+	{0x5835 ,0x22 ,0 ,0},
+	{0x5836 ,0x22 ,0 ,0},
+	{0x5837 ,0x0  ,0 ,0},
+	{0x5838 ,0x12 ,0 ,0},
+	{0x5839 ,0x12 ,0 ,0},
+	{0x583a ,0x10 ,0 ,0},
+	{0x583b ,0x10 ,0 ,0},
+	{0x583c ,0x2  ,0 ,0},
+	{0x583d ,0xce ,0 ,0},
+
+};
+
 static const struct reg_value ov5640_setting_VGA_640_480[] = {
 	{0x3008, 0x42, 0, 0},
 	{0x3c07, 0x08, 0, 0},
@@ -1146,6 +1244,43 @@ static int ov5640_set_jpeg_timings(struct ov5640_dev *sensor,
 }
 
 /* download ov5640 settings to sensor through i2c */
+static int ov5640_download_firmware(struct ov5640_dev *sensor,
+				    struct reg_value *pModeSetting,
+				    s32 ArySize)
+{
+	register u32 Delay_ms = 0;
+	register u16 RegAddr = 0;
+	register u8 Mask = 0;
+	register u8 Val = 0;
+	u8 RegVal = 0;
+	int i, retval = 0;
+
+	for (i = 0; i < ArySize; ++i, ++pModeSetting) {
+		Delay_ms = pModeSetting->delay_ms;
+		RegAddr = pModeSetting->reg_addr;
+		Val = pModeSetting->val;
+		Mask = pModeSetting->mask;
+
+		if (Mask) {
+			retval = ov5640_read_reg(sensor, RegAddr, &RegVal);
+			if (retval < 0)
+				goto err;
+
+			RegVal &= ~(u8)Mask;
+			Val &= Mask;
+			Val |= RegVal;
+		}
+
+		retval = ov5640_write_reg(sensor, RegAddr, Val);
+		if (retval < 0)
+			goto err;
+
+		if (Delay_ms)
+			msleep(Delay_ms);
+	}
+err:
+	return retval;
+}
 static int ov5640_set_timings(struct ov5640_dev *sensor,
 			      const struct ov5640_mode_info *mode)
 {
@@ -1870,6 +2005,20 @@ static int ov5640_set_mode(struct ov5640_dev *sensor)
 	}
 	if (ret < 0)
 		goto restore_auto_exp_gain;
+
+#if 1
+	//John_gao add new ov5640 偏红调节
+	{
+		struct reg_value *pModeSetting = ov5640_setting_new;
+		s32 ArySize = ARRAY_SIZE(ov5640_setting_new);
+		printk("GLS ????? set reg \n");
+		ret = ov5640_download_firmware(sensor, pModeSetting,
+				ArySize);
+		if (ret < 0)
+			printk("GLS set ov5640_setting_new err !!\n");
+	}
+	//end John_gao
+#endif
 
 	/* restore auto gain and exposure */
 	if (auto_gain)
