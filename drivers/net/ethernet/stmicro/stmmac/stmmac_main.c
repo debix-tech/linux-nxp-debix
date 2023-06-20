@@ -943,7 +943,8 @@ static int phy_rtl8211f_led_fixup(struct phy_device *phydev)
 	ret = phy_read(phydev, 0x02);
 	//printk("GLS_PHY 02 id=0x%x\n", ret);
 	ret2 = phy_read(phydev, 0x03);
-	//printk("GLS_PHY 03 id=0x%x\n", ret);
+	//printk("GLS_PHY 03 id=0x%x\n", ret2);
+	//rtl8211f
 	if(ret == 0x1c && ret2 == 0xc916){
 		/*switch to extension page44*/
 		phy_write(phydev, 0x1f, 0xd04);
@@ -952,6 +953,38 @@ static int phy_rtl8211f_led_fixup(struct phy_device *phydev)
 		/*set led1(yellow) act*/
 		phy_write(phydev, 0x11, 0x8);
 		phy_write(phydev, 0x1f, 0);
+	//rtl8211e
+	}else if(ret == 0x1c && ret2 == 0xc915){
+		 /*switch to extension page44*/
+                int vv = 0;
+		//printk("GLS_PHY stmmac use rtl8211e\n");
+
+                phy_write(phydev, 31, 0x07);
+                phy_write(phydev, 30, 0x2c);
+
+                /*set led1(yellow) act*/
+                vv = phy_read(phydev,26);
+                //printk("GLS_PHY fec vv=0x%04x\n", vv);
+                vv &= 0xFFEF;// bit4=0
+                vv |= 0x20;// bit5=1
+                vv &= 0xFFBF;// bit6=0
+                //printk("GLS_PHY fec vv=0x%04x\n", vv);
+                phy_write(phydev, 26, vv);
+
+
+                /*set led0(green) link*/
+                vv = phy_read(phydev,28);
+                //printk("GLS_PHY fec vv=0x%04x\n", vv);
+                vv |= 0x7;// bit0,1,2=1
+                vv &= 0xFF8F;// bit4,5,6=0
+                vv &= 0xF8FF;// bit8,9,10=0
+                //printk("GLS_PHY fec vv=0x%04x\n", vv);
+                phy_write(phydev, 28, vv);
+
+                /*switch back to page0*/
+                phy_write(phydev,31,0x00);
+
+		phy_modify_mmd_changed(phydev, MDIO_MMD_AN, MDIO_AN_EEE_ADV,6, 0);
 
 	}
        return 0;
