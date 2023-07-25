@@ -927,12 +927,15 @@
 
 &usb_dwc3_0 {
 	//dr_mode = "device"; //otg
-	//dr_mode = "host"; 
+#if 0
+	dr_mode = "host"; 
+#else
 	dr_mode = "otg"; 
 	hnp-disable;
 	srp-disable;
 	adp-disable;
 	usb-role-switch;
+#endif
 	//role-switch-default-mode = "none";
 	status = "okay";
 #if 0
