@@ -1855,7 +1855,7 @@ static int phy_rtl8211f_led_fixup(struct phy_device *phydev)
 	if(ret == 0x1c && ret2 == 0xc916){
 		/*switch to extension page44*/
 		phy_write(phydev, 0x1f, 0xd04);
-		phy_write(phydev, 0x10, 0x6d60);
+		phy_write(phydev, 0x10, 0x2f60);
 
 		/*set led1(yellow) act*/
 		phy_write(phydev, 0x11, 0x8);

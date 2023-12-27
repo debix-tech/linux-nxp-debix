@@ -927,7 +927,7 @@
 
 &usb_dwc3_0 {
 	//dr_mode = "device"; //otg
-#if 0
+#if 1
 	dr_mode = "host"; 
 #else
 	dr_mode = "otg"; 
