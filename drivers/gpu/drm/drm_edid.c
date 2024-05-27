@@ -2484,6 +2484,7 @@ static int drm_mode_hsync(const struct drm_display_mode *mode)
 
 static int isRTK27(struct edid *edid){
 	u8 *p = (u8 *) edid;
+	/*
 	printk("GLS_HDMI p8=0x%02x", p[8]);	
 	printk("GLS_HDMI p9=0x%02x", p[9]);	
 	printk("GLS_HDMI p10=0x%02x", p[10]);	
@@ -2491,6 +2492,7 @@ static int isRTK27(struct edid *edid){
 	printk("GLS_HDMI p20=0x%02x", p[20]);	
 	printk("GLS_HDMI p21=0x%02x", p[21]);	
 	printk("GLS_HDMI p22=0x%02x", p[22]);	
+	*/
 	if(p[8] == 0x4a &&
 	   p[9] == 0x8b &&
 	   p[10]== 0x3b &&
@@ -2554,7 +2556,7 @@ drm_mode_std(struct drm_connector *connector, struct edid *edid,
 		vsize = 768;
 	}
 
-printk("GLS_HDMI %s def mode 000 hsize(%d) vsize(%d) \n",__func__, hsize, vsize);
+//printk("GLS_HDMI %s def mode 000 hsize(%d) vsize(%d) \n",__func__, hsize, vsize);
 	/*
 	 * If this connector already has a mode for this size and refresh
 	 * rate (because it came from detailed or CVT info), use that
@@ -2591,7 +2593,7 @@ printk("GLS_HDMI %s def mode 000 hsize(%d) vsize(%d) \n",__func__, hsize, vsize)
 		} 
 	}
 	
-printk("GLS_HDMI %s def mode 001 hsize(%d) vsize(%d) \n",__func__, hsize, vsize);
+//printk("GLS_HDMI %s def mode 001 hsize(%d) vsize(%d) \n",__func__, hsize, vsize);
 	/* check whether it can be found in default mode table */
 	if (drm_monitor_supports_rb(edid)) {
 		mode = drm_mode_find_dmt(dev, hsize, vsize, vrefresh_rate,
@@ -2599,12 +2601,12 @@ printk("GLS_HDMI %s def mode 001 hsize(%d) vsize(%d) \n",__func__, hsize, vsize)
 		if (mode)
 			return mode;
 	}
-printk("GLS_HDMI %s def mode 002 hsize(%d) vsize(%d) \n",__func__, hsize, vsize);
+//printk("GLS_HDMI %s def mode 002 hsize(%d) vsize(%d) \n",__func__, hsize, vsize);
 	mode = drm_mode_find_dmt(dev, hsize, vsize, vrefresh_rate, false);
 	if (mode)
 		return mode;
 
-printk("GLS_HDMI %s def mode 103 hsize(%d) vsize(%d) \n",__func__, hsize, vsize);
+//printk("GLS_HDMI %s def mode 103 hsize(%d) vsize(%d) \n",__func__, hsize, vsize);
 	/* okay, generate it */
 	switch (timing_level) {
 	case LEVEL_DMT:

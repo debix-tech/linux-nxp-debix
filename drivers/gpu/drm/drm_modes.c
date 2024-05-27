@@ -1367,7 +1367,7 @@ void drm_connector_list_update(struct drm_connector *connector)
 				continue;
 
 			found_it = true;
-	printk("GLS_HDMI ABC Mode  " DRM_MODE_FMT "\n", DRM_MODE_ARG(mode));
+	//printk("GLS_HDMI ABC Mode  " DRM_MODE_FMT "\n", DRM_MODE_ARG(mode));
 	/*if(mode->hdisplay==1280 &&
 		mode->vdisplay==800 ){
 		 mode->type = 0x40;
