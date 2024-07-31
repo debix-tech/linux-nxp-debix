@@ -136,6 +136,7 @@ dtb-$(CONFIG_ARCH_MXC) += imx8mp-evk.dtb \
 			  imx8mp-debix-lora-HC050IG40029-D58V.C.dtb \
 			  imx8mp-debix-lora-HC080IY28026-D60V.C.dtb \
 			  imx8mp-debix-lora-TD080B.dtb \
+			  imx8mp-debix-core-AM-480272MGTZQW-T02H.dtb \
 			  imx8mp-debix-lora-HC101IK25050-D59V.C.dtb 
 #dtb-$(CONFIG_ARCH_MXC) += imx8mq-evk.dtb imx8mq-evk-rpmsg.dtb
 #dtb-$(CONFIG_ARCH_MXC) += imx8mq-evk.dtb imx8mq-evk-rpmsg.dtb imx8mq-evk-pcie1-m2.dtb imx8mq-evk-usd-wifi.dtb \

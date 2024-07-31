@@ -2572,6 +2572,60 @@ static const struct panel_desc debix_JW050R0320I01= {
         .connector_type = DRM_MODE_CONNECTOR_LVDS,
 };
 
+//debix 480x272
+static const struct drm_display_mode debix_AM480272MGTZQW_mode = {
+	.clock = 9000,
+	.hdisplay = 480,
+	.hsync_start = 480 + 2,
+	.hsync_end = 480 + 2 + 41,
+	.htotal = 480 + 2 + 41 + 2,
+	.vdisplay = 272,
+	.vsync_start = 272 + 2,
+	.vsync_end = 272 + 2 + 10,
+	.vtotal = 272 + 2 + 10 + 2,
+	.flags = DRM_MODE_FLAG_PHSYNC | DRM_MODE_FLAG_PVSYNC,
+	//.flags = DISPLAY_FLAGS_HSYNC_LOW | DISPLAY_FLAGS_VSYNC_LOW |
+	//	 DISPLAY_FLAGS_DE_HIGH | DISPLAY_FLAGS_PIXDATA_POSEDGE |
+	//	 DISPLAY_FLAGS_SYNC_POSEDGE,
+
+};
+
+static const struct panel_desc debix_AM480272MGTZQW= {
+        //.timings = &debix_AM480272MGTZQW_mode,
+	.modes = &debix_AM480272MGTZQW_mode,
+	.num_modes = 1,
+        //.num_timings = 1,
+        .bpc = 8,
+        .size = {
+                .width = 105,
+                .height = 67,
+        },
+        .delay = {
+                /*
+                 * The panel spec recommends one second delay
+                 * to the below items.  However, it's a bit too
+                 * long in pratice.  Based on tests, it turns
+                 * out 100 milliseconds is fine.
+                 */
+                .prepare = 100,
+                .enable = 100,
+                .unprepare = 100,
+                .disable = 100,
+        },
+        //.bus_format = MEDIA_BUS_FMT_RGB666_1X18,
+        //.bus_format = MEDIA_BUS_FMT_RGB666_1X7X3_SPWG,
+        //.bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_SPWG,
+        .bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_JEIDA,
+        //.bus_flags = DRM_BUS_FLAG_DE_HIGH,
+	.bus_flags = DRM_BUS_FLAG_DE_HIGH | DRM_BUS_FLAG_PIXDATA_DRIVE_NEGEDGE,
+        //.bus_flags = DISPLAY_FLAGS_HSYNC_LOW | DISPLAY_FLAGS_VSYNC_LOW |
+         //      DISPLAY_FLAGS_DE_HIGH | DISPLAY_FLAGS_PIXDATA_POSEDGE |
+          //     DISPLAY_FLAGS_SYNC_POSEDGE,
+        .connector_type = DRM_MODE_CONNECTOR_LVDS,
+
+};
+
+
 
 static const struct display_timing debix_JW070R0520B02_mode = {
 	.pixelclock = { 42500000, 49500000, 67200000 },
@@ -4586,6 +4640,10 @@ static const struct of_device_id platform_of_match[] = {
 		//John_gao polyhex 800x480
 		.compatible = "debix,JW050R0320I01",
 		.data = &debix_JW050R0320I01,
+	}, {
+		//John_gao polyhex 480x272
+		.compatible = "debix,AM480272MGTZQW",
+		.data = &debix_AM480272MGTZQW,
 	}, {
 		//John_gao polyhex 800x1280
 		.compatible = "debix,JW080R1120B02",

@@ -583,6 +583,8 @@ static void option_instat_callback(struct urb *urb);
 
 
 static const struct usb_device_id option_ids[] = {
+	{ USB_DEVICE(0x10c4, 0xea60) }, /* John_gao add im-100*/ 
+
 #if 1 //Added by Debix John_gao 
 	{ USB_DEVICE(0x05C6, 0x9090) }, /* Quectel UC15 */ 
 	{ USB_DEVICE(0x05C6, 0x9003) }, /* Quectel UC20 */ 
@@ -2183,6 +2185,16 @@ static int option_probe(struct usb_serial *serial,
 	if (device_flags & NUMEP2 && iface_desc->bNumEndpoints != 2)
 		return -ENODEV;
 
+#if 1
+	printk("GLS_RNDIS vid = %d \n", serial->dev->descriptor.idVendor);
+	printk("GLS_RNDIS pid = %d \n", serial->dev->descriptor.idProduct);
+	if (serial->dev->descriptor.idVendor == cpu_to_le16(0x10c4) &&
+			serial->dev->descriptor.idProduct == cpu_to_le16(0xea60)) {
+	//		&& serial->interface->cur_altsetting->desc.bInterfaceNumber >= 4) 
+		printk("GLS_RNDIS number : %d \n", serial->interface->cur_altsetting->desc.bInterfaceNumber);
+
+	}
+#endif
 #if 1 //Added by Debix John_gao 
 	//Quectel UC20's interface 4 can be used as USB network device
 	if (serial->dev->descriptor.idVendor == cpu_to_le16(0x05C6) &&
