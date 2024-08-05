@@ -2573,6 +2573,7 @@ static const struct panel_desc debix_JW050R0320I01= {
 };
 
 //debix 480x272
+#if 0
 static const struct drm_display_mode debix_AM480272MGTZQW_mode = {
 	.clock = 9000,
 	.hdisplay = 480,
@@ -2589,12 +2590,30 @@ static const struct drm_display_mode debix_AM480272MGTZQW_mode = {
 	//	 DISPLAY_FLAGS_SYNC_POSEDGE,
 
 };
+#endif
+static const struct display_timing debix_AM480272MGTZQW_mode = {
+
+        .pixelclock = { 8000000, 12500000, 12000000 },
+        .hactive = { 480, 480, 480 },
+        .hfront_porch = { 2, 75, 75 },
+        .hback_porch = { 3, 20, 43 },
+        .hsync_len = { 2, 13, 43 },
+        .vactive = { 272, 272, 272},
+        .vfront_porch = { 2, 12, 37 },
+        .vback_porch = { 2, 8, 12 },
+        .vsync_len =   { 2, 4, 12 },
+        .flags = DISPLAY_FLAGS_DE_HIGH,
+        //.flags = DRM_MODE_FLAG_NVSYNC | DRM_MODE_FLAG_NHSYNC,
+        //.flags = DISPLAY_FLAGS_HSYNC_LOW | DISPLAY_FLAGS_VSYNC_LOW |
+        //       DISPLAY_FLAGS_DE_HIGH | DISPLAY_FLAGS_PIXDATA_POSEDGE |
+        //       DISPLAY_FLAGS_SYNC_POSEDGE,
+};
 
 static const struct panel_desc debix_AM480272MGTZQW= {
-        //.timings = &debix_AM480272MGTZQW_mode,
-	.modes = &debix_AM480272MGTZQW_mode,
-	.num_modes = 1,
-        //.num_timings = 1,
+        .timings = &debix_AM480272MGTZQW_mode,
+	//.modes = &debix_AM480272MGTZQW_mode,
+	//.num_modes = 1,
+        .num_timings = 1,
         .bpc = 8,
         .size = {
                 .width = 105,
@@ -2616,8 +2635,8 @@ static const struct panel_desc debix_AM480272MGTZQW= {
         //.bus_format = MEDIA_BUS_FMT_RGB666_1X7X3_SPWG,
         //.bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_SPWG,
         .bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_JEIDA,
-        //.bus_flags = DRM_BUS_FLAG_DE_HIGH,
-	.bus_flags = DRM_BUS_FLAG_DE_HIGH | DRM_BUS_FLAG_PIXDATA_DRIVE_NEGEDGE,
+        .bus_flags = DRM_BUS_FLAG_DE_HIGH,
+	//.bus_flags = DRM_BUS_FLAG_DE_HIGH | DRM_BUS_FLAG_PIXDATA_DRIVE_NEGEDGE,
         //.bus_flags = DISPLAY_FLAGS_HSYNC_LOW | DISPLAY_FLAGS_VSYNC_LOW |
          //      DISPLAY_FLAGS_DE_HIGH | DISPLAY_FLAGS_PIXDATA_POSEDGE |
           //     DISPLAY_FLAGS_SYNC_POSEDGE,

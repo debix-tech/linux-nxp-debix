@@ -238,6 +238,29 @@ static int pwm_backlight_check_fb_name(struct device *dev, struct fb_info *info)
 	return false;
 }
 
+static void inversionLevers(int arr[], int size){
+	int left = 0; 
+	int right = size - 1; 
+	printk("GLS_PWM size = %d \n", size);
+	while(left < right){
+		int temp = arr[left];
+		arr[left] = arr[right];
+		arr[right] = temp;
+		left ++;
+		right --;	
+	}
+#if 0
+	//debug
+	{
+		int i = 0; 
+		for( i = 0 ; i < size ; i ++){
+			printk("GLS_PWM ---- %d \n", arr[i]);	
+		}
+	
+	}
+#endif
+}
+
 static int pwm_backlight_parse_dt(struct device *dev,
 				  struct platform_pwm_backlight_data *data)
 {
@@ -247,6 +270,7 @@ static int pwm_backlight_parse_dt(struct device *dev,
 	unsigned int num_steps = 0;
 	struct property *prop;
 	unsigned int *table;
+	int                     inversion = 0;
 	int length;
 	u32 value;
 	int ret;
@@ -280,6 +304,12 @@ static int pwm_backlight_parse_dt(struct device *dev,
 
 	data->max_brightness = length / sizeof(u32);
 
+	//John_gao add for inversion 1 - 0 
+	ret = of_property_read_u32(node, "inversion",&inversion);
+	if (ret < 0){
+		printk("GLS_PWM not use inversion");
+		inversion=0;
+	}
 	/* read brightness levels from DT property */
 	if (data->max_brightness > 0) {
 		size_t size = sizeof(*data->levels) * data->max_brightness;
@@ -294,6 +324,10 @@ static int pwm_backlight_parse_dt(struct device *dev,
 						 data->max_brightness);
 		if (ret < 0)
 			return ret;
+
+		if(inversion){
+			inversionLevers(data->levels, data->max_brightness);
+		}
 
 		ret = of_property_read_u32(node, "default-brightness-level",
 					   &value);
