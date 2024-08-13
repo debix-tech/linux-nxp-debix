@@ -38,7 +38,29 @@ struct pwm_bl_data {
 	int			(*check_fb)(struct device *, struct fb_info *);
 	void			(*exit)(struct device *);
 	char			fb_id[16];
+
+	//John_gao add delay open pwm
+	struct delayed_work     delayed_pwm_work;
+        int                     now_brightness;
+	//end John_gao add delay open pwm
 };
+
+//John_gao add delay open pwm
+static int compute_duty_cycle(struct pwm_bl_data *pb, int brightness);
+
+static void pwm_work(struct work_struct *work)
+{
+        struct pwm_bl_data *priv =
+                container_of(work, struct pwm_bl_data, delayed_pwm_work.work);
+        struct pwm_state state;
+
+        printk("GLS_PWM pwm work birghtness: %d \n", priv->now_brightness);
+        pwm_get_state(priv->pwm, &state);
+        state.duty_cycle = compute_duty_cycle(priv, priv->now_brightness);
+        pwm_apply_state(priv->pwm, &state);
+
+}
+//end John_gao add delay open pwm
 
 static void pwm_backlight_power_on(struct pwm_bl_data *pb)
 {
@@ -118,7 +140,21 @@ static int pwm_backlight_update_status(struct backlight_device *bl)
 	if (brightness > 0) {
 		pwm_get_state(pb->pwm, &state);
 		state.duty_cycle = compute_duty_cycle(pb, brightness);
-		pwm_apply_state(pb->pwm, &state);
+	//John_gao add delay open pwm
+		if (!pb->enabled){
+                        printk("GLS_PWM first set to 0 : def %d \n", brightness);
+                        state.duty_cycle = 0;
+                        pwm_apply_state(pb->pwm, &state);
+                        //msleep(1000);
+                        //state.duty_cycle = compute_duty_cycle(pb, brightness);
+                        //printk("GLS_PWM first set to %d  \n", state.duty_cycle);
+                        //pwm_apply_state(pb->pwm, &state);
+                        pb->now_brightness = brightness;
+                        schedule_delayed_work(&pb->delayed_pwm_work,HZ/2);
+                }else{
+                        pwm_apply_state(pb->pwm, &state);
+                }
+	//end John_gao add delay open pwm
 		pwm_backlight_power_on(pb);
 	} else {
 		pwm_backlight_power_off(pb);
@@ -682,6 +718,11 @@ static int pwm_backlight_probe(struct platform_device *pdev)
 	backlight_update_status(bl);
 
 	platform_set_drvdata(pdev, bl);
+
+	//John_gao add delay open pwm
+	INIT_DELAYED_WORK(&pb->delayed_pwm_work, pwm_work);
+	//end John_gao add delay open pwm
+
 	return 0;
 
 err_alloc:
@@ -697,6 +738,10 @@ static int pwm_backlight_remove(struct platform_device *pdev)
 
 	backlight_device_unregister(bl);
 	pwm_backlight_power_off(pb);
+
+	//John_gao add delay open pwm
+	cancel_delayed_work_sync(&pb->delayed_pwm_work);
+	//end John_gao add delay open pwm
 
 	if (pb->exit)
 		pb->exit(&pdev->dev);
