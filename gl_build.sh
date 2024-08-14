@@ -9,7 +9,7 @@ export CROSS_COMPILE=aarch64-none-linux-gnu-
 
 make imx_v8_defconfig
 find arch/arm64/boot/dts -name *.dtb | xargs rm
-make -j128
+make -j64
 #make -j32 Image
 #make -j32 freescale/imx8mp-evk.dtb
 #make -j32 freescale/imx8mp-evk-raspberrypi-touchscreen.dtb
@@ -36,7 +36,7 @@ return
 #cp arch/arm64/boot/dts/freescale/imx8mp-evk-raspberrypi-touchscreen.dtb image-out
 #cp arch/arm64/boot/dts/freescale/imx8mp-evk-HC050IG40029-D58V.C-lvds-panel.dtb image-out
 
-make -j128 modules
+make -j64 modules
 make INSTALL_MOD_PATH=image-out INSTALL_MOD_STRIP=1 modules_install
 
 tar cpf image-out.tar image-out

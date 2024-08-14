@@ -48,6 +48,8 @@
 
 #define HDMI14_MAX_TMDSCLK	340000000
 
+extern int DEBIX_HDMI_DBG;
+
 enum hdmi_datamap {
 	RGB444_8B = 0x01,
 	RGB444_10B = 0x03,
@@ -2472,11 +2474,11 @@ static struct edid *dw_hdmi_get_edid(struct dw_hdmi *hdmi,
 {
 	struct edid *edid;
  
-printk("GLS_HDMI, %s \n", __func__);
+if(DEBIX_HDMI_DBG)printk("GLS_HDMI, %s \n", __func__);
 	if (!hdmi->ddc)
 		return NULL;
 
-printk("GLS_HDMI, %s get edid \n", __func__);
+if(DEBIX_HDMI_DBG)printk("GLS_HDMI, %s get edid \n", __func__);
 	edid = drm_get_edid(connector, hdmi->ddc);
 	if (!edid) {
 		dev_dbg(hdmi->dev, "failed to get edid\n");
@@ -2485,7 +2487,7 @@ printk("GLS_HDMI, %s get edid \n", __func__);
 
 	dev_dbg(hdmi->dev, "got edid: width[%d] x height[%d]\n",
 		edid->width_cm, edid->height_cm);
-printk("GLS_HDMI, %s width[%d] x height[%d]\n", __func__,edid->width_cm, edid->height_cm);
+if(DEBIX_HDMI_DBG)printk("GLS_HDMI, %s width[%d] x height[%d]\n", __func__,edid->width_cm, edid->height_cm);
 
 	hdmi->sink_is_hdmi = drm_detect_hdmi_monitor(edid);
 	hdmi->sink_has_audio = drm_detect_monitor_audio(edid);

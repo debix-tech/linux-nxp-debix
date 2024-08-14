@@ -25,6 +25,8 @@
 #include "imx8mp-hdmi-pavi.h"
 #include "imx-drm.h"
 
+extern int DEBIX_HDMI_DBG;
+
 /* GPR reg */
 struct imx_hdmi_chip_data {
 	int	reg_offset;
@@ -208,6 +210,10 @@ static bool imx8mp_hdmi_check_clk_rate(int rate_khz)
 {
 	int rate = rate_khz * 1000;
 
+	if(DEBIX_HDMI_DBG)printk("GLS_HDMI rate=%d clk_round_rate=%ld \n", rate, clk_round_rate(imx8mp_clocks[0].clk, rate));
+#if 1
+	
+#endif
 	/* Check hdmi phy pixel clock support rate */
 	if (rate != clk_round_rate(imx8mp_clocks[0].clk, rate))
 		return  false;
