@@ -3236,15 +3236,17 @@ static void fixup_detailed_cea_mode_clock(struct drm_display_mode *mode);
 static int is_debix_hdmi = 0;
 static int check_Debix_hdmi(struct edid *edid){
 	u8 *p = (u8 *) edid;
-/*	
-	printk("GLS_HDMI p8=0x%02x", p[8]);	
-	printk("GLS_HDMI p9=0x%02x", p[9]);	
-	printk("GLS_HDMI p10=0x%02x", p[10]);	
-	printk("GLS_HDMI p11=0x%02x", p[11]);	
-	printk("GLS_HDMI p20=0x%02x", p[20]);	
-	printk("GLS_HDMI p21=0x%02x", p[21]);	
-	printk("GLS_HDMI p22=0x%02x", p[22]);	
-*/	
+	
+	if(DEBIX_HDMI_DBG){
+		printk("GLS_HDMI p8=0x%02x", p[8]);	
+		printk("GLS_HDMI p9=0x%02x", p[9]);	
+		printk("GLS_HDMI p10=0x%02x", p[10]);	
+		printk("GLS_HDMI p11=0x%02x", p[11]);	
+		printk("GLS_HDMI p20=0x%02x", p[20]);	
+		printk("GLS_HDMI p21=0x%02x", p[21]);	
+		printk("GLS_HDMI p22=0x%02x", p[22]);	
+	}
+	
 	if(p[8] == 0x12 &&
 	   p[9] == 0xe5 &&
 	   p[10]== 0x00 &&
