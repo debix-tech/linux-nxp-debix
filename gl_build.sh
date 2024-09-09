@@ -26,7 +26,7 @@ mkdir -p image-out/boot
 cp arch/arm64/boot/Image image-out/boot/.
 #cp arch/arm64/boot/dts/freescale/imx8mp-evk.dtb image-out/boot/.
 cp arch/arm64/boot/dts/freescale/*.dtb image-out/boot/.
-return 
+#return 
 #cp arch/arm64/boot/dts/freescale/imx8mp-evk.dtb image-out
 #cp arch/arm64/boot/dts/freescale/imx8mp-debix-lora-board.dtb image-out
 #cp arch/arm64/boot/dts/freescale/imx8mp-debix-io-board.dtb image-out

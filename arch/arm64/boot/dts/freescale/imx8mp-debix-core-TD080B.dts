@@ -31,7 +31,11 @@ mipi_backlight: mipi_backlight {
 
 		};
 };
-
+&pwm1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pwm1>;
+	status = "okay";
+};
 &mipi_dsi {
 	status = "okay";
 	panel@0 {
