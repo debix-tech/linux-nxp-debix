@@ -408,6 +408,15 @@ config DRM_PANEL_MANTIX_MLAF057WE51
 	  has a resolution of 720x1440 pixels, a built in backlight and touch
 	  controller.
 
+config DRM_PANEL_DEBIX_HC080IY28026_D60
+	tristate "debix HC080IY28026-D60 800x720 DSI video mode panel"
+	depends on OF
+	depends on DRM_MIPI_DSI
+	depends on BACKLIGHT_CLASS_DEVICE
+	help
+	  Say Y here if you want to enable support for debix HC080IY28026-D60
+	  (800x1280) DSI panel.
+
 config DRM_PANEL_NEC_NL8048HL11
 	tristate "NEC NL8048HL11 RGB panel"
 	depends on GPIOLIB && OF && SPI
@@ -572,6 +581,15 @@ config DRM_PANEL_RAYDIUM_RM67191
 	help
 	  Say Y here if you want to enable support for Raydium RM67191 FHD
 	  (1080x1920) DSI panel.
+
+config DRM_PANEL_DEBIX_TD080B
+	tristate "debix TD080B 800x720 DSI video mode panel"
+	depends on OF
+	depends on DRM_MIPI_DSI
+	depends on BACKLIGHT_CLASS_DEVICE
+	help
+	  Say Y here if you want to enable support for debix TD080B 
+	  (800x1280) DSI panel.
 
 config DRM_PANEL_RAYDIUM_RM68200
 	tristate "Raydium RM68200 720x1280 DSI video mode panel"

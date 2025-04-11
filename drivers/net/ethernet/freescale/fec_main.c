@@ -1980,8 +1980,16 @@ static int fec_get_mac(struct net_device *ndev)
 		struct device_node *np = fep->pdev->dev.of_node;
 		if (np) {
 			ret = of_get_mac_address(np, tmpaddr);
-			if (!ret)
+			if (!ret){
 				iap = tmpaddr;
+				//add by polyhex
+				if(is_multicast_ether_addr(iap)){
+					dev_err(&fep->pdev->dev, "Ether Addr is Multicast Address,Mac[0]=0x%x\n",iap[0]);
+					iap[0] &= 0xFE;
+				}
+				//end add by polyhex
+
+			}
 			else if (ret == -EPROBE_DEFER)
 				return ret;
 		}
@@ -2031,6 +2039,46 @@ static int fec_get_mac(struct net_device *ndev)
 	return 0;
 }
 
+//John_gao
+static int phy_rtl8211e_led_fixup(struct phy_device *phydev)
+{
+	int phy_id1 = 0;
+	int phy_id2 = 0;
+	//page 0
+	phy_write(phydev, 0x1f, 0);
+
+	phy_id1 = phy_read(phydev, 0x02);
+	phy_id2 = phy_read(phydev, 0x03);
+
+	printk("debix ens34 phy_id1=0x%x,phy_id2=0x%x\n", phy_id1,phy_id2);
+
+	if(phy_id1 == 0x1c && phy_id2 == 0xc916){ //RTL8211f 0xc916
+		/*switch to extension page44*/
+		phy_write(phydev, 0x1f, 0xd04);
+		//phy_write(phydev, 0x10, 0x6d60); // Model A/B
+		phy_write(phydev, 0x10, 0x2f60);   // Model A/B SE
+
+		/*set led1(yellow) act*/
+		phy_write(phydev, 0x11, 0x8);
+
+		phy_write(phydev, 0x1f, 0);
+
+	}else if(phy_id1 == 0x1c && phy_id2 == 0xc915) { // RTL8211E 0xc915
+		/*switch to extension page44*/
+		phy_write(phydev, 0x1f, 0x007);
+		phy_write(phydev, 0x1e, 0x02c);
+
+		/*set led0(green) 100M/1000M link,led1(yellow) 10M/100M/1000M link+act */
+		phy_write(phydev, 0x1a, 0x0020);
+		phy_write(phydev, 0x1c, 0x76);
+
+		phy_write(phydev, 0x1f, 0);
+		/* Do not advertise 100Base-TX/1000Base-T EEE Capability.*/
+		phy_modify_mmd(phydev,MDIO_MMD_AN,MDIO_AN_EEE_ADV,6,0);
+	}
+
+	return 0;
+}
 /* ------------------------------------------------------------------------- */
 
 /*
@@ -2123,6 +2171,9 @@ static void fec_enet_adjust_link(struct net_device *ndev)
 
 	if (status_change)
 		phy_print_status(phy_dev);
+
+	//John_gao
+	phy_rtl8211e_led_fixup(phy_dev);
 }
 
 static int fec_enet_mdio_wait(struct fec_enet_private *fep)
@@ -4353,6 +4404,9 @@ fec_probe(struct platform_device *pdev)
 	if (!ndev)
 		return -ENOMEM;
 
+	//add by polyhex
+	strcpy(ndev->name, "ens34");
+	//end add by polyhex
 	SET_NETDEV_DEV(ndev, &pdev->dev);
 
 	/* setup board info structure */

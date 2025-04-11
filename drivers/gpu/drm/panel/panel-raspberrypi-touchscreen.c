@@ -43,10 +43,12 @@
 
 #include <linux/delay.h>
 #include <linux/err.h>
+#include <linux/fb.h>
 #include <linux/i2c.h>
 #include <linux/media-bus-format.h>
 #include <linux/module.h>
 #include <linux/of.h>
+#include <linux/of_device.h>
 #include <linux/of_graph.h>
 #include <linux/pm.h>
 
@@ -192,13 +194,28 @@ struct rpi_touchscreen {
 	struct drm_panel base;
 	struct mipi_dsi_device *dsi;
 	struct i2c_client *i2c;
+	bool enabled;
+	//const struct rpi_platform_data *pdata;
 };
+int panel_not_i2c = 0;
+struct rpi_touchscreen *panel;
+
+//John_gao add modes 
+const int cc = 33000;
+const int hp = 210;
+const int hb = 30;
+const int hsync = 16;
+
+const int vp = 22;
+const int vb = 13;
+const int vsync = 10;
 
 static const struct drm_display_mode rpi_touchscreen_modes[] = {
 	{
 		/* Modeline comes from the Raspberry Pi firmware, with HFP=1
 		 * plugged in and clock re-computed from that.
 		 */
+#if 0
 		.clock = 25979400 / 1000,
 		.hdisplay = 800,
 		.hsync_start = 800 + 1,
@@ -208,6 +225,17 @@ static const struct drm_display_mode rpi_touchscreen_modes[] = {
 		.vsync_start = 480 + 7,
 		.vsync_end = 480 + 7 + 2,
 		.vtotal = 480 + 7 + 2 + 21,
+#else 
+	.clock = cc,
+        .hdisplay = 800,
+	.hsync_start = 800 + hp,
+	.hsync_end = 800 + hp + hb,
+	.htotal = 800 + hp + hb + hsync,
+	.vdisplay = 480,
+	.vsync_start = 480 + vp,
+	.vsync_end = 480 + vp + vb,
+	.vtotal = 480 + vp + vb + vsync, 
+#endif
 	},
 };
 
@@ -218,7 +246,36 @@ static struct rpi_touchscreen *panel_to_ts(struct drm_panel *panel)
 
 static int rpi_touchscreen_i2c_read(struct rpi_touchscreen *ts, u8 reg)
 {
-	return i2c_smbus_read_byte_data(ts->i2c, reg);
+	//return i2c_smbus_read_byte_data(ts->i2c, reg);
+		struct i2c_client *client = ts->i2c;
+	struct i2c_msg msgs[1];
+	u8 addr_buf[1] = { reg };
+	u8 data_buf[1] = { 0, };
+	int ret;
+
+	/* Write register address */
+	msgs[0].addr = client->addr;
+	msgs[0].flags = 0;
+	msgs[0].len = ARRAY_SIZE(addr_buf);
+	msgs[0].buf = addr_buf;
+
+	ret = i2c_transfer(client->adapter, msgs, ARRAY_SIZE(msgs));
+	if (ret != ARRAY_SIZE(msgs))
+		return -EIO;
+
+	usleep_range(100, 300);
+
+	/* Read data from register */
+	msgs[0].addr = client->addr;
+	msgs[0].flags = I2C_M_RD;
+	msgs[0].len = 1;
+	msgs[0].buf = data_buf;
+
+	ret = i2c_transfer(client->adapter, msgs, ARRAY_SIZE(msgs));
+	if (ret != ARRAY_SIZE(msgs))
+		return -EIO;
+
+	return data_buf[0];
 }
 
 static void rpi_touchscreen_i2c_write(struct rpi_touchscreen *ts,
@@ -228,7 +285,7 @@ static void rpi_touchscreen_i2c_write(struct rpi_touchscreen *ts,
 
 	ret = i2c_smbus_write_byte_data(ts->i2c, reg, val);
 	if (ret)
-		dev_err(&ts->i2c->dev, "I2C write failed: %d\n", ret);
+		dev_err(&ts->dsi->dev, "I2C write failed: %d\n", ret);
 }
 
 static int rpi_touchscreen_write(struct rpi_touchscreen *ts, u16 reg, u32 val)
@@ -264,12 +321,13 @@ static int rpi_touchscreen_noop(struct drm_panel *panel)
 	return 0;
 }
 
-static int rpi_touchscreen_prepare(struct drm_panel *panel)
+static int rpi_touchscreen_enable(struct drm_panel *panel)
 {
 	struct rpi_touchscreen *ts = panel_to_ts(panel);
 	int i;
 
 	rpi_touchscreen_i2c_write(ts, REG_POWERON, 1);
+	usleep_range(20000, 25000);
 	/* Wait for nPWRDWN to go low to indicate poweron is done. */
 	for (i = 0; i < 100; i++) {
 		if (rpi_touchscreen_i2c_read(ts, REG_PORTB) & 1)
@@ -294,12 +352,12 @@ static int rpi_touchscreen_prepare(struct drm_panel *panel)
 	rpi_touchscreen_write(ts, DSI_STARTDSI, 0x01);
 	msleep(100);
 
-	return 0;
-}
+// 	return 0;
+// }
 
-static int rpi_touchscreen_enable(struct drm_panel *panel)
-{
-	struct rpi_touchscreen *ts = panel_to_ts(panel);
+// static int rpi_touchscreen_enable(struct drm_panel *panel)
+// {
+//	struct rpi_touchscreen *ts = panel_to_ts(panel);
 
 	/* Turn on the backlight. */
 	rpi_touchscreen_i2c_write(ts, REG_PWM, 255);
@@ -319,7 +377,7 @@ static int rpi_touchscreen_get_modes(struct drm_panel *panel,
 {
 	unsigned int i, num = 0;
 	static const u32 bus_format = MEDIA_BUS_FMT_RGB888_1X24;
-
+	if(panel_not_i2c) return 0;
 	for (i = 0; i < ARRAY_SIZE(rpi_touchscreen_modes); i++) {
 		const struct drm_display_mode *m = &rpi_touchscreen_modes[i];
 		struct drm_display_mode *mode;
@@ -355,7 +413,7 @@ static int rpi_touchscreen_get_modes(struct drm_panel *panel,
 static const struct drm_panel_funcs rpi_touchscreen_funcs = {
 	.disable = rpi_touchscreen_disable,
 	.unprepare = rpi_touchscreen_noop,
-	.prepare = rpi_touchscreen_prepare,
+	.prepare = rpi_touchscreen_noop,
 	.enable = rpi_touchscreen_enable,
 	.get_modes = rpi_touchscreen_get_modes,
 };
@@ -364,14 +422,14 @@ static int rpi_touchscreen_probe(struct i2c_client *i2c)
 {
 	struct device *dev = &i2c->dev;
 	struct rpi_touchscreen *ts;
-	struct device_node *endpoint, *dsi_host_node;
-	struct mipi_dsi_host *host;
+//	struct device_node *endpoint, *dsi_host_node;
+//	struct mipi_dsi_host *host;
 	int ver;
-	struct mipi_dsi_device_info info = {
-		.type = RPI_DSI_DRIVER_NAME,
-		.channel = 0,
-		.node = NULL,
-	};
+	// struct mipi_dsi_device_info info = {
+	// 	.type = RPI_DSI_DRIVER_NAME,
+	// 	.channel = 0,
+	// 	.node = NULL,
+	// };
 
 	ts = devm_kzalloc(dev, sizeof(*ts), GFP_KERNEL);
 	if (!ts)
@@ -395,10 +453,10 @@ static int rpi_touchscreen_probe(struct i2c_client *i2c)
 		dev_err(dev, "Unknown Atmel firmware revision: 0x%02x\n", ver);
 		return -ENODEV;
 	}
-
+	panel = ts;
 	/* Turn off at boot, so we can cleanly sequence powering on. */
 	rpi_touchscreen_i2c_write(ts, REG_POWERON, 0);
-
+#if 0   //imx8mp is not host 
 	/* Look up the DSI host.  It needs to probe before we do. */
 	endpoint = of_graph_get_next_endpoint(dev->of_node, NULL);
 	if (!endpoint)
@@ -435,12 +493,12 @@ static int rpi_touchscreen_probe(struct i2c_client *i2c)
 	 * driver's component bind function.
 	 */
 	drm_panel_add(&ts->base);
-
+#endif
 	return 0;
 
-error:
-	of_node_put(endpoint);
-	return -ENODEV;
+// error:
+	// of_node_put(endpoint);
+	// return -ENODEV;
 }
 
 static void rpi_touchscreen_remove(struct i2c_client *i2c)
@@ -452,17 +510,77 @@ static void rpi_touchscreen_remove(struct i2c_client *i2c)
 	drm_panel_remove(&ts->base);
 
 	mipi_dsi_device_unregister(ts->dsi);
+	kfree(ts->dsi);
 }
+/* Panel specific color-format bits */
+#define COL_FMT_16BPP 0x55
+#define COL_FMT_18BPP 0x66
+#define COL_FMT_24BPP 0x77
+
+
+#if 0
+static int color_format_from_dsi_format(enum mipi_dsi_pixel_format format)
+{
+	switch (format) {
+	case MIPI_DSI_FMT_RGB565:
+		return COL_FMT_16BPP;
+	case MIPI_DSI_FMT_RGB666:
+	case MIPI_DSI_FMT_RGB666_PACKED:
+		return COL_FMT_18BPP;
+	case MIPI_DSI_FMT_RGB888:
+		return COL_FMT_24BPP;
+	default:
+		return COL_FMT_24BPP; /* for backward compatibility */
+	}
+};
+#endif 
+
+static const struct of_device_id rpi_touchscreen_of_ids[] = {
+	{ .compatible = "raspberrypi,7inch-touchscreen-panel"},
+	{ } /* sentinel */
+};
+MODULE_DEVICE_TABLE(of, rpi_touchscreen_of_ids);
 
 static int rpi_touchscreen_dsi_probe(struct mipi_dsi_device *dsi)
 {
 	int ret;
+		struct device *dev = &dsi->dev;
+        //const struct of_device_id *of_id = of_match_device(rpi_touchscreen_of_ids, dev);
+//	struct device_node *np = dev->of_node;
+//John_gao  add dsi to drm
+	if( panel == NULL){
+		struct rpi_touchscreen *ts;
+		ts = devm_kzalloc(&dsi->dev, sizeof(*panel), GFP_KERNEL);
+		if (!ts) return -ENOMEM;
+		panel = ts;
+
+		panel_not_i2c = 1;
+		printk("GSL panel is null maybe mipi panel err \n");
+	}
+
+	mipi_dsi_set_drvdata(dsi, panel);
+	panel->dsi = dsi;
+	//panel->pdata = of_id->data;
 
 	dsi->mode_flags = (MIPI_DSI_MODE_VIDEO |
+			   MIPI_DSI_MODE_VIDEO_HSE |
 			   MIPI_DSI_MODE_VIDEO_SYNC_PULSE |
 			   MIPI_DSI_MODE_LPM);
 	dsi->format = MIPI_DSI_FMT_RGB888;
 	dsi->lanes = 1;
+	
+      /*  ret = of_property_read_u32(np, "dsi-lanes", &dsi->lanes);
+        if (ret) {
+                dev_err(dev, "Failed to get dsi-lanes property (%d)\n", ret);
+                return ret;
+        } */
+
+	drm_panel_init(&panel->base, dev, &rpi_touchscreen_funcs,
+		       DRM_MODE_CONNECTOR_DSI);
+        dev_set_drvdata(dev, panel);
+
+        drm_panel_add(&panel->base);
+//John_gao end
 
 	ret = mipi_dsi_attach(dsi);
 
@@ -474,13 +592,14 @@ static int rpi_touchscreen_dsi_probe(struct mipi_dsi_device *dsi)
 
 static struct mipi_dsi_driver rpi_touchscreen_dsi_driver = {
 	.driver.name = RPI_DSI_DRIVER_NAME,
+	.driver.of_match_table = rpi_touchscreen_of_ids,
 	.probe = rpi_touchscreen_dsi_probe,
 };
 
-static const struct of_device_id rpi_touchscreen_of_ids[] = {
-	{ .compatible = "raspberrypi,7inch-touchscreen-panel" },
-	{ } /* sentinel */
-};
+// static const struct of_device_id rpi_touchscreen_of_ids[] = {
+// 	{ .compatible = "raspberrypi,7inch-touchscreen-panel" },
+// 	{ } /* sentinel */
+// };
 MODULE_DEVICE_TABLE(of, rpi_touchscreen_of_ids);
 
 static struct i2c_driver rpi_touchscreen_driver = {

@@ -35,6 +35,8 @@
 
 #define CS427x_SYSCLK_MCLK 0
 
+#define INVALID_GPIO -1
+
 #define RX 0
 #define TX 1
 
@@ -45,6 +47,7 @@ enum fsl_asoc_card_type {
 	CARD_CS42888 = 1,
 	CARD_WM8960,
 	CARD_WM8962,
+	CARD_ES8316, //John_gao
 	CARD_SGTL5000,
 	CARD_AC97,
 	CARD_CS427X,
@@ -114,6 +117,11 @@ struct fsl_asoc_card_priv {
 	struct snd_soc_dai_link dai_link[3];
 	struct simple_util_jack hp_jack;
 	struct simple_util_jack mic_jack;
+	int spk_vdd5v_en;
+	int hp_spk_sel;
+	int spk_mute;
+	int hp_det;
+	int hp_irq;
 	struct platform_device *pdev;
 	struct codec_priv codec_priv[2];
 	struct cpu_priv cpu_priv;
@@ -132,6 +140,7 @@ struct fsl_asoc_card_priv {
 	char name[32];
 };
 
+struct fsl_asoc_card_priv *mypriv = NULL;
 /*
  * This dapm route map exists for DPCM link only.
  * The other routes shall go through Device Tree.
@@ -319,6 +328,15 @@ static int fsl_asoc_card_hw_params(struct snd_pcm_substream *substream,
 			dev_err(dev, "failed to set codec dai fmt: %d\n", ret);
 			return ret;
 		}
+	}
+	else if(priv->card_type == CARD_ES8316){
+		/* set codec DAI configuration */
+		ret = snd_soc_dai_set_fmt(snd_soc_rtd_to_codec(rtd, 0), priv->dai_fmt);
+		if (ret) {
+			dev_err(dev, "failed to set codec dai fmt: %d\n", ret);
+			return ret;
+		}
+
 	}
 
 	return 0;
@@ -688,17 +706,85 @@ static int fsl_asoc_card_spdif_init(struct device_node *codec_np[],
 	return 0;
 }
 
+int onece_set = 0;
+//static void set_gpio_spk(struct fsl_asoc_card_priv *priv, int enable)
+
+void __set_gpio_spk(int enable)
+{
+	struct fsl_asoc_card_priv *priv = mypriv;
+	printk("GLS_AUDIO spk set %s\n", enable?"on":"off");
+	if(priv->spk_mute != INVALID_GPIO){
+		gpio_direction_output(priv->spk_mute, enable);
+	}
+	if(priv->hp_spk_sel != INVALID_GPIO){
+		gpio_direction_output(priv->hp_spk_sel, enable);
+	}
+	msleep(500);
+	if(priv->spk_vdd5v_en != INVALID_GPIO){
+		gpio_direction_output(priv->spk_vdd5v_en, enable);
+	}
+
+}
+
+void set_gpio_spk(int mute)
+{
+	struct fsl_asoc_card_priv *priv = mypriv;
+
+	int enable = 0;
+
+	if(mute){
+		enable = 0;
+	}else{
+		enable = 1;
+	}
+	__set_gpio_spk(enable);
+}
+EXPORT_SYMBOL_GPL(set_gpio_spk);
+
+static irqreturn_t hp_det_irq(int irq, void *dev_id)
+{
+        struct fsl_asoc_card_priv *priv = (struct fsl_asoc_card_priv *)dev_id;
+        //struct platform_device *pdev = priv->pdev;
+        //struct device *dev = &pdev->dev;
+
+	if(priv->hp_det > 0)
+	printk("GLS_AUDIO irq = %d \n", gpio_get_value(priv->hp_det));
+	set_gpio_spk(0);
+
+	return IRQ_HANDLED;
+}
+
 static int hp_jack_event(struct notifier_block *nb, unsigned long event,
 			 void *data)
 {
 	struct snd_soc_jack *jack = (struct snd_soc_jack *)data;
 	struct snd_soc_dapm_context *dapm = &jack->card->dapm;
 
-	if (event & SND_JACK_HEADPHONE)
+	if (event & SND_JACK_HEADPHONE)	{
 		/* Disable speaker if headphone is plugged in */
-		return snd_soc_dapm_disable_pin(dapm, "Ext Spk");
-	else
-		return snd_soc_dapm_enable_pin(dapm, "Ext Spk");
+		snd_soc_dapm_disable_pin(dapm, "Ext Spk"); // original
+	//add by polyhex
+		printk("es8316 %s hp in \n",__func__);
+		//snd_soc_dapm_enable_pin(dapm, "Headphone Jack");
+	//end add by polyhex
+
+		//set_gpio_spk(priv,0);
+		set_gpio_spk(1);
+	}else {
+
+		snd_soc_dapm_enable_pin(dapm, "Ext Spk");// original
+		//add by polyhex
+		printk("es8316 %s hp out \n",__func__);
+		//snd_soc_dapm_disable_pin(dapm, "Headphone Jack");
+		//snd_soc_dapm_enable_pin(dapm, "Headphone Jack");
+		//end add by polyhex
+		//set_gpio_spk(priv,1);
+		if(onece_set)
+		set_gpio_spk(0);
+		else
+		onece_set = 1;
+	}
+	return 0;
 }
 
 static struct notifier_block hp_jack_nb = {
@@ -920,6 +1006,27 @@ static int fsl_asoc_card_probe(struct platform_device *pdev)
 		priv->codec_priv[0].mclk_id = SGTL5000_SYSCLK;
 		priv->dai_fmt |= SND_SOC_DAIFMT_CBP_CFP;
 		priv->card_type = CARD_SGTL5000;
+	//John_gao add es8316
+	}else if (of_device_is_compatible(np, "fsl,imx-audio-es8316")) {
+		//printk("es8316 , setting ... \n");
+		//codec_dai_name = "es8316-hifi";
+		codec_dai_name[0] = "ES8316 HiFi";
+
+		//priv->codec_priv.mclk_id = 0;
+		//slave mode use pll
+		//priv->codec_priv.fll_id = 1; //WM8960_SYSCLK_AUTO;
+		//priv->codec_priv.pll_id = 2; //WM8960_SYSCLK_AUTO;
+		//priv->dai_fmt |= SND_SOC_DAIFMT_CBM_CFM ;
+	        //			| SND_SOC_DAIFMT_CBS_CFS
+				 ;
+		//priv->dai_fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_CBS_CFS | SND_SOC_DAIFMT_IB_IF ;
+		//priv->dai_fmt = SND_SOC_DAIFMT_LEFT_J | SND_SOC_DAIFMT_CBM_CFM | SND_SOC_DAIFMT_IB_IF ;
+		//priv->dai_fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_CBM_CFM | SND_SOC_DAIFMT_IB_IF ;
+		priv->dai_fmt |= SND_SOC_DAIFMT_CBM_CFM;
+		//priv->dai_fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_CBS_CFS | SND_SOC_DAIFMT_IB_NF;
+		//priv->dai_fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_CBM_CFM | SND_SOC_DAIFMT_IB_IF;
+		priv->card_type = CARD_ES8316;
+//end add by polyhex
 	} else if (of_device_is_compatible(np, "fsl,imx-audio-tlv320aic32x4")) {
 		codec_dai_name[0] = "tlv320aic32x4-hifi";
 		priv->dai_fmt |= SND_SOC_DAIFMT_CBP_CFP;
@@ -1255,7 +1362,88 @@ static int fsl_asoc_card_probe(struct platform_device *pdev)
 
 		snd_soc_jack_notifier_register(&priv->mic_jack.jack, &mic_jack_nb);
 	}
+	//John_gao add spk gpios 
+	//
+	priv->hp_det = of_get_named_gpio(np,"hp-det-gpios",0);
+	if(priv->hp_det < 0){
+		printk("GLS_AUDIO Can not read property spk_mute\n");
+		priv->hp_det = INVALID_GPIO;	
+	}else{
+		priv->hp_irq = gpio_to_irq(priv->hp_det);			
+		if (priv->hp_irq > 0) {
+			ret = devm_request_threaded_irq(&pdev->dev, priv->hp_irq,
+					NULL, hp_det_irq,
+					IRQF_TRIGGER_RISING |IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
+					"hp_det_irq", priv);
+			if (ret < 0) {
+				dev_err(&pdev->dev, "irq %d request failed, %d\n",
+						priv->hp_irq, ret);
+				goto asrc_fail;
+			}
+		}
 
+	}
+
+	priv->spk_mute = of_get_named_gpio(np,"spk-mute",0);
+	if (priv->spk_mute < 0) {
+		printk("Can not read property spk_mute\n");
+		priv->spk_mute = INVALID_GPIO;
+	}else{
+		ret = devm_gpio_request_one(&pdev->dev, priv->spk_mute,
+					    GPIOF_OUT_INIT_LOW, "spk-mute");
+		if (ret) {
+			printk( "Failed to request spk_mute\n");
+			priv->spk_mute = INVALID_GPIO;
+		}else{
+			gpio_direction_output(priv->spk_mute, 0);
+		}
+	
+	}
+
+	priv->hp_spk_sel = of_get_named_gpio(np,
+						      "hp-spk-sel",
+						      0);
+	if (priv->hp_spk_sel < 0) {
+		printk("Can not read property hp_spk_sel\n");
+		priv->hp_spk_sel = INVALID_GPIO;
+	}else{
+		ret = devm_gpio_request_one(&pdev->dev, priv->hp_spk_sel,
+					    GPIOF_OUT_INIT_LOW, "hp_spk_sel");
+		if (ret) {
+			printk( "Failed to request hp_spk_sel\n");
+			priv->hp_spk_sel = INVALID_GPIO;
+		}else{
+			gpio_direction_output(priv->hp_spk_sel, 0);
+		}
+	
+	}
+	priv->spk_vdd5v_en = of_get_named_gpio(np,
+						      "spk-vdd5v-en",
+						      0);
+	if (priv->spk_vdd5v_en < 0) {
+		printk( "Can not read property spk_vdd5v_en\n");
+		priv->spk_vdd5v_en = INVALID_GPIO;
+	}else{
+		ret = devm_gpio_request_one(&pdev->dev, priv->spk_vdd5v_en,
+					    GPIOF_OUT_INIT_LOW, "spk_vdd5v_en");
+		if (ret) {
+			printk( "Failed to request spk_vdd5v_en\n");
+			priv->spk_vdd5v_en = INVALID_GPIO;
+		}else{
+			gpio_direction_output(priv->spk_vdd5v_en, 0);
+		}
+	
+	}
+	mypriv = priv;
+
+	//set_gpio_spk();
+/*	printk("GLS_AUDIO vdd5v(%d) spk-sel(%d) spk-mute(%d)\n",
+			priv->spk_vdd5v_en,
+			priv->hp_spk_sel,
+			priv->spk_mute
+			);
+			*/
+	//end John_gao add spk gpios 
 asrc_fail:
 	of_node_put(asrc_np);
 	of_node_put(codec_np[0]);
@@ -1267,6 +1455,18 @@ fail:
 	return ret;
 }
 
+static void fsl_asoc_card_remove(struct platform_device *pdev)
+{
+	struct fsl_asoc_card_priv *priv = platform_get_drvdata(pdev);
+	struct device *dev = &priv->pdev->dev;
+	dev_err(dev, "GLS_AUDIO %s ....... \n",__func__);
+	if (priv->hp_irq > 0) {
+		devm_free_irq(&pdev->dev,priv->hp_irq, priv);
+	}
+	__set_gpio_spk(0);
+        kfree(priv);
+}
+
 static const struct of_device_id fsl_asoc_card_dt_ids[] = {
 	{ .compatible = "fsl,imx-audio-ac97", },
 	{ .compatible = "fsl,imx-audio-cs42888", },
@@ -1275,6 +1475,7 @@ static const struct of_device_id fsl_asoc_card_dt_ids[] = {
 	{ .compatible = "fsl,imx-audio-tlv320aic31xx", },
 	{ .compatible = "fsl,imx-audio-sgtl5000", },
 	{ .compatible = "fsl,imx-audio-wm8962", },
+	{ .compatible = "fsl,imx-audio-es8316", },//add by polyhex
 	{ .compatible = "fsl,imx-audio-wm8960", },
 	{ .compatible = "fsl,imx-audio-mqs", },
 	{ .compatible = "fsl,imx-audio-wm8524", },
@@ -1289,6 +1490,7 @@ MODULE_DEVICE_TABLE(of, fsl_asoc_card_dt_ids);
 
 static struct platform_driver fsl_asoc_card_driver = {
 	.probe = fsl_asoc_card_probe,
+	.remove = fsl_asoc_card_remove,
 	.driver = {
 		.name = DRIVER_NAME,
 		.pm = &snd_soc_pm_ops,

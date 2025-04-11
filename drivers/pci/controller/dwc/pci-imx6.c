@@ -17,7 +17,9 @@
 #include <linux/mfd/syscon/imx6q-iomuxc-gpr.h>
 #include <linux/mfd/syscon/imx7-iomuxc-gpr.h>
 #include <linux/module.h>
+#include <linux/gpio.h>
 #include <linux/of.h>
+#include <linux/of_gpio.h>
 #include <linux/of_address.h>
 #include <linux/pci.h>
 #include <linux/platform_device.h>
@@ -147,6 +149,11 @@ struct imx_lut_data {
 struct imx_pcie {
 	struct dw_pcie		*pci;
 	struct gpio_desc	*reset_gpiod;
+	/*Debix add for 4G AIO*/
+	int			vdd2v5_en;
+	int			vdd1v1_en;
+	int			vdd3v3_en;
+	/*end Debix add for 4G AIO*/
 	int			host_wake_irq;
 	bool			link_is_up;
 	struct clk_bulk_data	clks[IMX_PCIE_MAX_CLKS];
@@ -1688,6 +1695,34 @@ static int imx_pcie_probe(struct platform_device *pdev)
 
 	for (i = 0; i < imx_pcie->drvdata->clks_cnt; i++)
 		imx_pcie->clks[i].id = imx_pcie->drvdata->clk_names[i];
+
+	/*Debix add for 4G AIO*/
+	imx_pcie->vdd2v5_en = of_get_named_gpio(node, "vdd2v5_en", 0);
+	if (gpio_is_valid(imx_pcie->vdd2v5_en)) {
+		//printk("Debix_4g vdd2v5\n");
+		ret = devm_gpio_request_one(dev, imx_pcie->vdd2v5_en,
+					GPIOF_OUT_INIT_HIGH ,
+				"PCIe vdd2v5");
+
+		gpio_set_value_cansleep(imx_pcie->vdd2v5_en,1);
+	}
+	imx_pcie->vdd1v1_en = of_get_named_gpio(node, "vdd1v1_en", 0);
+	if (gpio_is_valid(imx_pcie->vdd1v1_en)) {
+		//printk("Debix_4g vdd1v1\n");
+		ret = devm_gpio_request_one(dev, imx_pcie->vdd1v1_en,
+					GPIOF_OUT_INIT_HIGH ,
+				"PCIe vdd1v1");
+		gpio_set_value_cansleep(imx_pcie->vdd1v1_en,1);
+	}
+	imx_pcie->vdd3v3_en = of_get_named_gpio(node, "vdd3v3_en", 0);
+	if (gpio_is_valid(imx_pcie->vdd3v3_en)) {
+		//printk("Debix_4g vdd3v3\n");
+		ret = devm_gpio_request_one(dev, imx_pcie->vdd3v3_en,
+					GPIOF_OUT_INIT_HIGH ,
+				"PCIe vdd3v3");
+		gpio_set_value_cansleep(imx_pcie->vdd3v3_en,1);
+	}
+/*end Debix add for 4G AIO*/
 
 	/* Fetch clocks */
 	ret = devm_clk_bulk_get(dev, imx_pcie->drvdata->clks_cnt, imx_pcie->clks);

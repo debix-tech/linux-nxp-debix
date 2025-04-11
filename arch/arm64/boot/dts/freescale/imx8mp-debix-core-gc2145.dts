@@ -1,0 +1,75 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright 2020 NXP
+ */
+
+#include "imx8mp-debix-core-board.dts"
+
+///delete-node/ &ov5640_0;
+
+&i2c2 {
+	gc2145_0: gc2145_mipi@3c {
+		compatible = "gc2145";
+		reg = <0x3c>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_csi0_pwn>, <&pinctrl_csi0_rst>, <&pinctrl_csi_mclk>;
+		clocks = <&clk IMX8MP_CLK_IPP_DO_CLKO2>;
+		clock-names = "xclk";
+		assigned-clocks = <&clk IMX8MP_CLK_IPP_DO_CLKO2>;
+		assigned-clock-parents = <&clk IMX8MP_CLK_24M>;
+		assigned-clock-rates = <24000000>;
+		mclk = <24000000>;
+		mclk_source = <0>;
+		
+		csi_id = <0>;
+		powerdown-gpios = <&gpio2 11 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio1 6 GPIO_ACTIVE_HIGH>;
+	
+		mipi_csi;
+		status = "okay";
+
+		port {
+			gc2145_mipi_0_ep: endpoint {
+				remote-endpoint = <&mipi_csi0_ep>;
+				data-lanes = <1>;
+				clock-lanes = <0>;
+			};
+		};
+	};
+};
+
+&mipi_csi_0 { 
+	status = "okay";
+   	port {
+		mipi_csi0_ep: endpoint {
+			remote-endpoint = <&gc2145_mipi_0_ep>;
+			data-lanes = <1>;
+			csis-hs-settle = <13>;
+			csis-clk-settle = <2>;
+			csis-wclk;
+		};
+	};
+};
+
+&cameradev {
+	status = "okay";
+};
+
+
+&isi_0 {
+	status = "okay";
+
+};
+
+&isi_1 {
+	status = "disabled";
+
+};
+
+&isp_0 {
+	status = "disabled";
+};
+
+&dewarp {
+	status = "disabled";
+};

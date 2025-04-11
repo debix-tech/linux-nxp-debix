@@ -32,11 +32,21 @@ static int __init early_hostname(char *arg)
 }
 early_param("hostname", early_hostname);
 
+#if 1
+//John_gao set linux version
+#define polyhex_version "DebixModelAB V1.0.1"
+
+const char linux_proc_banner[] =
+        "%s version %s"
+        " (" polyhex_version ")"
+        " (" LINUX_COMPILER ") %s\n";
+
+#else
 const char linux_proc_banner[] =
 	"%s version %s"
 	" (" LINUX_COMPILE_BY "@" LINUX_COMPILE_HOST ")"
 	" (" LINUX_COMPILER ") %s\n";
-
+#endif
 BUILD_SALT;
 BUILD_LTO_INFO;
 

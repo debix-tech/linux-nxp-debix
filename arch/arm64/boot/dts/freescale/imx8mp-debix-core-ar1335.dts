@@ -1,0 +1,79 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright 2020 NXP
+ */
+
+#include "imx8mp-debix-core-board.dts"
+
+///delete-node/ &ov5640_0;
+
+&i2c2 {
+
+	ar1335: ar1335@36 {
+		compatible = "onsemi,ar1335";
+		reg = <0x36>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_csi0_pwn>, <&pinctrl_csi0_rst>, <&pinctrl_csi_mclk>;
+		clocks = <&clk IMX8MP_CLK_IPP_DO_CLKO2>;
+		clock-names = "csi_mclk";
+		assigned-clocks = <&clk IMX8MP_CLK_IPP_DO_CLKO2>;
+		assigned-clock-parents = <&clk IMX8MP_CLK_24M>;
+		assigned-clock-rates = <24000000>;
+		mclk = <24000000>;
+		mclk_source = <0>;
+		
+		csi_id = <0>;
+		powerdown-gpios = <&gpio2 11 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio1 6 GPIO_ACTIVE_HIGH>;
+	
+		mipi_csi;
+		status = "okay";
+		
+		port {
+			ar1335_mipi_0_ep: endpoint {
+				remote-endpoint = <&mipi_csi0_ep>;
+				data-lanes = <1 2 3 4>;
+				clock-lanes = <0>;
+				max-pixel-frequency = /bits/ 64 <500000000>;
+			};
+		};
+	};
+
+
+};
+
+&mipi_csi_0 { 
+    
+    port@0 {
+        mipi_csi0_ep: endpoint {
+        ///delete-property/ remote-endpoint;
+        remote-endpoint = <&ar1335_mipi_0_ep>;
+        data-lanes = <4>;
+				csis-hs-settle = <16>;
+			};
+   };
+};
+
+&cameradev {
+        /delete-node/ mipi_csi_1;
+};
+
+&isi_0 {
+	status = "disabled";
+
+};
+
+&isi_1 {
+	status = "disabled";
+
+};
+
+
+&isp_0 {
+	status = "okay";
+};
+
+&dewarp {
+	status = "okay";
+};
+

@@ -689,6 +689,9 @@ static const struct pca9450_regulator_desc pca9450bc_regulators[] = {
 	},
 };
 
+//add by polyhex
+struct pca9450 *Mypca9450 = NULL;
+//end add by polyhex
 static const struct pca9450_regulator_desc pca9451a_regulators[] = {
 	{
 		.desc = {
@@ -1122,6 +1125,29 @@ static int pca9450_i2c_probe(struct i2c_client *i2c)
 		type == PCA9450_TYPE_PCA9450A ? "pca9450a" :
 		(type == PCA9450_TYPE_PCA9451A ? "pca9451a" : "pca9450bc"));
 
+	//John_gao
+	{
+		unsigned int reg;
+		Mypca9450 = pca9450;
+		ret = regmap_read(pca9450->regmap, PCA9450_REG_LDO4CTRL, &reg);
+		if (ret) {
+			dev_err(&i2c->dev, "Read ldo4 error\n");
+			return ret;
+		}
+		printk("John_gao ldo4 : 0x%x \n", reg);
+
+		//set to 3.3 0xdf
+		//set to 0.8 0x0
+		//set to 2.0 0xcc
+		regmap_write(pca9450->regmap, PCA9450_REG_LDO4CTRL, 0xdf);
+		ret = regmap_read(pca9450->regmap, PCA9450_REG_LDO4CTRL, &reg);
+		if (ret) {
+			dev_err(&i2c->dev, "Read ldo4 error\n");
+			return ret;
+		}
+		printk("John_gao set 0 ldo4 : 0x%x \n", reg);
+	}
+//end add by John_gao
 	return 0;
 }
 

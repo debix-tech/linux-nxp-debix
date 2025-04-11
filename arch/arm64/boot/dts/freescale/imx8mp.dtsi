@@ -265,7 +265,9 @@
 
 		gpu_reserved: gpu_reserved@100000000 {
 			no-map;
-			reg = <0x1 0x00000000 0 0x10000000>;
+			//John_gao use 2GB ddr
+			reg = <0x0 0x80000000 0 0x10000000>;
+			//reg = <0x1 0x00000000 0 0x10000000>;
 		};
 
 		dsp_reserved: dsp@92400000 {
@@ -384,7 +386,7 @@
 				};
 
 				cpu_crit0: trip1 {
-					temperature = <95000>;
+					temperature = <105000>;
 					hysteresis = <2000>;
 					type = "critical";
 				};
@@ -415,7 +417,7 @@
 				};
 
 				soc_crit0: trip1 {
-					temperature = <95000>;
+					temperature = <105000>;
 					hysteresis = <2000>;
 					type = "critical";
 				};

@@ -145,9 +145,9 @@ imx8mp_ldb_encoder_atomic_check(struct drm_encoder *encoder,
 	struct imx8mp_ldb_channel *imx8mp_ldb_ch =
 						enc_to_imx8mp_ldb_ch(encoder);
 	struct ldb_channel *ldb_ch = &imx8mp_ldb_ch->base;
-	struct imx8mp_ldb *imx8mp_ldb = imx8mp_ldb_ch->imx8mp_ldb;
-	struct ldb *ldb = &imx8mp_ldb->base;
-	struct drm_display_mode *mode = &crtc_state->adjusted_mode;
+	//struct imx8mp_ldb *imx8mp_ldb = imx8mp_ldb_ch->imx8mp_ldb;
+	//struct ldb *ldb = &imx8mp_ldb->base;
+	//struct drm_display_mode *mode = &crtc_state->adjusted_mode;
 	struct drm_bridge_state *bridge_state = NULL;
 	struct drm_bridge *bridge;
 
@@ -175,11 +175,12 @@ imx8mp_ldb_encoder_atomic_check(struct drm_encoder *encoder,
 	 * Due to limited video PLL frequency points on i.MX8mp,
 	 * we do mode fixup here in case any mode is unsupported.
 	 */
+	/* John_gao some lcd clock less than 74.25MHz
 	if (ldb->dual)
 		mode->clock = mode->clock > 100000 ? 148500 : 74250;
 	else
 		mode->clock = 74250;
-
+	*/
 	return 0;
 }
 
@@ -190,8 +191,8 @@ imx8mp_ldb_encoder_mode_valid(struct drm_encoder *encoder,
 	struct imx8mp_ldb_channel *imx8mp_ldb_ch =
 						enc_to_imx8mp_ldb_ch(encoder);
 	struct ldb_channel *ldb_ch = &imx8mp_ldb_ch->base;
-	struct imx8mp_ldb *imx8mp_ldb = imx8mp_ldb_ch->imx8mp_ldb;
-	struct ldb *ldb = &imx8mp_ldb->base;
+	//struct imx8mp_ldb *imx8mp_ldb = imx8mp_ldb_ch->imx8mp_ldb;
+	//struct ldb *ldb = &imx8mp_ldb->base;
 
 	/* it should be okay with a panel */
 	if (ldb_ch->panel)
@@ -201,12 +202,13 @@ imx8mp_ldb_encoder_mode_valid(struct drm_encoder *encoder,
 	 * Due to limited video PLL frequency points on i.MX8mp,
 	 * we do mode valid check here.
 	 */
+	/* John_gao some lcd clock less than 74.25MHz
 	if (ldb->dual && mode->clock != 74250 && mode->clock != 148500)
 		return MODE_NOCLOCK;
 
 	if (!ldb->dual && mode->clock != 74250)
 		return MODE_NOCLOCK;
-
+	*/
 	return MODE_OK;
 }
 

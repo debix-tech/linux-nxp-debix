@@ -16,6 +16,9 @@ obj-$(CONFIG_BT_HCIBLUECARD)	+= bluecard_cs.o
 obj-$(CONFIG_BT_HCIBTUSB)	+= btusb.o
 obj-$(CONFIG_BT_HCIBTSDIO)	+= btsdio.o
 
+#add by polyhex
+obj-$(CONFIG_MACH_IMX_BLUETOOTH_RFKILL) += mx8_bt_rfkill.o
+
 obj-$(CONFIG_BT_INTEL)		+= btintel.o
 obj-$(CONFIG_BT_INTEL_PCIE)	+= btintel_pcie.o btintel.o
 obj-$(CONFIG_BT_ATH3K)		+= ath3k.o

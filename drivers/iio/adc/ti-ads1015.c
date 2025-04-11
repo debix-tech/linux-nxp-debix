@@ -396,15 +396,44 @@ static
 int ads1015_get_adc_result(struct ads1015_data *data, int chan, int *val)
 {
 	const int *data_rate = data->chip->data_rate;
-	int ret, pga, dr, dr_old, conv_time;
+	int ret, pga, dr;//, dr_old, conv_time;
 	unsigned int old, mask, cfg;
+	int getRegTime = 10;
+	data_rate = data_rate; // avoid warning: unused variable ¡®data_rate¡¯
 
 	if (chan < 0 || chan >= ADS1015_CHANNELS)
 		return -EINVAL;
+#if 1
+	pga = data->channel_data[chan].pga;
+	dr = data->channel_data[chan].data_rate;
+	mask = ADS1015_CFG_MUX_MASK | ADS1015_CFG_PGA_MASK |
+		ADS1015_CFG_DR_MASK;
+	cfg = chan << ADS1015_CFG_MUX_SHIFT | pga << ADS1015_CFG_PGA_SHIFT |
+		dr << ADS1015_CFG_DR_SHIFT;
 
+	cfg |= 0x8103;
+
+	//printk("GLS_ADS chan=%d 0x%x cfg=( 0x%x ) in \n", chan,ADS1015_CFG_REG, cfg);
+	ret = regmap_write(data->regmap, ADS1015_CFG_REG, cfg);
+	if (ret)
+		return ret;
+
+	while(getRegTime--){
+			//printk("GLS_ADS in\n");
 	ret = regmap_read(data->regmap, ADS1015_CFG_REG, &old);
 	if (ret)
 		return ret;
+	//printk("GLS_ADS chan=%d 0x%x cfg=( 0x%x == 0x%x )\n", chan,ADS1015_CFG_REG, cfg, old);
+		if(cfg == old) {
+		//	printk("GLS_ADS out\n");
+			break;
+		}
+	}
+#else
+	ret = regmap_read(data->regmap, ADS1015_CFG_REG, &old);
+	if (ret)
+		return ret;
+	printk("GLS_ADS chan=%d 0x%x old=0x%x\n", chan,ADS1015_CFG_REG, old);
 
 	pga = data->channel_data[chan].pga;
 	dr = data->channel_data[chan].data_rate;
@@ -436,7 +465,7 @@ int ads1015_get_adc_result(struct ads1015_data *data, int chan, int *val)
 		usleep_range(conv_time, conv_time + 1);
 		data->conv_invalid = false;
 	}
-
+#endif
 	return regmap_read(data->regmap, ADS1015_CONV_REG, val);
 }
 
@@ -966,9 +995,13 @@ static void ads1015_get_channels_config(struct i2c_client *client)
 
 static int ads1015_set_conv_mode(struct ads1015_data *data, int mode)
 {
+#if 0
 	return regmap_update_bits(data->regmap, ADS1015_CFG_REG,
 				  ADS1015_CFG_MOD_MASK,
 				  mode << ADS1015_CFG_MOD_SHIFT);
+#else
+	return 0;
+#endif
 }
 
 static int ads1015_probe(struct i2c_client *client)
@@ -1068,7 +1101,8 @@ static int ads1015_probe(struct i2c_client *client)
 			return ret;
 	}
 
-	ret = ads1015_set_conv_mode(data, ADS1015_CONTINUOUS);
+	//John_gao set single-shot ret = ads1015_set_conv_mode(data, ADS1015_CONTINUOUS);
+	ret = ads1015_set_conv_mode(data, ADS1015_SINGLESHOT);
 	if (ret)
 		return ret;
 
@@ -1123,7 +1157,8 @@ static int ads1015_runtime_resume(struct device *dev)
 	struct ads1015_data *data = iio_priv(indio_dev);
 	int ret;
 
-	ret = ads1015_set_conv_mode(data, ADS1015_CONTINUOUS);
+	//John_gao set single-shot ret = ads1015_set_conv_mode(data, ADS1015_CONTINUOUS);
+	ret = ads1015_set_conv_mode(data, ADS1015_SINGLESHOT);
 	if (!ret)
 		data->conv_invalid = true;
 

@@ -744,7 +744,52 @@ static int es8316_set_jack(struct snd_soc_component *component,
 
 	return 0;
 }
+static ssize_t es8316_reg_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+        int i = 0;
+	u8 reg = 0;
+	struct es8316_priv *es8316 = dev_get_drvdata(dev);
 
+	printk("================ \n\n\n");
+	printk("================ \n\n\n");
+	printk("================ \n\n\n");
+	printk("================ \n\n\n");
+	printk("================ \n\n\n");
+	printk("================ \n\n\n");
+	for (i = 0 ; i < 0x53; i++){
+		reg = snd_soc_component_read(es8316->component, i);
+		printk("%02x: %02x \n", i , reg);
+	}
+
+
+        return scnprintf(buf, PAGE_SIZE, "es8316 reg \n");
+
+        //return strlen(buf);
+}
+static ssize_t
+es8316_reg_store(struct device *d, struct device_attribute *attr,
+                         const char *buf, size_t count)
+{
+        //struct il_priv *il = dev_get_drvdata(d);
+	struct es8316_priv *es8316 = dev_get_drvdata(d);
+        //unsigned long val;
+        //int ret;
+	int reg,value;
+	sscanf(buf, "%x,%x", &reg,&value);
+	printk("set ret:0x%x value:0x%x\n", reg, value);
+	snd_soc_component_write(es8316->component, reg, value);
+
+        //ret = kstrtoul(buf, 0, &val);
+        //if (ret)
+        //        IL_INFO("%s is not in hex or decimal form.\n", buf);
+        //else
+        //        il->debug_level = val;
+
+        return strnlen(buf, count);
+}
+
+static DEVICE_ATTR(es8316_reg, 0644, es8316_reg_show,
+                   es8316_reg_store);
 static int es8316_probe(struct snd_soc_component *component)
 {
 	struct es8316_priv *es8316 = snd_soc_component_get_drvdata(component);
@@ -784,6 +829,18 @@ static int es8316_probe(struct snd_soc_component *component)
 	 * and quality for Intel CHT platforms.
 	 */
 	snd_soc_component_write(component, ES8316_CLKMGR_ADCOSR, 0x32);
+
+	//add attr
+	{
+	int err ;
+
+	printk("es8316 %s 003 attr\n", __func__);
+        err = device_create_file(component->dev, &dev_attr_es8316_reg);
+        if (err){
+                printk("%s create attr es8316_reg err!!!\n",__func__);
+                //goto exit;
+        }
+	}
 
 	return 0;
 }

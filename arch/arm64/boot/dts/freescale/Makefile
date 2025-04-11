@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0
-
+ifdef CONFIG_NXP_ALL_DTS
 dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-ls1012a-2g5rdb.dtb
 dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-ls1012a-frdm.dtb
 dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-ls1012a-frwy.dtb
@@ -852,3 +852,30 @@ dtb-$(CONFIG_ARCH_S32) += s32v234-evb.dtb \
 			  s32v234-sbc.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx8qm-mek-sof-cs42888.dtb imx8qm-mek-sof-wm8960.dtb \
 			  imx8qm-mek-revd-sof-wm8962.dtb imx8qm-mek-sof.dtb
+
+endif
+
+dtb-$(CONFIG_ARCH_MXC) += imx8mp-evk.dtb \
+			imx8mp-debix-core-board.dtb \
+			imx8mp-debix-core-TD050A.dtb \
+			imx8mp-debix-core-TD070A.dtb \
+			imx8mp-debix-core-TD080A.dtb \
+			imx8mp-debix-core-TD080B.dtb \
+			imx8mp-debix-core-TD101A.dtb \
+			imx8mp-debix-core-gc2145.dtb \
+			imx8mp-debix-core-ov5640.dtb \
+			imx8mp-debix-core-ar1335.dtb \
+			imx8mp-debix-4g-board.dtb \
+			imx8mp-debix-io-TD050A.dtb \
+			imx8mp-debix-io-TD070A.dtb \
+			imx8mp-debix-io-TD080A.dtb \
+			imx8mp-debix-io-TD080B.dtb \
+			imx8mp-debix-io-TD101A.dtb \
+			imx8mp-debix-io-board.dtb \
+			imx8mp-debix-io-raspberrypi-touchscreen.dtb \
+			imx8mp-debix-lora-TD050A.dtb \
+			imx8mp-debix-lora-TD070A.dtb \
+			imx8mp-debix-lora-TD080A.dtb \
+			imx8mp-debix-lora-TD080B.dtb \
+			imx8mp-debix-lora-TD101A.dtb \
+			imx8mp-debix-lora-board.dtb

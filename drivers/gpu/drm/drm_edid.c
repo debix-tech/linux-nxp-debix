@@ -752,11 +752,13 @@ static const struct drm_display_mode edid_cea_modes_1[] = {
 		   752, 800, 0, 480, 490, 492, 525, 0,
 		   DRM_MODE_FLAG_NHSYNC | DRM_MODE_FLAG_NVSYNC),
 	  .picture_aspect_ratio = HDMI_PICTURE_ASPECT_4_3, },
-	/* 2 - 720x480@60Hz 4:3 */
-	{ DRM_MODE("720x480", DRM_MODE_TYPE_DRIVER, 27000, 720, 736,
-		   798, 858, 0, 480, 489, 495, 525, 0,
-		   DRM_MODE_FLAG_NHSYNC | DRM_MODE_FLAG_NVSYNC),
-	  .picture_aspect_ratio = HDMI_PICTURE_ASPECT_4_3, },
+	/* 2 - 1280x800@75Hz 16:10 */
+	{ DRM_MODE("1280x800", DRM_MODE_TYPE_DRIVER, 106500, 1280, 1360,
+		   1488, 1696, 0, 800, 803, 809, 838, 0,
+	//{ DRM_MODE("1280x800", DRM_MODE_TYPE_DRIVER, 71000, 1280, 1328,
+	//	   1360, 1440, 0, 800, 803, 809, 823, 0,
+		   DRM_MODE_FLAG_NHSYNC | DRM_MODE_FLAG_PVSYNC),
+	  .picture_aspect_ratio = HDMI_PICTURE_ASPECT_16_9, },
 	/* 3 - 720x480@60Hz 16:9 */
 	{ DRM_MODE("720x480", DRM_MODE_TYPE_DRIVER, 27000, 720, 736,
 		   798, 858, 0, 480, 489, 495, 525, 0,
@@ -3324,6 +3326,20 @@ drm_gtf2_mode(struct drm_device *dev,
 
 	return mode;
 }
+static int isRTK27(const struct drm_edid *drm_edid){
+	u8 *p = (u8 *) (drm_edid->edid);
+
+	if(p[8] == 0x4a &&
+	   p[9] == 0x8b &&
+	   p[10]== 0x3b &&
+	   p[11]== 0x2a &&
+	   p[20]== 0x80 &&
+	   p[21]== 0x3c &&
+	   p[22]== 0x22){
+		return 1;
+	}
+	return 0;
+}
 
 /*
  * Take the standard timing params (in this case width, aspect, and refresh)
@@ -3393,7 +3409,18 @@ static struct drm_display_mode *drm_mode_std(struct drm_connector *connector,
 		mode->hsync_end = mode->hsync_end - 1;
 		return mode;
 	}
-
+	if(isRTK27(drm_edid)){
+		if(hsize == 1920 && vsize == 1080 ){
+			return NULL;
+		}else if(hsize == 1600 && vsize == 1200 ){
+			return NULL;
+		}else if(hsize == 1280 && vsize == 1024 ){
+			return NULL;
+		}else if(hsize == 1152 && vsize == 864 ){
+			hsize = 1280;
+			vsize = 800;
+		} 
+	}
 	/* check whether it can be found in default mode table */
 	if (drm_monitor_supports_rb(drm_edid)) {
 		mode = drm_mode_find_dmt(dev, hsize, vsize, vrefresh_rate,
@@ -4073,6 +4100,31 @@ add_cvt_modes(struct drm_connector *connector, const struct drm_edid *drm_edid)
 static void fixup_detailed_cea_mode_clock(struct drm_connector *connector,
 					  struct drm_display_mode *mode);
 
+//John_gao 检查 edid 是否为 Debix HDMI
+static int is_debix_hdmi = 0;
+static int check_Debix_hdmi(const struct edid *edid){
+        u8 *p = (u8 *) edid;
+/*
+        printk("GLS_HDMI p8=0x%02x", p[8]);
+        printk("GLS_HDMI p9=0x%02x", p[9]);
+        printk("GLS_HDMI p10=0x%02x", p[10]);
+        printk("GLS_HDMI p11=0x%02x", p[11]);
+        printk("GLS_HDMI p20=0x%02x", p[20]);
+        printk("GLS_HDMI p21=0x%02x", p[21]);
+        printk("GLS_HDMI p22=0x%02x", p[22]);
+*/
+        if(p[8] == 0x12 &&
+           p[9] == 0xe5 &&
+           p[10]== 0x00 &&
+           p[11]== 0x21 &&
+           p[20]== 0x81 &&
+           p[21]== 0x2f &&
+           p[22]== 0x1a){
+                return 1;
+        }
+        return 0;
+}
+
 static void
 do_detailed_mode(const struct detailed_timing *timing, void *c)
 {
@@ -4084,6 +4136,22 @@ do_detailed_mode(const struct detailed_timing *timing, void *c)
 
 	newmode = drm_mode_detailed(closure->connector,
 				    closure->drm_edid, timing);
+	//John_gao  获取EDID 主显示 时序
+        if(is_debix_hdmi){
+
+        const struct detailed_pixel_timing *pt = &timing->data.pixel_data;
+        unsigned hactive = (pt->hactive_hblank_hi & 0xf0) << 4 | pt->hactive_lo;
+        unsigned vactive = (pt->vactive_vblank_hi & 0xf0) << 4 | pt->vactive_lo;
+                if(hactive == 800 && vactive == 480){
+                        printk("GLS_HDMI Debix 5inc Hdmi w(%d) h(%d)\n", hactive,vactive);
+                }else if(hactive == 1024 && vactive == 600){
+                        printk("GLS_HDMI Debix 7inc Hdmi w(%d) h(%d)\n", hactive,vactive);
+  //              }else if(hactive == 1280 && vactive == 800){
+  //                      printk("GLS_HDMI Debix 10.1inc Hdmi w(%d) h(%d)\n", hactive,vactive);
+                }else {
+                                return ;
+                }
+        }
 	if (!newmode)
 		return;
 
@@ -4121,6 +4189,7 @@ static int add_detailed_modes(struct drm_connector *connector,
 		closure.preferred =
 			drm_edid->edid->features & DRM_EDID_FEATURE_PREFERRED_TIMING;
 
+	is_debix_hdmi = check_Debix_hdmi(drm_edid->edid);
 	drm_for_each_detailed_block(drm_edid, do_detailed_mode, &closure);
 
 	return closure.modes;
@@ -6869,12 +6938,16 @@ static int _drm_edid_connector_add_modes(struct drm_connector *connector,
 	 * XXX order for additional mode types in extension blocks?
 	 */
 	num_modes += add_detailed_modes(connector, drm_edid);
-	num_modes += add_cvt_modes(connector, drm_edid);
-	num_modes += add_standard_modes(connector, drm_edid);
-	num_modes += add_established_modes(connector, drm_edid);
-	num_modes += add_cea_modes(connector, drm_edid);
-	num_modes += add_alternate_cea_modes(connector, drm_edid);
-	num_modes += add_displayid_detailed_modes(connector, drm_edid);
+	if(is_debix_hdmi){
+                printk("GLS_HDMI --- use Debix Hdmi ---\n");
+        }else{
+		num_modes += add_cvt_modes(connector, drm_edid);
+		num_modes += add_standard_modes(connector, drm_edid);
+		num_modes += add_established_modes(connector, drm_edid);
+		num_modes += add_cea_modes(connector, drm_edid);
+		num_modes += add_alternate_cea_modes(connector, drm_edid);
+		num_modes += add_displayid_detailed_modes(connector, drm_edid);
+	}
 	if (drm_edid->edid->features & DRM_EDID_FEATURE_CONTINUOUS_FREQ)
 		num_modes += add_inferred_modes(connector, drm_edid);
 

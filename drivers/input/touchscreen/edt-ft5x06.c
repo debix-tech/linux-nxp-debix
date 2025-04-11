@@ -33,6 +33,7 @@
 #include <linux/uaccess.h>
 
 #include <linux/unaligned.h>
+#include <linux/of.h>
 
 #define WORK_REGISTER_THRESHOLD		0x00
 #define WORK_REGISTER_REPORT_RATE	0x08
@@ -76,6 +77,8 @@
 
 #define EDT_DEFAULT_NUM_X		1024
 #define EDT_DEFAULT_NUM_Y		1024
+//John_gao add for 7inch-touchscreen-panel
+#define POLL_INTERVAL_MS		17	/* 17ms = 60fps */
 
 #define M06_REG_CMD(factory) ((factory) ? 0xf3 : 0xfc)
 #define M06_REG_ADDR(factory, addr) ((factory) ? (addr) & 0x7f : (addr) & 0x3f)
@@ -147,6 +150,11 @@ struct edt_ft5x06_ts_data {
 	enum edt_ver version;
 	unsigned int crc_errors;
 	unsigned int header_errors;
+	//John_gao add for 7inch-touchscreen-panel
+	struct timer_list timer;
+	struct work_struct work_i2c_poll;
+	int max_x;
+	int max_y;
 };
 
 struct edt_i2c_chip_data {
@@ -335,9 +343,19 @@ static irqreturn_t edt_ft5x06_ts_isr(int irq, void *dev_id)
 
 		input_mt_slot(tsdata->input, id);
 		if (input_mt_report_slot_state(tsdata->input, MT_TOOL_FINGER,
-					       type != TOUCH_EVENT_UP))
+					       type != TOUCH_EVENT_UP)){
+						  // printk("GLS x=%d y=%d \n",x , y);
+			//John_gao add for 7inch-touchscreen-panel
+			if(tsdata->max_x && tsdata->max_x){
+				x = tsdata->max_x - x;
+				y = tsdata->max_y - y;
+			}else{
+				x = 800 - x;
+				y = 480 - y;
+			}
 			touchscreen_report_pos(tsdata->input, &tsdata->prop,
 					       x, y, true);
+		}
 	}
 
 	input_mt_report_pointer_emulation(tsdata->input, true);
@@ -345,6 +363,23 @@ static irqreturn_t edt_ft5x06_ts_isr(int irq, void *dev_id)
 
 out:
 	return IRQ_HANDLED;
+}
+
+	//John_gao add for 7inch-touchscreen-panel
+static void edt_ft5x06_ts_irq_poll_timer(struct timer_list *t)
+{
+	struct edt_ft5x06_ts_data *tsdata = from_timer(tsdata, t, timer);
+
+	schedule_work(&tsdata->work_i2c_poll);
+	mod_timer(&tsdata->timer, jiffies + msecs_to_jiffies(POLL_INTERVAL_MS));
+}
+
+static void edt_ft5x06_ts_work_i2c_poll(struct work_struct *work)
+{
+	struct edt_ft5x06_ts_data *tsdata = container_of(work,
+			struct edt_ft5x06_ts_data, work_i2c_poll);
+
+	edt_ft5x06_ts_isr(0, tsdata);
 }
 
 struct edt_ft5x06_attribute {
@@ -1144,6 +1179,8 @@ static int edt_ft5x06_ts_probe(struct i2c_client *client)
 	struct edt_ft5x06_ts_data *tsdata;
 	unsigned int val;
 	struct input_dev *input;
+	struct device *dev = &client->dev;
+	struct device_node *np = dev->of_node;
 	unsigned long irq_flags;
 	int error;
 	u32 report_rate;
@@ -1332,17 +1369,34 @@ static int edt_ft5x06_ts_probe(struct i2c_client *client)
 		return error;
 	}
 
-	irq_flags = irq_get_trigger_type(client->irq);
-	if (irq_flags == IRQF_TRIGGER_NONE)
-		irq_flags = IRQF_TRIGGER_FALLING;
-	irq_flags |= IRQF_ONESHOT;
+	if (client->irq) {
+		irq_flags = irq_get_trigger_type(client->irq);
+		if (irq_flags == IRQF_TRIGGER_NONE)
+			irq_flags = IRQF_TRIGGER_FALLING;
+		irq_flags |= IRQF_ONESHOT;
 
-	error = devm_request_threaded_irq(&client->dev, client->irq,
-					  NULL, edt_ft5x06_ts_isr, irq_flags,
-					  client->name, tsdata);
-	if (error) {
-		dev_err(&client->dev, "Unable to request touchscreen IRQ.\n");
-		return error;
+		error = devm_request_threaded_irq(&client->dev, client->irq,
+				NULL, edt_ft5x06_ts_isr, irq_flags,
+				client->name, tsdata);
+		if (error) {
+			dev_err(&client->dev, "Unable to request touchscreen IRQ.\n");
+			return error;
+		}
+	} else {
+	//John_gao add for 7inch-touchscreen-panel
+		error = of_property_read_u32(np, "touchscreen-size-x", &tsdata->max_x);
+		if(error) tsdata->max_x = 0;
+		error = of_property_read_u32(np, "touchscreen-size-y", &tsdata->max_y);
+		if(error) tsdata->max_y = 0;
+
+		//printk("GLS tp x,y(%d,%d) \n", tsdata->max_x, tsdata->max_y);
+
+		INIT_WORK(&tsdata->work_i2c_poll,
+			  edt_ft5x06_ts_work_i2c_poll);
+		timer_setup(&tsdata->timer, edt_ft5x06_ts_irq_poll_timer, 0);
+		tsdata->timer.expires = jiffies +
+					msecs_to_jiffies(POLL_INTERVAL_MS);
+		add_timer(&tsdata->timer);
 	}
 
 	error = input_register_device(input);
@@ -1364,6 +1418,8 @@ static void edt_ft5x06_ts_remove(struct i2c_client *client)
 {
 	struct edt_ft5x06_ts_data *tsdata = i2c_get_clientdata(client);
 
+	//John_gao add for 7inch-touchscreen-panel
+	del_timer(&tsdata->timer);
 	edt_ft5x06_ts_teardown_debugfs(tsdata);
 }
 

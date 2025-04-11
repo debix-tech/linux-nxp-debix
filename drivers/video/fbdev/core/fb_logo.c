@@ -5,8 +5,9 @@
 
 #include "fb_internal.h"
 
-bool fb_center_logo __read_mostly;
-int fb_logo_count __read_mostly = -1;
+//John_gao Display logo in the center
+bool fb_center_logo __read_mostly = true;
+int fb_logo_count __read_mostly = 1;
 
 static inline unsigned int safe_shift(unsigned int d, int n)
 {

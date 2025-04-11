@@ -1,0 +1,50 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Copyright 2019 NXP
+ */
+
+#include "imx8mp-debix-io-board.dts"
+
+&mipi_dsi {
+	status = "okay";
+	/*John_gao add raspberrypi,7inch-touchscreen-panel*/
+	port@1 {
+		dsim_to_tpanel: endpoint {
+			remote-endpoint = <&tpanel_from_dsim>;
+			attach-bridge;
+		};
+	};
+
+	panel@0 {
+		compatible = "raspberrypi,7inch-touchscreen-panel";
+		reg = <0>;
+		pinctrl-0 = <&pinctrl_mipi_dsi_en>;
+		reset-gpio = <&gpio1 8 GPIO_ACTIVE_LOW>;
+		status = "okay";
+	};
+};
+
+&i2c2 {
+    /*John_gao add raspberrypi,7inch-touchscreen-panel*/
+    lcd@45 {
+	    compatible = "raspberrypi,7inch-touchscreen-panel";
+            reg = <0x45>;
+
+	    status = "okay";
+            port {
+                tpanel_from_dsim: endpoint {
+                        remote-endpoint = <&dsim_to_tpanel>;
+                };
+            };
+    };
+
+    
+	ft5406: ts@38 {
+		compatible = "edt,edt-ft5406";
+		reg = <0x38>;
+
+		touchscreen-size-x = < 800 >;
+		touchscreen-size-y = < 480 >;
+	};
+
+};
