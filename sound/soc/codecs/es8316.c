@@ -432,6 +432,8 @@ static int es8316_set_dai_fmt(struct snd_soc_dai *codec_dai,
 	}
 
 	mask = ES8316_SERDATA1_MASTER | ES8316_SERDATA1_BCLK_INV;
+	//John_gao test for adc 0x09 reg 
+	printk("GLS_AUDIO reg(%x) mask(%x) value(%x) \n", ES8316_SERDATA1, mask, serdata1);
 	snd_soc_component_update_bits(component, ES8316_SERDATA1, mask, serdata1);
 
 	mask = ES8316_SERDATA2_FMT_MASK | ES8316_SERDATA2_ADCLRP;
@@ -505,7 +507,9 @@ static int es8316_pcm_hw_params(struct snd_pcm_substream *substream,
 	}
 
 	lrck_divider = clk / params_rate(params);
+	//printk("GLS_AUDIO lrck_divider(%x) bclk_divider(%x)\n", lrck_divider,bclk_divider);
 	bclk_divider = lrck_divider / 4;
+	//printk("GLS_AUDIO lrck_divider(%x) bclk_divider(%x)\n", lrck_divider,bclk_divider);
 	switch (params_format(params)) {
 	case SNDRV_PCM_FORMAT_S16_LE:
 		wordlen = ES8316_SERDATA2_LEN_16;
@@ -528,11 +532,14 @@ static int es8316_pcm_hw_params(struct snd_pcm_substream *substream,
 		return -EINVAL;
 	}
 
+	//printk("GLS_AUDIO lrck_divider(%x) bclk_divider(%x)\n", lrck_divider,bclk_divider);
 	snd_soc_component_update_bits(component, ES8316_SERDATA_DAC,
 			    ES8316_SERDATA2_LEN_MASK, wordlen);
 	snd_soc_component_update_bits(component, ES8316_SERDATA_ADC,
 			    ES8316_SERDATA2_LEN_MASK, wordlen);
-	snd_soc_component_update_bits(component, ES8316_SERDATA1, 0x1f, bclk_divider);
+	//John_gao test for adc 0x09 reg 4 to 8
+	//printk("GLS_AUDIO reg(%x) 0x1f value(%x) \n", ES8316_SERDATA1, bclk_divider==4?8:bclk_divider);
+	snd_soc_component_update_bits(component, ES8316_SERDATA1, 0x1f, bclk_divider==4?8:bclk_divider);
 	snd_soc_component_update_bits(component, ES8316_CLKMGR_ADCDIV1, 0x0f, lrck_divider >> 8);
 	snd_soc_component_update_bits(component, ES8316_CLKMGR_ADCDIV2, 0xff, lrck_divider & 0xff);
 	snd_soc_component_update_bits(component, ES8316_CLKMGR_DACDIV1, 0x0f, lrck_divider >> 8);
