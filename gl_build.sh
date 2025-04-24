@@ -17,7 +17,7 @@ cp arch/arm64/boot/dts/freescale/*.dtb image_out/boot/.
 
 cp arch/arm64/boot/Image image_out/boot/.
 
-#return
+return
 
 make -j32 modules
 

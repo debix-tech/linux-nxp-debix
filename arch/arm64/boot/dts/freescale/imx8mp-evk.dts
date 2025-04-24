@@ -96,7 +96,7 @@
 		enable-active-high;
 	};
 #endif
-	reg_pcie0: regulator-pcie {
+	/*reg_pcie0: regulator-pcie {
 		compatible = "regulator-fixed";
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_pcie0_reg>;
@@ -106,7 +106,7 @@
 		gpio = <&gpio2 6 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
 		regulator-always-on;
-	};
+	}; */
 /*
 	reg_usb_vbus: regulator-vbus {
 		compatible = "regulator-fixed";
@@ -799,11 +799,11 @@
 		clock-frequency = <32768>;
 		clock-output-names = "xin32k";
 		init_date="2022/04/12";
-		interrupt-parent = <&gpio2>;
-		interrupts = <11 IRQ_TYPE_EDGE_FALLING>;
+		//interrupt-parent = <&gpio2>;
+		//interrupts = <11 IRQ_TYPE_EDGE_FALLING>;
 		
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_rtc_int>;
+		//pinctrl-names = "default";
+		//pinctrl-0 = <&pinctrl_rtc_int>;
 	};
 	ads1115: ads1115@48 {
 		 compatible = "ti,ads1115";
@@ -947,7 +947,7 @@
 	pinctrl-0 = <&pinctrl_pcie0>;
 	reset-gpio = <&gpio4 27 GPIO_ACTIVE_LOW>;
 	//host-wake-gpio = <&gpio5 21 GPIO_ACTIVE_LOW>;
-	vpcie-supply = <&reg_pcie0>;
+	//vpcie-supply = <&reg_pcie0>;
 	status = "disabled";
 };
 
@@ -957,12 +957,12 @@
 	status = "disabled";
 };
 
+#if 0
 &pwm2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_pwm2>;
 	status = "disabled";
 };
-#if 0
 &pwm4 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_pwm4>;
@@ -1352,11 +1352,11 @@
 		>;
 	};
 	
-	pinctrl_rtc_int: rtcintgrp {
+	/*pinctrl_rtc_int: rtcintgrp {
 		fsl,pins = <
 			MX8MP_IOMUXC_SD1_STROBE__GPIO2_IO11 0x140
 		>;
-	};
+	};*/
 	pinctrl_mipi_dsi_en: mipi_dsi_en {
 		fsl,pins = <
 			MX8MP_IOMUXC_GPIO1_IO08__GPIO1_IO08	0x16
@@ -1371,11 +1371,11 @@
 		>;
 	};
 
-	pinctrl_pcie0_reg: pcie0reggrp {
+	/*pinctrl_pcie0_reg: pcie0reggrp {
 		fsl,pins = <
 			MX8MP_IOMUXC_SD1_DATA4__GPIO2_IO06	0x40
 		>;
-	};
+	}; */
 /*
 	pinctrl_pdm: pdmgrp {
 		fsl,pins = <
@@ -1405,12 +1405,12 @@
 		>;
 	};
 
+/*
 	pinctrl_pwm2: pwm2grp {
 		fsl,pins = <
 			//MX8MP_IOMUXC_GPIO1_IO11__PWM2_OUT	0x116
 		>;
 	};
-/*
 	pinctrl_pwm4: pwm4grp {
 		fsl,pins = <
 			MX8MP_IOMUXC_SAI5_RXFS__PWM4_OUT	0x116

@@ -27,6 +27,24 @@
 #include <media/v4l2-fwnode.h>
 #include <media/v4l2-subdev.h>
 
+//John_gao add for auto focus
+#include <linux/workqueue.h>
+#include "ov5640_mipi_v2_af.h"
+//#define DELAYTIME 50 //0.5s
+//#define DELAYTIME 100 //0.5s
+#define DELAYTIME 250 //0.5s
+int isOutAe = 0;
+int old_ae = 0 ;
+int isAutoStart = 0;
+#define WORK_AF_DEF 0x0
+
+#if 1
+#define ov5640_info(fmt, args...) pr_info("GLS_CAM ov5640: "fmt, ##args)
+#define GLS(args...) ov5640_info(args)
+#else
+#define GLS(args...)
+#endif
+
 /* min/typical/max system clock (xclk) frequencies */
 #define OV5640_XCLK_MIN  6000000
 #define OV5640_XCLK_MAX 54000000
@@ -377,14 +395,14 @@ enum ov5640_downsize_mode {
 	SUBSAMPLING,
 	SCALING,
 };
-
+/* define in ov5640_mipi_v2_af.h
 struct reg_value {
 	u16 reg_addr;
 	u8 val;
 	u8 mask;
 	u32 delay_ms;
 };
-
+*/
 struct ov5640_timings {
 	/* Analog crop rectangle. */
 	struct v4l2_rect analog_crop;
@@ -442,6 +460,14 @@ struct ov5640_ctrls {
 	struct v4l2_ctrl *test_pattern;
 	struct v4l2_ctrl *hflip;
 	struct v4l2_ctrl *vflip;
+	struct {
+                /* continuous auto focus/auto focus cluster */
+                struct v4l2_ctrl *focus_auto;
+                struct v4l2_ctrl *af_start;
+                struct v4l2_ctrl *af_stop;
+                struct v4l2_ctrl *af_status;
+                struct v4l2_ctrl *af_distance;
+        };
 };
 
 struct ov5640_dev {
@@ -456,6 +482,10 @@ struct ov5640_dev {
 	struct gpio_desc *reset_gpio;
 	struct gpio_desc *pwdn_gpio;
 	bool   upside_down;
+//John_gao add for auto focus
+	struct delayed_work delay_work;
+	struct device *dev;
+//end John_gao add for auto focus
 
 	/* lock to protect all members below */
 	struct mutex lock;
@@ -685,6 +715,104 @@ static const struct reg_value ov5640_setting_1080P_1920_1080[] = {
 	{0x3a15, 0x60, 0, 0}, {0x4407, 0x04, 0, 0},
 	{0x460b, 0x37, 0, 0}, {0x460c, 0x20, 0, 0}, {0x3824, 0x04, 0, 0},
 	{0x4005, 0x1a, 0, 0},
+};
+
+//John_gao add new ov5640 Calibration biased towards red
+static struct reg_value ov5640_setting_new[] = {
+	{0x5180 ,0xff ,0 ,0},
+	{0x5181 ,0xf2 ,0 ,0},
+	{0x5182 ,0x0  ,0 ,0},
+	{0x5183 ,0x14 ,0 ,0},
+	{0x5184 ,0x25 ,0 ,0},
+	{0x5185 ,0x24 ,0 ,0},
+	{0x5186 ,0x10 ,0 ,0},
+	{0x5187 ,0x10 ,0 ,0},
+	{0x5188 ,0x10 ,0 ,0},
+	{0x5189 ,0x6d ,0 ,0},
+	{0x518a ,0x53 ,0 ,0},
+	{0x518b ,0x90 ,0 ,0},
+	{0x518c ,0x8c ,0 ,0},
+	{0x518d ,0x3b ,0 ,0},
+	{0x518e ,0x2c ,0 ,0},
+	{0x518f ,0x59 ,0 ,0},
+	{0x5190 ,0x42 ,0 ,0},
+	{0x5191 ,0xf8 ,0 ,0},
+	{0x5192 ,0x4  ,0 ,0},
+	{0x5193 ,0x70 ,0 ,0},
+	{0x5194 ,0xf0 ,0 ,0},
+	{0x5195 ,0xf0 ,0 ,0},
+	{0x5196 ,0x3  ,0 ,0},
+	{0x5197 ,0x1  ,0 ,0},
+	{0x5198 ,0x4  ,0 ,0},
+	{0x5199 ,0x0  ,0 ,0},
+	{0x519a ,0x4  ,0 ,0},
+	{0x519b ,0x13 ,0 ,0},
+	{0x519c ,0x6  ,0 ,0},
+	{0x519d ,0x9e ,0 ,0},
+	{0x519e ,0x38 ,0 ,0},
+	{0x5800 ,0x2a ,0 ,0},
+	{0x5801 ,0x1a ,0 ,0},
+	{0x5802 ,0x13 ,0 ,0},
+	{0x5803 ,0x13 ,0 ,0},
+	{0x5804 ,0x1b ,0 ,0},
+	{0x5805 ,0x2b ,0 ,0},
+	{0x5806 ,0x10 ,0 ,0},
+	{0x5807 ,0x9  ,0 ,0},
+	{0x5808 ,0x7  ,0 ,0},
+	{0x5809 ,0x7  ,0 ,0},
+	{0x580a ,0xa  ,0 ,0},
+	{0x580b ,0x10 ,0 ,0},
+	{0x580c ,0x8  ,0 ,0},
+	{0x580d ,0x3  ,0 ,0},
+	{0x580e ,0x0  ,0 ,0},
+	{0x580f ,0x0  ,0 ,0},
+	{0x5810 ,0x4  ,0 ,0},
+	{0x5811 ,0x9  ,0 ,0},
+	{0x5812 ,0x9  ,0 ,0},
+	{0x5813 ,0x3  ,0 ,0},
+	{0x5814 ,0x0  ,0 ,0},
+	{0x5815 ,0x0  ,0 ,0},
+	{0x5816 ,0x4  ,0 ,0},
+	{0x5817 ,0x9  ,0 ,0},
+	{0x5818 ,0xd  ,0 ,0},
+	{0x5819 ,0x6  ,0 ,0},
+	{0x581a ,0x3  ,0 ,0},
+	{0x581b ,0x4  ,0 ,0},
+	{0x581c ,0x6  ,0 ,0},
+	{0x581d ,0xd  ,0 ,0},
+	{0x581e ,0x21 ,0 ,0},
+	{0x581f ,0x11 ,0 ,0},
+	{0x5820 ,0xa  ,0 ,0},
+	{0x5821 ,0xa  ,0 ,0},
+	{0x5822 ,0x13 ,0 ,0},
+	{0x5823 ,0x23 ,0 ,0},
+	{0x5824 ,0x13 ,0 ,0},
+	{0x5825 ,0x24 ,0 ,0},
+	{0x5826 ,0x24 ,0 ,0},
+	{0x5827 ,0x22 ,0 ,0},
+	{0x5828 ,0x4  ,0 ,0},
+	{0x5829 ,0x10 ,0 ,0},
+	{0x582a ,0x22 ,0 ,0},
+	{0x582b ,0x22 ,0 ,0},
+	{0x582c ,0x22 ,0 ,0},
+	{0x582d ,0x22 ,0 ,0},
+	{0x582e ,0x10 ,0 ,0},
+	{0x582f ,0x22 ,0 ,0},
+	{0x5830 ,0x42 ,0 ,0},
+	{0x5831 ,0x22 ,0 ,0},
+	{0x5832 ,0x22 ,0 ,0},
+	{0x5833 ,0x10 ,0 ,0},
+	{0x5834 ,0x22 ,0 ,0},
+	{0x5835 ,0x22 ,0 ,0},
+	{0x5836 ,0x22 ,0 ,0},
+	{0x5837 ,0x0  ,0 ,0},
+	{0x5838 ,0x12 ,0 ,0},
+	{0x5839 ,0x12 ,0 ,0},
+	{0x583a ,0x10 ,0 ,0},
+	{0x583b ,0x10 ,0 ,0},
+	{0x583c ,0x2  ,0 ,0},
+	{0x583d ,0xce ,0 ,0},
+
 };
 
 static const struct reg_value ov5640_setting_QSXGA_2592_1944[] = {
@@ -1656,6 +1784,48 @@ static int ov5640_set_jpeg_timings(struct ov5640_dev *sensor,
 	return ov5640_write_reg16(sensor, OV5640_REG_VFIFO_VSIZE, mode->height);
 }
 
+
+static int ov5640_download_firmware(struct ov5640_dev *sensor,
+				    struct reg_value *pModeSetting,
+				    s32 ArySize)
+{
+	register u32 Delay_ms = 0;
+	register u16 RegAddr = 0;
+	register u8 Mask = 0;
+	register u8 Val = 0;
+	u8 RegVal = 0;
+	int i, retval = 0;
+
+	for (i = 0; i < ArySize; ++i, ++pModeSetting) {
+		Delay_ms = pModeSetting->delay_ms;
+		RegAddr = pModeSetting->reg_addr;
+		Val = pModeSetting->val;
+		Mask = pModeSetting->mask;
+
+		if (Mask) {
+			retval = ov5640_read_reg(sensor, RegAddr, &RegVal);
+			if (retval < 0){
+				printk("GLS_CAM read addr(%x) val(%x)\n", RegAddr, RegVal );
+				goto err;
+			}
+
+			RegVal &= ~(u8)Mask;
+			Val &= Mask;
+			Val |= RegVal;
+		}
+
+		retval = ov5640_write_reg(sensor, RegAddr, Val);
+		if (retval < 0){
+			printk("GLS_CAM write addr(%x) reg(%x) \n", RegAddr, Val);
+			goto err;
+		}
+
+		if (Delay_ms)
+			msleep(Delay_ms);
+	}
+err:
+	return retval;
+}
 /* download ov5640 settings to sensor through i2c */
 static int ov5640_set_timings(struct ov5640_dev *sensor,
 			      const struct ov5640_mode_info *mode)
@@ -2083,6 +2253,93 @@ static int ov5640_set_ae_target(struct ov5640_dev *sensor, int target)
 	return ov5640_write_reg(sensor, OV5640_REG_AEC_CTRL1F, fast_low);
 }
 
+//John_gao add for auto focus
+static ssize_t ov5640_autofocus_store(struct device *dev,
+        struct device_attribute *attr, const char *buf, size_t count)
+{
+	int i = buf[0] - '0';
+	if(i == 1){
+		isAutoStart = 1;
+	}else isAutoStart = 0;
+	return count;
+}
+static ssize_t ov5640_autofocus_show(struct device *dev,
+        struct device_attribute *attr, char *buf)
+{
+	sprintf(buf, "%d", isAutoStart);
+        return strlen(buf);
+}
+static DEVICE_ATTR(ov5640_autofocus, 0664, ov5640_autofocus_show, ov5640_autofocus_store);
+
+static ssize_t ov5640_focus_store(struct device *dev,
+        struct device_attribute *attr, const char *buf, size_t count)
+{
+	int i = buf[0] - '0';
+	struct ov5640_dev *sensor = dev_get_drvdata(dev);
+	if(i == 1){
+		ov5640_write_reg(sensor,0x3022, 0x03); //John_gao focus
+	}
+	return count;
+}
+static ssize_t ov5640_focus_show(struct device *dev,
+        struct device_attribute *attr, char *buf)
+{
+	struct ov5640_dev *sensor = dev_get_drvdata(dev);
+      	u8 val ;
+	ov5640_read_reg(sensor, 0x3022, &val);
+	sprintf(buf, "0x3022=0x%02x\n", val);
+        return strlen(buf);
+}
+
+static DEVICE_ATTR(ov5640_focus, 0664, ov5640_focus_show, ov5640_focus_store);
+
+static int check_value(int a, int b)
+{
+	int ret = 0;
+	if(a > b) ret = a-b;
+        else  ret = b - a;
+
+
+	GLS("GLS_CAM ret=%d , def=%d \n", ret, WORK_AF_DEF);
+
+	if(ret > WORK_AF_DEF) return 1;
+
+	return 0;
+}
+
+int runTime = 0 ;
+static void af_work(struct work_struct *work)
+{
+        struct delayed_work *dwork = container_of(work, struct delayed_work, work);
+        struct ov5640_dev *sensor = container_of(dwork,
+                        struct ov5640_dev, delay_work);
+      	u8 val ;
+
+	if(isOutAe) return;
+
+	if(isAutoStart){
+		ov5640_read_reg(sensor, 0x350b, &val);
+		if(check_value(val, old_ae)){
+			GLS("GLS start auto focus val=%d,old=%d \n", val,old_ae);
+			old_ae = val;
+			ov5640_write_reg(sensor,0x3022, 0x03); //John_gao auto focus
+			runTime = 0;
+			while(1){
+				runTime ++;
+				ov5640_read_reg(sensor, 0x3029, &val);
+				if(val == 0x10 ){
+					break;
+				}
+				if(runTime > 10)break;
+				msleep(100);
+
+			}
+		}
+	}
+	schedule_delayed_work(&sensor->delay_work, DELAYTIME);
+}
+//end John_gao add for auto focus
+
 static int ov5640_get_binning(struct ov5640_dev *sensor)
 {
 	u8 temp;
@@ -2379,6 +2636,33 @@ static int ov5640_set_mode(struct ov5640_dev *sensor)
 	if (ret < 0)
 		goto restore_auto_exp_gain;
 
+#if 1
+	//John_gao add new ov5640 Calibration biased towards red
+	{
+		struct reg_value *pModeSetting = ov5640_setting_new;
+		s32 ArySize = ARRAY_SIZE(ov5640_setting_new);
+		printk("GLS towards red set  \n");
+		ret = ov5640_download_firmware(sensor, pModeSetting,
+				ArySize);
+		if (ret < 0)
+			printk("GLS set ov5640_setting_new err !!\n");
+	}
+	//end John_gao
+#endif
+	//John_gao add for focus
+#if 1
+	ret = ov5640_download_firmware(sensor, ov5640_af_12_60ma,
+			ARRAY_SIZE(ov5640_af_12_60ma));
+#else
+	ret = ov5640_download_firmware(sensor, ov5640_af_20_70ma,
+			ARRAY_SIZE(ov5640_af_20_70ma));
+#endif
+	if (ret < 0)
+		printk("GLS_CAM ======= write af err !!!!\n");
+	else
+		GLS("GLS_CAM ======= write af ok !!!!\n");
+	//end John_gao add for focus
+	
 	/* restore auto gain and exposure */
 	if (auto_gain)
 		ov5640_set_autogain(sensor, true);
@@ -3331,6 +3615,44 @@ static int ov5640_set_ctrl_vblank(struct ov5640_dev *sensor, int value)
 				  mode->height + value);
 }
 
+static int ov5640_set_auto_focus(struct ov5640_dev *sensor, int caf)
+{
+	struct ov5640_ctrls *c =  &sensor->ctrls;
+	int ret = 1;
+	printk("GLS_CAM %s 001 \n", __func__);
+
+	if((c->focus_auto->is_new && c->focus_auto->val) ||
+                                    c->af_start->is_new)
+	{
+	printk("GLS_CAM %s 002 \n", __func__);
+		ret = ov5640_write_reg(sensor,0x3022, 0x03); //John_gao auto focus
+	}
+	else if ((c->focus_auto->is_new && !c->focus_auto->val) ||
+                                                        c->af_stop->is_new)
+	{
+	printk("GLS_CAM %s 003 \n", __func__);
+		ret = ov5640_write_reg(sensor,0x3022, 0x0); //John_gao stop
+	}else{
+	printk("GLS_CAM %s 004 \n", __func__);
+		ret = ov5640_write_reg(sensor,0x3022, 0x03); //John_gao auto focus
+	}
+
+	return ret;
+}
+static int ov5640_get_af_status(struct ov5640_dev *sensor)
+{
+	u8 val;
+	int ret = ov5640_read_reg(sensor, 0x3029, &val);
+
+	if(val == 0x10){
+		sensor->ctrls.focus_auto->val = V4L2_AUTO_FOCUS_STATUS_REACHED;
+	}else{
+		sensor->ctrls.focus_auto->val = V4L2_AUTO_FOCUS_STATUS_BUSY;
+	}
+
+	return ret;
+}
+
 static int ov5640_g_volatile_ctrl(struct v4l2_ctrl *ctrl)
 {
 	struct v4l2_subdev *sd = ctrl_to_sd(ctrl);
@@ -3354,6 +3676,12 @@ static int ov5640_g_volatile_ctrl(struct v4l2_ctrl *ctrl)
 		if (val < 0)
 			return val;
 		sensor->ctrls.exposure->val = val;
+		break;
+	case V4L2_CID_FOCUS_AUTO:
+		val = ov5640_get_af_status(sensor);
+		if(val < 0 )
+			return val;
+		sensor->ctrls.focus_auto->val = val;
 		break;
 	}
 
@@ -3427,6 +3755,9 @@ static int ov5640_s_ctrl(struct v4l2_ctrl *ctrl)
 		break;
 	case V4L2_CID_VBLANK:
 		ret = ov5640_set_ctrl_vblank(sensor, ctrl->val);
+		break;
+	case V4L2_CID_FOCUS_AUTO:
+		ret = ov5640_set_auto_focus(sensor, ctrl->val);
 		break;
 	default:
 		ret = -EINVAL;
@@ -3518,6 +3849,22 @@ static int ov5640_init_controls(struct ov5640_dev *sensor)
 					 0, 1, 1, 0);
 	ctrls->vflip = v4l2_ctrl_new_std(hdl, ops, V4L2_CID_VFLIP,
 					 0, 1, 1, 0);
+	//John_gao add focus
+	ctrls->focus_auto = v4l2_ctrl_new_std(hdl, ops,
+                        V4L2_CID_FOCUS_AUTO, 0, 1, 1, 0);
+
+        ctrls->af_start = v4l2_ctrl_new_std(hdl, ops,
+                        V4L2_CID_AUTO_FOCUS_START, 0, 1, 1, 0);
+
+        ctrls->af_stop = v4l2_ctrl_new_std(hdl, ops,
+                        V4L2_CID_AUTO_FOCUS_STOP, 0, 1, 1, 0);
+
+	ctrls->af_status = v4l2_ctrl_new_std(hdl, ops,
+                        V4L2_CID_AUTO_FOCUS_STATUS, 0,
+                        (V4L2_AUTO_FOCUS_STATUS_BUSY |
+                         V4L2_AUTO_FOCUS_STATUS_REACHED |
+                         V4L2_AUTO_FOCUS_STATUS_FAILED),
+                        0, V4L2_AUTO_FOCUS_STATUS_IDLE);
 
 	ctrls->light_freq =
 		v4l2_ctrl_new_std_menu(hdl, ops,
@@ -3788,6 +4135,15 @@ static int ov5640_s_stream(struct v4l2_subdev *sd, int enable)
 
 		if (!ret)
 			sensor->streaming = enable;
+
+		//John_gao set focus
+		if(enable){
+			isOutAe = 0;
+			schedule_delayed_work(&sensor->delay_work, DELAYTIME);
+		}else{
+			isOutAe = 1;
+		}
+		//end John_gao set focus
 	}
 
 out:
@@ -3977,6 +4333,24 @@ static int ov5640_probe(struct i2c_client *client)
 	if (IS_ERR(sensor->reset_gpio))
 		return PTR_ERR(sensor->reset_gpio);
 
+	//John_gao set focus
+	sensor->dev = &client->dev;
+	dev_set_drvdata(dev, sensor);
+//John_gao
+	INIT_DELAYED_WORK(&sensor->delay_work, af_work);
+//John_gao attr
+	ret = device_create_file(&client->dev, &dev_attr_ov5640_focus);
+        if (ret){
+                printk("GLS_CAM %s create attr ov5640_focus err!!!\n",__func__);
+                //goto exit;
+        }
+	ret = device_create_file(&client->dev, &dev_attr_ov5640_autofocus);
+        if (ret){
+                printk("GLS_CAM %s create attr ov5640_autofocus err!!!\n",__func__);
+                //goto exit;
+        }
+	//end John_gao set focus
+	
 	v4l2_i2c_subdev_init(&sensor->sd, client, &ov5640_subdev_ops);
 	sensor->sd.internal_ops = &ov5640_internal_ops;
 

@@ -23,25 +23,32 @@
 		
 		csi_id = <0>;
 		powerdown-gpios = <&gpio2 11 GPIO_ACTIVE_HIGH>;
-		reset-gpios = <&gpio1 6 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio1 6 GPIO_ACTIVE_LOW>;
 	
 		mipi_csi;
 		status = "okay";
 
 		port {
 			gc2145_mipi_0_ep: endpoint {
+                                ///delete-property/ remote-endpoint;
 				remote-endpoint = <&mipi_csi0_ep>;
-				data-lanes = <1>;
+                                data-lanes = <1>;
 				clock-lanes = <0>;
+				//link-frequencies = /bits/ 64 <120000000 192000000 240000000>;
 			};
 		};
 	};
 };
 
 &mipi_csi_0 { 
-	status = "okay";
-   	port {
+        #address-cells = <1>;
+        #size-cells = <0>;
+        status = "okay";
+
+        port@0 {
+                reg = <0>;
 		mipi_csi0_ep: endpoint {
+                        ///delete-property/ remote-endpoint;
 			remote-endpoint = <&gc2145_mipi_0_ep>;
 			data-lanes = <1>;
 			csis-hs-settle = <13>;
@@ -50,7 +57,11 @@
 		};
 	};
 };
-
+&mipi_csi_1 {
+        #address-cells = <1>;
+        #size-cells = <0>;
+        status = "disabled";
+};
 &cameradev {
 	status = "okay";
 };
@@ -58,11 +69,23 @@
 
 &isi_0 {
 	status = "okay";
+	cap_device {
+                status = "okay";
+        };
+
+        m2m_device {
+                status = "disabled";
+        };
+
 
 };
 
 &isi_1 {
-	status = "disabled";
+        status = "disabled";
+        cap_device {
+                status = "okay";
+        };
+
 
 };
 
@@ -72,4 +95,24 @@
 
 &dewarp {
 	status = "disabled";
+};
+
+&iomuxc {
+	pinctrl_csi0_pwn: csi0_pwn_grp {
+                fsl,pins = <
+                        MX8MP_IOMUXC_SD1_STROBE__GPIO2_IO11 0x19
+                >;
+        };
+
+        pinctrl_csi0_rst: csi0_rst_grp {
+                fsl,pins = <
+                        MX8MP_IOMUXC_GPIO1_IO06__GPIO1_IO06             0x19
+                >;
+        };
+	pinctrl_csi_mclk: csi_mclk_grp {
+                fsl,pins = <
+                        MX8MP_IOMUXC_GPIO1_IO15__CCM_CLKO2      0x59
+                >;
+        };
+
 };
