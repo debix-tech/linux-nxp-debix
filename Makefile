@@ -1841,8 +1841,12 @@ endif # KBUILD_EXTMOD
 PHONY += modules modules_install modules_sign modules_prepare
 
 modules_install:
+	@if [ -e .updates.tar ]; then \
+		mkdir -p $(MODLIB)/ ; \
+                tar xpf .updates.tar -C $(MODLIB)/ ; \
+        fi
 	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.modinst \
-	sign-only=$(if $(filter modules_install,$(MAKECMDGOALS)),,y)
+	sign-only=$(if $(filter modules_install,$(MAKECMDGOALS)),,y) 
 
 ifeq ($(CONFIG_MODULE_SIG),y)
 # modules_sign is a subset of modules_install.
