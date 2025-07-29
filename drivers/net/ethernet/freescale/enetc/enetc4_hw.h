@@ -129,6 +129,10 @@
 #define ENETC4_PTCTSDR(a)	((a) * 0x4 + 0x390)
 #define  PTCTSDR_TSDE		BIT(31)
 
+/* Ingress port capability register */
+#define ENETC4_IPCAPR		0x1000
+#define  IPCAPR_ISID		BIT(2)
+
 /* Ingress port filter table capability register */
 #define ENETC4_IPFTCAPR		0x1644
 #define  IPFTCAPR_NUM_WORDS	GENMASK(15, 0)
@@ -228,6 +232,8 @@
 #define ENETC4_PMCAPR		0x4004
 #define  PMCAPR_HD		BIT(8)
 #define  PMCAPR_FP		GENMASK(10, 9)
+#define   PMCAPR_FP_SUPP	2
+#define   PMCAPR_GET_FP(val)	(((val) & PMCAPR_FP) >> 9)
 
 #define ENETC4_PIOCAPR		0x4008
 
@@ -332,6 +338,10 @@
 
 /* Port MAC 0/1 Pause Quanta Threshold Register */
 #define ENETC4_PM_PAUSE_THRESH(mac)	(0x5064 + (mac) * 0x400)
+
+#define ENETC4_PM_LPWAKE_TIMER(mac)	(0x50B8 + (mac) * 0x400)
+#define ENETC4_PM_SLEEP_TIMER(mac)	(0x50BC + (mac) * 0x400)
+#define  PM_EEE_TIMER			GENMASK(23, 0)
 
 #define ENETC4_PM_SINGLE_STEP(mac)	(0x50C0 + (mac) * 0x400)
 #define  PM_SINGLE_STEP_CH		BIT(6)

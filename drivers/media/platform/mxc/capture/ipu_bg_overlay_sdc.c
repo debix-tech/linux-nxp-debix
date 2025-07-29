@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /*
  * Copyright 2004-2015 Freescale Semiconductor, Inc. All Rights Reserved.
- * Copyright 2019 NXP
+ * Copyright 2019,2024 NXP
  */
 
 /*!
@@ -524,7 +524,7 @@ EXPORT_SYMBOL(bg_overlay_sdc_deselect);
  *
  * @return  Error code indicating success or failure
  */
-__init int bg_overlay_sdc_init(void)
+static __init int bg_overlay_sdc_init(void)
 {
 	return 0;
 }
@@ -534,7 +534,7 @@ __init int bg_overlay_sdc_init(void)
  *
  * @return  Error code indicating success or failure
  */
-void __exit bg_overlay_sdc_exit(void)
+static void __exit bg_overlay_sdc_exit(void)
 {
 }
 

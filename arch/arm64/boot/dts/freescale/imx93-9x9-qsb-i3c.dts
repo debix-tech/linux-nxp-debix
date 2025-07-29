@@ -15,9 +15,8 @@
 /delete-node/&lpi2c1;
 
 &i3c1 {
-	pinctrl-names = "default", "sleep";
+	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_i3c1>;
-	pinctrl-1 = <&pinctrl_i3c1>;
 	i2c-scl-hz = <400000>;
 	status = "okay";
 

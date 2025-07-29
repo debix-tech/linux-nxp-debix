@@ -381,23 +381,6 @@ static int mipi_csis_phy_init(struct csi_state *state)
 	return ret;
 }
 
-static int mipi_csis_phy_reset_mx8mm(struct csi_state *state)
-{
-	struct reset_control *phy_reset;
-
-	phy_reset = devm_reset_control_get_exclusive(state->dev, "csi,mipi_rst");
-	if (IS_ERR(phy_reset))
-		return PTR_ERR(phy_reset);
-
-	reset_control_assert(phy_reset);
-	usleep_range(10, 20);
-	reset_control_deassert(phy_reset);
-	usleep_range(10, 20);
-
-	return 0;
-
-}
-
 static int mipi_csis_phy_reset(struct csi_state *state)
 {
 	struct device_node *np = state->dev->of_node;
@@ -1266,7 +1249,7 @@ static int mipi_csis_runtime_resume(struct device *dev)
 	return mipi_csis_pm_resume(dev, true);
 }
 
-static int mipi_csis_remove(struct platform_device *pdev)
+static void mipi_csis_remove(struct platform_device *pdev)
 {
 	struct csi_state *state = platform_get_drvdata(pdev);
 
@@ -1278,8 +1261,6 @@ static int mipi_csis_remove(struct platform_device *pdev)
 	pm_runtime_disable(&pdev->dev);
 	mipi_csis_pm_suspend(&pdev->dev, true);
 	pm_runtime_set_suspended(&pdev->dev);
-
-	return 0;
 }
 
 static const struct dev_pm_ops mipi_csis_pm_ops = {
@@ -1291,9 +1272,6 @@ static const struct dev_pm_ops mipi_csis_pm_ops = {
 static const struct of_device_id mipi_csis_of_match[] = {
 	{	.compatible = "fsl,imx7d-mipi-csi",
 		.data = (void *)&mipi_csis_phy_reset,
-	},
-	{	.compatible = "fsl,imx8mm-mipi-csi",
-		.data = (void *)&mipi_csis_phy_reset_mx8mm,
 	},
 	{ /* sentinel */ },
 };

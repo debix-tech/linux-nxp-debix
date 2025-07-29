@@ -33,7 +33,7 @@
 	status = "disabled";
 };
 
-&adp5585gpio {
+&adp5585 {
 	/* EXP_SEL RPi */
 	exp-sel-hog {
 		/delete-property/ output-low;
@@ -49,8 +49,6 @@
 
 /* lpi2c4 work as a lpi2c master bus */
 &lpi2c4 {
-	#address-cells = <1>;
-	#size-cells = <0>;
 	clock-frequency = <400000>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpi2c4>;
@@ -63,8 +61,6 @@
  * at 7 bit address 0x64 on lpi2c6.
  */
 &lpi2c6 {
-	#address-cells = <1>;
-	#size-cells = <0>;
 	clock-frequency = <400000>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpi2c6>;

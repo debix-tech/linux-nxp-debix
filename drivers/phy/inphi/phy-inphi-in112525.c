@@ -742,7 +742,7 @@ static const struct phy_ops in112525_ops = {
 };
 
 static struct phy *in112525_xlate(struct device *dev,
-				  struct of_phandle_args *args)
+				  const struct of_phandle_args *args)
 {
 	struct in112525_priv *priv = dev_get_drvdata(dev);
 	int idx = args->args[0];

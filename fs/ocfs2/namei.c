@@ -1338,7 +1338,7 @@ static int ocfs2_rename(struct mnt_idmap *idmap,
 		goto bail;
 	}
 
-	if (S_ISDIR(old_inode->i_mode)) {
+	if (S_ISDIR(old_inode->i_mode) && new_dir != old_dir) {
 		u64 old_inode_parent;
 
 		update_dot_dot = 1;
@@ -1355,8 +1355,7 @@ static int ocfs2_rename(struct mnt_idmap *idmap,
 			goto bail;
 		}
 
-		if (!new_inode && new_dir != old_dir &&
-		    new_dir->i_nlink >= ocfs2_link_max(osb)) {
+		if (!new_inode && new_dir->i_nlink >= ocfs2_link_max(osb)) {
 			status = -EMLINK;
 			goto bail;
 		}
@@ -1599,6 +1598,13 @@ static int ocfs2_rename(struct mnt_idmap *idmap,
 	if (update_dot_dot) {
 		status = ocfs2_update_entry(old_inode, handle,
 					    &old_inode_dot_dot_res, new_dir);
+		if (status < 0) {
+			mlog_errno(status);
+			goto bail;
+		}
+	}
+
+	if (S_ISDIR(old_inode->i_mode)) {
 		drop_nlink(old_dir);
 		if (new_inode) {
 			drop_nlink(new_inode);
@@ -1638,6 +1644,10 @@ static int ocfs2_rename(struct mnt_idmap *idmap,
 							 INODE_CACHE(old_dir),
 							 old_dir_bh,
 							 OCFS2_JOURNAL_ACCESS_WRITE);
+			if (status < 0) {
+				mlog_errno(status);
+				goto bail;
+			}
 			fe = (struct ocfs2_dinode *) old_dir_bh->b_data;
 			ocfs2_set_links_count(fe, old_dir->i_nlink);
 			ocfs2_journal_dirty(handle, old_dir_bh);
@@ -2179,8 +2189,10 @@ static int __ocfs2_prepare_orphan_dir(struct inode *orphan_dir_inode,
  * @osb: ocfs2 file system
  * @ret_orphan_dir: Orphan dir inode - returned locked!
  * @blkno: Actual block number of the inode to be inserted into orphan dir.
+ * @name: Buffer to store the name of the orphan.
  * @lookup: dir lookup result, to be passed back into functions like
  *          ocfs2_orphan_add
+ * @dio: Flag indicating if direct IO is being used or not.
  *
  * Returns zero on success and the ret_orphan_dir, name and lookup
  * fields will be populated.

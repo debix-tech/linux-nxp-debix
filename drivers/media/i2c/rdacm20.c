@@ -23,6 +23,7 @@
 #include <linux/slab.h>
 #include <linux/videodev2.h>
 
+#include <media/mipi-csi2.h>
 #include <media/v4l2-async.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-subdev.h>
@@ -318,6 +319,7 @@ struct rdacm20_device {
 	struct media_pad		pad;
 	struct v4l2_ctrl_handler	ctrls;
 	u32				addrs[2];
+	bool				no_poc;
 };
 
 static inline struct rdacm20_device *sd_to_rdacm20(struct v4l2_subdev *sd)
@@ -435,14 +437,54 @@ static int rdacm20_get_fmt(struct v4l2_subdev *sd,
 	return 0;
 }
 
+static int rdacm20_enum_frame_size(struct v4l2_subdev *sd,
+				   struct v4l2_subdev_state *state,
+				   struct v4l2_subdev_frame_size_enum *fse)
+{
+	if (fse->index)
+		return -EINVAL;
+
+	fse->max_width = OV10635_WIDTH;
+	fse->min_width = OV10635_WIDTH;
+	fse->max_height = OV10635_HEIGHT;
+	fse->min_height = OV10635_HEIGHT;
+
+	return 0;
+}
+
+static int rdacm20_get_frame_desc(struct v4l2_subdev *sd, unsigned int pad,
+			     struct v4l2_mbus_frame_desc *fd)
+{
+	struct v4l2_subdev_state *state;
+	struct v4l2_subdev_format format;
+
+	fd->type = V4L2_MBUS_FRAME_DESC_TYPE_CSI2;
+	fd->num_entries = 1;
+
+	state = v4l2_subdev_lock_and_get_active_state(sd);
+
+	format.pad = 0;
+	rdacm20_get_fmt(sd, state, &format);
+
+	fd->entry[0].pixelcode = format.format.code;
+	fd->entry[0].bus.csi2.vc = 0;
+	fd->entry[0].bus.csi2.dt = MIPI_CSI2_DT_YUV422_8B;
+
+	v4l2_subdev_unlock_state(state);
+
+	return 0;
+}
+
 static const struct v4l2_subdev_video_ops rdacm20_video_ops = {
 	.s_stream	= rdacm20_s_stream,
 };
 
 static const struct v4l2_subdev_pad_ops rdacm20_subdev_pad_ops = {
-	.enum_mbus_code = rdacm20_enum_mbus_code,
-	.get_fmt	= rdacm20_get_fmt,
-	.set_fmt	= rdacm20_get_fmt,
+	.enum_mbus_code		= rdacm20_enum_mbus_code,
+	.get_fmt		= rdacm20_get_fmt,
+	.set_fmt		= rdacm20_get_fmt,
+	.enum_frame_size	= rdacm20_enum_frame_size,
+	.get_frame_desc		= rdacm20_get_frame_desc,
 };
 
 static const struct v4l2_subdev_ops rdacm20_subdev_ops = {
@@ -463,8 +505,8 @@ static int rdacm20_initialize(struct rdacm20_device *dev)
 		return ret;
 
 	/*
-	 *  Ensure that we have a good link configuration before attempting to
-	 *  identify the device.
+	 * Ensure that we have a good link configuration before attempting to
+	 * identify the device.
 	 */
 	ret = max9271_configure_i2c(&dev->serializer,
 				    MAX9271_I2CSLVSH_469NS_234NS |
@@ -472,6 +514,35 @@ static int rdacm20_initialize(struct rdacm20_device *dev)
 				    MAX9271_I2CMSTBT_105KBPS);
 	if (ret)
 		return ret;
+
+	ret = max9271_verify_id(&dev->serializer);
+	if (ret < 0) {
+		/*
+		 * If the deserializer has no PoC configured, this means we have no way to
+		 * properly reset. In this case, we just look for the serializer on the
+		 * configured address and, if found, just exit this routine since we do not
+		 * want to reset the sensor.
+		 */
+		if (dev->no_poc) {
+			/*
+			 * Since we failed identifying the serializer on default address, try
+			 * looking for it on the programmed address.
+			 */
+			dev->serializer.client->addr = dev->addrs[0];
+			ret = max9271_verify_id(&dev->serializer);
+			if (!ret) {
+				dev->sensor->addr = dev->addrs[1];
+				dev_info(dev->dev, "Identified already initialized RDACM20 camera module");
+				return 0;
+			}
+		}
+		return ret;
+	}
+
+	ret = max9271_set_address(&dev->serializer, dev->addrs[0]);
+	if (ret < 0)
+		return ret;
+	dev->serializer.client->addr = dev->addrs[0];
 
 	/*
 	 * Hold OV10635 in reset during max9271 configuration. The reset signal
@@ -489,15 +560,6 @@ static int rdacm20_initialize(struct rdacm20_device *dev)
 	ret = max9271_configure_gmsl_link(&dev->serializer);
 	if (ret)
 		return ret;
-
-	ret = max9271_verify_id(&dev->serializer);
-	if (ret < 0)
-		return ret;
-
-	ret = max9271_set_address(&dev->serializer, dev->addrs[0]);
-	if (ret < 0)
-		return ret;
-	dev->serializer.client->addr = dev->addrs[0];
 
 	/*
 	 * Release ov10635 from reset and initialize it. The image sensor
@@ -590,6 +652,8 @@ static int rdacm20_probe(struct i2c_client *client)
 		goto error;
 	}
 
+	dev->no_poc = of_property_read_bool(client->dev.of_node, "imi,no-poc");
+
 	/* Initialize the hardware. */
 	ret = rdacm20_initialize(dev);
 	if (ret < 0)
@@ -603,6 +667,14 @@ static int rdacm20_probe(struct i2c_client *client)
 	v4l2_ctrl_new_std(&dev->ctrls, NULL, V4L2_CID_PIXEL_RATE,
 			  OV10635_PIXEL_RATE, OV10635_PIXEL_RATE, 1,
 			  OV10635_PIXEL_RATE);
+	v4l2_ctrl_new_std(&dev->ctrls, NULL, V4L2_CID_HBLANK,
+			  OV10635_HTS - OV10635_WIDTH,
+			  OV10635_HTS - OV10635_WIDTH,
+			  1, OV10635_HTS - OV10635_WIDTH);
+	v4l2_ctrl_new_std(&dev->ctrls, NULL, V4L2_CID_VBLANK,
+			  OV10635_VTS - OV10635_HEIGHT,
+			  OV10635_VTS - OV10635_HEIGHT,
+			  1, OV10635_VTS - OV10635_HEIGHT);
 	dev->sd.ctrl_handler = &dev->ctrls;
 
 	ret = dev->ctrls.error;
@@ -612,6 +684,10 @@ static int rdacm20_probe(struct i2c_client *client)
 	dev->pad.flags = MEDIA_PAD_FL_SOURCE;
 	dev->sd.entity.function = MEDIA_ENT_F_CAM_SENSOR;
 	ret = media_entity_pads_init(&dev->sd.entity, 1, &dev->pad);
+	if (ret < 0)
+		goto error_free_ctrls;
+
+	ret = v4l2_subdev_init_finalize(&dev->sd);
 	if (ret < 0)
 		goto error_free_ctrls;
 
@@ -625,8 +701,7 @@ error_free_ctrls:
 	v4l2_ctrl_handler_free(&dev->ctrls);
 error:
 	media_entity_cleanup(&dev->sd.entity);
-	if (dev->sensor)
-		i2c_unregister_device(dev->sensor);
+	i2c_unregister_device(dev->sensor);
 
 	dev_err(&client->dev, "probe failed\n");
 

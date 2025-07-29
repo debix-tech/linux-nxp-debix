@@ -18,11 +18,9 @@ description: |
 
 properties:
   compatible:
-    oneOf:
-      - const: nxp,sysctr-timer
-      - items:
-          - const: nxp,sysctr-timer
-          - const: nxp,imx95-sysctr-timer
+    enum:
+      - nxp,imx95-sysctr-timer
+      - nxp,sysctr-timer
 
   reg:
     maxItems: 1

@@ -238,4 +238,5 @@ __setup("uart_from_osc", setup_uart_clk);
 
 #endif
 
+MODULE_DESCRIPTION("Common clock support for NXP i.MX SoC family");
 MODULE_LICENSE("GPL v2");

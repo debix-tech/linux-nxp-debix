@@ -43,6 +43,7 @@
 #include <linux/module.h>
 #include <linux/of_mdio.h>
 #include <linux/of_net.h>
+#include <linux/platform_device.h>
 #include <linux/kthread.h>
 #include <linux/io.h>
 #include <linux/if_arp.h>	/* arp_hdr_len() */
@@ -103,11 +104,6 @@ MODULE_PARM_DESC(debug, "Module/Driver verbosity level");
 static uint16_t tx_timeout = 1000;
 module_param(tx_timeout, ushort, S_IRUGO);
 MODULE_PARM_DESC(tx_timeout, "The Tx timeout in ms");
-
-static const char rtx[][3] = {
-	[RX] = "RX",
-	[TX] = "TX"
-};
 
 /* BM */
 
@@ -333,7 +329,7 @@ static void _dpa_tx_error(struct net_device		*net_dev,
  * @fd: Pointer to QMan frame descriptor structure
  * @skb: Pointer to socket buffer which will have its ip_summed field
  *	overwritten
- * @use_gro will only be written with 0, if the frame is definitely not
+ * @use_gro: will only be written with 0, if the frame is definitely not
  *	GRO-able; otherwise, it will be left unchanged
  * @dcl4c_valid: if set, we assume no parser errors, since any error frame is
  *	dropped before this function is called. When FMBM_RFNE[FDCS] is set, RX
@@ -435,7 +431,7 @@ static void __hot _dpa_tx_conf(struct net_device	*net_dev,
 	dev_kfree_skb(skb);
 }
 
-enum qman_cb_dqrr_result
+static enum qman_cb_dqrr_result
 priv_rx_error_dqrr(struct qman_portal		*portal,
 		      struct qman_fq			*fq,
 		      const struct qm_dqrr_entry	*dq)
@@ -466,8 +462,7 @@ priv_rx_error_dqrr(struct qman_portal		*portal,
 	return qman_cb_dqrr_consume;
 }
 
-
-enum qman_cb_dqrr_result __hot
+static enum qman_cb_dqrr_result __hot
 priv_rx_default_dqrr(struct qman_portal		*portal,
 			struct qman_fq			*fq,
 			const struct qm_dqrr_entry	*dq)
@@ -507,7 +502,7 @@ priv_rx_default_dqrr(struct qman_portal		*portal,
 	return qman_cb_dqrr_consume;
 }
 
-enum qman_cb_dqrr_result
+static enum qman_cb_dqrr_result
 priv_tx_conf_error_dqrr(struct qman_portal		*portal,
 		      struct qman_fq			*fq,
 		      const struct qm_dqrr_entry	*dq)
@@ -529,7 +524,7 @@ priv_tx_conf_error_dqrr(struct qman_portal		*portal,
 	return qman_cb_dqrr_consume;
 }
 
-enum qman_cb_dqrr_result __hot
+static enum qman_cb_dqrr_result __hot
 priv_tx_conf_default_dqrr(struct qman_portal		*portal,
 			struct qman_fq			*fq,
 			const struct qm_dqrr_entry	*dq)
@@ -555,9 +550,8 @@ priv_tx_conf_default_dqrr(struct qman_portal		*portal,
 	return qman_cb_dqrr_consume;
 }
 
-void priv_ern(struct qman_portal	*portal,
-		       struct qman_fq		*fq,
-		       const struct qm_mr_entry	*msg)
+static void priv_ern(struct qman_portal *portal, struct qman_fq *fq,
+		     const struct qm_mr_entry *msg)
 {
 	struct net_device	*net_dev;
 	const struct dpa_priv_s	*priv;
@@ -770,7 +764,8 @@ static int dpa_private_netdev_init(struct net_device *net_dev)
 	net_dev->max_mtu = dpa_get_max_mtu();
 
 	net_dev->hw_features |= NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM |
-				NETIF_F_RXCSUM | NETIF_F_LLTX;
+				NETIF_F_RXCSUM;
+	net_dev->lltx               = true;
 
 	/* Advertise S/G and HIGHDMA support for private interfaces */
 	net_dev->hw_features |= NETIF_F_SG | NETIF_F_HIGHDMA;

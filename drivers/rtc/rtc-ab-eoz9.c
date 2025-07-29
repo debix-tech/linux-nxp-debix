@@ -396,13 +396,6 @@ static int abeoz9z3_temp_read(struct device *dev,
 	if (ret < 0)
 		return ret;
 
-	if ((val & ABEOZ9_REG_CTRL_STATUS_V1F) ||
-	    (val & ABEOZ9_REG_CTRL_STATUS_V2F)) {
-		dev_err(dev,
-			"thermometer might be disabled due to low voltage\n");
-		return -EINVAL;
-	}
-
 	switch (attr) {
 	case hwmon_temp_input:
 		ret = regmap_read(regmap, ABEOZ9_REG_REG_TEMP, &val);
@@ -575,7 +568,7 @@ MODULE_DEVICE_TABLE(of, abeoz9_dt_match);
 #endif
 
 static const struct i2c_device_id abeoz9_id[] = {
-	{ "abeoz9", 0 },
+	{ "abeoz9" },
 	{ }
 };
 

@@ -47,17 +47,15 @@ static int dcss_drv_init(struct device *dev, bool componentized)
 	struct dcss_drv *mdrv;
 	int err = 0;
 
-	mdrv = kzalloc(sizeof(*mdrv), GFP_KERNEL);
+	mdrv = devm_kzalloc(dev, sizeof(*mdrv), GFP_KERNEL);
 	if (!mdrv)
 		return -ENOMEM;
 
 	mdrv->is_componentized = componentized;
 
 	mdrv->dcss = dcss_dev_create(dev, componentized);
-	if (IS_ERR(mdrv->dcss)) {
-		err = PTR_ERR(mdrv->dcss);
-		goto err;
-	}
+	if (IS_ERR(mdrv->dcss))
+		return PTR_ERR(mdrv->dcss);
 
 	dev_set_drvdata(dev, mdrv);
 
@@ -73,8 +71,6 @@ static int dcss_drv_init(struct device *dev, bool componentized)
 dcss_shutoff:
 	dcss_dev_destroy(mdrv->dcss);
 
-err:
-	kfree(mdrv);
 	return err;
 }
 
@@ -84,8 +80,6 @@ static void dcss_drv_deinit(struct device *dev, bool componentized)
 
 	dcss_kms_detach(mdrv->kms, componentized);
 	dcss_dev_destroy(mdrv->dcss);
-
-	kfree(mdrv);
 }
 
 static int dcss_drv_bind(struct device *dev)
@@ -132,7 +126,7 @@ static int dcss_drv_platform_probe(struct platform_device *pdev)
 	return component_master_add_with_match(dev, &dcss_master_ops, match);
 }
 
-static int dcss_drv_platform_remove(struct platform_device *pdev)
+static void dcss_drv_platform_remove(struct platform_device *pdev)
 {
 	struct dcss_drv *mdrv = dev_get_drvdata(&pdev->dev);
 
@@ -140,8 +134,13 @@ static int dcss_drv_platform_remove(struct platform_device *pdev)
 		component_master_del(&pdev->dev, &dcss_master_ops);
 	else
 		dcss_drv_deinit(&pdev->dev, false);
+}
 
-	return 0;
+static void dcss_drv_platform_shutdown(struct platform_device *pdev)
+{
+	struct dcss_drv *mdrv = dev_get_drvdata(&pdev->dev);
+
+	dcss_kms_shutdown(mdrv->kms);
 }
 
 static struct dcss_type_data dcss_types[] = {
@@ -170,7 +169,8 @@ MODULE_DEVICE_TABLE(of, dcss_of_match);
 
 static struct platform_driver dcss_platform_driver = {
 	.probe	= dcss_drv_platform_probe,
-	.remove	= dcss_drv_platform_remove,
+	.remove_new = dcss_drv_platform_remove,
+	.shutdown = dcss_drv_platform_shutdown,
 	.driver	= {
 		.name = "imx-dcss",
 		.of_match_table	= dcss_of_match,

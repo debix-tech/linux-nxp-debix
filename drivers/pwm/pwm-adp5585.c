@@ -1,229 +1,188 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * PWM driver for Analog Devices ADP5585 MFD
+ * Analog Devices ADP5585 PWM driver
  *
  * Copyright 2022 NXP
+ * Copyright 2024 Ideas on Board Oy
+ *
+ * Limitations:
+ * - The .apply() operation executes atomically, but may not wait for the
+ *   period to complete (this is not documented and would need to be tested).
+ * - Disabling the PWM drives the output pin to a low level immediately.
+ * - The hardware can only generate normal polarity output.
  */
 
-#include <linux/clk.h>
-#include <linux/init.h>
-#include <linux/io.h>
+#include <asm/byteorder.h>
+
+#include <linux/device.h>
+#include <linux/err.h>
+#include <linux/math64.h>
 #include <linux/mfd/adp5585.h>
+#include <linux/minmax.h>
 #include <linux/module.h>
-#include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/pwm.h>
-#include <linux/slab.h>
+#include <linux/regmap.h>
 #include <linux/time.h>
+#include <linux/types.h>
 
 #define ADP5585_PWM_CHAN_NUM		1
-#define ADP5585_PWM_FASTEST_PERIOD_NS	2000
-#define ADP5585_PWM_SLOWEST_PERIOD_NS	131070000
 
-struct adp5585_pwm_chip {
-	struct device *parent;
-	struct pwm_chip chip;
-	struct mutex lock;
-	u8 pin_config_val;
-};
+#define ADP5585_PWM_OSC_FREQ_HZ		1000000U
+#define ADP5585_PWM_MIN_PERIOD_NS	(2ULL * NSEC_PER_SEC / ADP5585_PWM_OSC_FREQ_HZ)
+#define ADP5585_PWM_MAX_PERIOD_NS	(2ULL * 0xffff * NSEC_PER_SEC / ADP5585_PWM_OSC_FREQ_HZ)
 
-static inline struct adp5585_pwm_chip *
-to_adp5585_pwm_chip(struct pwm_chip *chip)
+static int pwm_adp5585_request(struct pwm_chip *chip, struct pwm_device *pwm)
 {
-	return container_of(chip, struct adp5585_pwm_chip, chip);
+	struct regmap *regmap = pwmchip_get_drvdata(chip);
+
+	/* Configure the R3 pin as PWM output. */
+	return regmap_update_bits(regmap, ADP5585_PIN_CONFIG_C,
+				  ADP5585_R3_EXTEND_CFG_MASK,
+				  ADP5585_R3_EXTEND_CFG_PWM_OUT);
 }
 
-static int adp5585_pwm_reg_read(struct adp5585_pwm_chip *adp5585_pwm, u8 reg, u8 *val)
+static void pwm_adp5585_free(struct pwm_chip *chip, struct pwm_device *pwm)
 {
-	struct adp5585_dev *adp5585;
-	adp5585 = dev_get_drvdata(adp5585_pwm->parent);
+	struct regmap *regmap = pwmchip_get_drvdata(chip);
 
-	return adp5585->read_reg(adp5585, reg, val);
-}
-
-static int adp5585_pwm_reg_write(struct adp5585_pwm_chip *adp5585_pwm, u8 reg, u8 val)
-{
-	struct adp5585_dev *adp5585;
-	adp5585 = dev_get_drvdata(adp5585_pwm->parent);
-
-	return adp5585->write_reg(adp5585, reg, val);
-}
-
-static int pwm_adp5585_get_state(struct pwm_chip *chip,
-				  struct pwm_device *pwm,
-				  struct pwm_state *state)
-{
-	struct adp5585_pwm_chip *adp5585_pwm = to_adp5585_pwm_chip(chip);
-	u32 on, off;
-	u8 temp;
-
-	/* get period */
-	adp5585_pwm_reg_read(adp5585_pwm, ADP5585_PWM_OFFT_LOW, &temp);
-	off = temp;
-	adp5585_pwm_reg_read(adp5585_pwm, ADP5585_PWM_OFFT_HIGH, &temp);
-	off |= temp << 8;
-	adp5585_pwm_reg_read(adp5585_pwm, ADP5585_PWM_ONT_LOW, &temp);
-	on = temp;
-	adp5585_pwm_reg_read(adp5585_pwm, ADP5585_PWM_ONT_HIGH, &temp);
-	on |= temp << 8;
-	state->period = (on + off) * NSEC_PER_USEC;
-
-	/* get duty cycle */
-	state->duty_cycle = on;
-
-	/* get polarity */
-	state->polarity = PWM_POLARITY_NORMAL;
-
-	/* get channel status */
-	adp5585_pwm_reg_read(adp5585_pwm, ADP5585_PWM_CFG, &temp);
-	state->enabled = temp & ADP5585_PWM_CFG_EN;
-
-	return 0;
+	regmap_update_bits(regmap, ADP5585_PIN_CONFIG_C,
+			   ADP5585_R3_EXTEND_CFG_MASK,
+			   ADP5585_R3_EXTEND_CFG_GPIO4);
 }
 
 static int pwm_adp5585_apply(struct pwm_chip *chip,
 			     struct pwm_device *pwm,
 			     const struct pwm_state *state)
 {
-	struct adp5585_pwm_chip *adp5585_pwm = to_adp5585_pwm_chip(chip);
-	u8 enabled;
-	int ret;
+	struct regmap *regmap = pwmchip_get_drvdata(chip);
+	u64 period, duty_cycle;
 	u32 on, off;
+	__le16 val;
+	int ret;
 
-	if (state->period > ADP5585_PWM_SLOWEST_PERIOD_NS ||
-	    state->period < ADP5585_PWM_FASTEST_PERIOD_NS)
+	if (!state->enabled) {
+		regmap_clear_bits(regmap, ADP5585_GENERAL_CFG, ADP5585_OSC_EN);
+		regmap_clear_bits(regmap, ADP5585_PWM_CFG, ADP5585_PWM_EN);
+		return 0;
+	}
+
+	if (state->polarity != PWM_POLARITY_NORMAL)
 		return -EINVAL;
 
-	mutex_lock(&adp5585_pwm->lock);
-	/* set on/off cycle*/
-	on = DIV_ROUND_CLOSEST_ULL(state->duty_cycle, NSEC_PER_USEC);
-	off = DIV_ROUND_CLOSEST_ULL((state->period - state->duty_cycle),
-				   NSEC_PER_USEC);
-	ret = adp5585_pwm_reg_write(adp5585_pwm, ADP5585_PWM_OFFT_LOW,
-				    off & ADP5585_REG_MASK);
-	if (ret)
-		goto ERROR_PATH;
-	ret = adp5585_pwm_reg_write(adp5585_pwm, ADP5585_PWM_OFFT_HIGH,
-				    (off >> 8) & ADP5585_REG_MASK);
-	if (ret)
-		goto ERROR_PATH;
-	ret = adp5585_pwm_reg_write(adp5585_pwm, ADP5585_PWM_ONT_LOW,
-				    on & ADP5585_REG_MASK);
-	if (ret)
-		goto ERROR_PATH;
-	ret = adp5585_pwm_reg_write(adp5585_pwm, ADP5585_PWM_ONT_HIGH,
-				    (on >> 8) & ADP5585_REG_MASK);
-	if (ret)
-		goto ERROR_PATH;
+	if (state->period < ADP5585_PWM_MIN_PERIOD_NS)
+		return -EINVAL;
 
-	/* enable PWM and set to continuous PWM mode*/
-	adp5585_pwm_reg_read(adp5585_pwm, ADP5585_PWM_CFG, &enabled);
-	if (state->enabled)
-		ret = adp5585_pwm_reg_write(adp5585_pwm, ADP5585_PWM_CFG,
-					ADP5585_PWM_CFG_EN);
-	else
-		ret = adp5585_pwm_reg_write(adp5585_pwm, ADP5585_PWM_CFG, 0);
+	period = min(state->period, ADP5585_PWM_MAX_PERIOD_NS);
+	duty_cycle = min(state->duty_cycle, period);
 
-ERROR_PATH:
-	mutex_unlock(&adp5585_pwm->lock);
+	/*
+	 * Compute the on and off time. As the internal oscillator frequency is
+	 * 1MHz, the calculation can be simplified without loss of precision.
+	 */
+	on = div_u64(duty_cycle, NSEC_PER_SEC / ADP5585_PWM_OSC_FREQ_HZ);
+	off = div_u64(period, NSEC_PER_SEC / ADP5585_PWM_OSC_FREQ_HZ) - on;
 
-	return ret;
+	val = cpu_to_le16(off);
+	ret = regmap_bulk_write(regmap, ADP5585_PWM_OFFT_LOW, &val, 2);
+	if (ret)
+		return ret;
+
+	val = cpu_to_le16(on);
+	ret = regmap_bulk_write(regmap, ADP5585_PWM_ONT_LOW, &val, 2);
+	if (ret)
+		return ret;
+
+	/* Enable PWM in continuous mode and no external AND'ing. */
+	ret = regmap_update_bits(regmap, ADP5585_PWM_CFG,
+				 ADP5585_PWM_IN_AND | ADP5585_PWM_MODE |
+				 ADP5585_PWM_EN, ADP5585_PWM_EN);
+	if (ret)
+		return ret;
+
+	ret = regmap_set_bits(regmap, ADP5585_GENERAL_CFG, ADP5585_OSC_EN);
+	if (ret)
+		return ret;
+
+	return regmap_set_bits(regmap, ADP5585_PWM_CFG, ADP5585_PWM_EN);
 }
 
-static int pwm_adp5585_request(struct pwm_chip *chip, struct pwm_device *pwm)
+static int pwm_adp5585_get_state(struct pwm_chip *chip,
+				 struct pwm_device *pwm,
+				 struct pwm_state *state)
 {
-	struct adp5585_pwm_chip *adp5585_pwm = to_adp5585_pwm_chip(chip);
-	u8 reg_cfg;
+	struct regmap *regmap = pwmchip_get_drvdata(chip);
+	unsigned int on, off;
+	unsigned int val;
+	__le16 on_off;
 	int ret;
 
-	mutex_lock(&adp5585_pwm->lock);
-	adp5585_pwm_reg_read(adp5585_pwm, ADP5585_PIN_CONFIG_C,
-			     &adp5585_pwm->pin_config_val);
-	reg_cfg = adp5585_pwm->pin_config_val & ~ADP5585_PIN_CONFIG_R3_MASK;
-	reg_cfg |= ADP5585_PIN_CONFIG_R3_PWM;
-	ret = adp5585_pwm_reg_write(adp5585_pwm, ADP5585_PIN_CONFIG_C,
-				    reg_cfg);
+	ret = regmap_bulk_read(regmap, ADP5585_PWM_OFFT_LOW, &on_off, 2);
+	if (ret)
+		return ret;
+	off = le16_to_cpu(on_off);
 
-	adp5585_pwm_reg_read(adp5585_pwm, ADP5585_GENERAL_CFG,
-			     &adp5585_pwm->pin_config_val);
-	reg_cfg |= ADP5585_GENERAL_CFG_OSC_EN;
-	ret = adp5585_pwm_reg_write(adp5585_pwm, ADP5585_GENERAL_CFG, reg_cfg);
-	mutex_unlock(&adp5585_pwm->lock);
+	ret = regmap_bulk_read(regmap, ADP5585_PWM_ONT_LOW, &on_off, 2);
+	if (ret)
+		return ret;
+	on = le16_to_cpu(on_off);
 
-	return ret;
-}
+	state->duty_cycle = on * (NSEC_PER_SEC / ADP5585_PWM_OSC_FREQ_HZ);
+	state->period = (on + off) * (NSEC_PER_SEC / ADP5585_PWM_OSC_FREQ_HZ);
 
-static void pwm_adp5585_free(struct pwm_chip *chip, struct pwm_device *pwm)
-{
-	struct adp5585_pwm_chip *adp5585_pwm = to_adp5585_pwm_chip(chip);
-	u8 reg_cfg;
+	state->polarity = PWM_POLARITY_NORMAL;
 
-	mutex_lock(&adp5585_pwm->lock);
-	adp5585_pwm_reg_read(adp5585_pwm, ADP5585_PIN_CONFIG_C, &reg_cfg);
-	reg_cfg &= ~ADP5585_PIN_CONFIG_R3_MASK;
-	reg_cfg |= adp5585_pwm->pin_config_val & ADP5585_PIN_CONFIG_R3_MASK;
-	adp5585_pwm_reg_write(adp5585_pwm, ADP5585_PIN_CONFIG_C, reg_cfg);
-	mutex_unlock(&adp5585_pwm->lock);
+	regmap_read(regmap, ADP5585_PWM_CFG, &val);
+	state->enabled = !!(val & ADP5585_PWM_EN);
+
+	return 0;
 }
 
 static const struct pwm_ops adp5585_pwm_ops = {
 	.request = pwm_adp5585_request,
 	.free = pwm_adp5585_free,
-	.get_state = pwm_adp5585_get_state,
 	.apply = pwm_adp5585_apply,
-	.owner = THIS_MODULE,
+	.get_state = pwm_adp5585_get_state,
 };
 
 static int adp5585_pwm_probe(struct platform_device *pdev)
 {
-	struct adp5585_pwm_chip *adp5585_pwm;
+	struct device *dev = &pdev->dev;
+	struct adp5585_dev *adp5585 = dev_get_drvdata(dev->parent);
+	struct pwm_chip *chip;
 	int ret;
 
-	adp5585_pwm = devm_kzalloc(&pdev->dev, sizeof(*adp5585_pwm), GFP_KERNEL);
-	if (!adp5585_pwm)
-		return -ENOMEM;
+	chip = devm_pwmchip_alloc(dev, ADP5585_PWM_CHAN_NUM, 0);
+	if (IS_ERR(chip))
+		return PTR_ERR(chip);
 
-	adp5585_pwm->parent = pdev->dev.parent;
-	platform_set_drvdata(pdev, adp5585_pwm);
+	device_set_of_node_from_dev(dev, dev->parent);
 
-	adp5585_pwm->chip.dev = &pdev->dev;
-	adp5585_pwm->chip.ops = &adp5585_pwm_ops;
-	adp5585_pwm->chip.npwm = ADP5585_PWM_CHAN_NUM;
+	pwmchip_set_drvdata(chip, adp5585->regmap);
+	chip->ops = &adp5585_pwm_ops;
 
-	mutex_init(&adp5585_pwm->lock);
-
-	ret = pwmchip_add(&adp5585_pwm->chip);
+	ret = devm_pwmchip_add(dev, chip);
 	if (ret)
-		dev_err(&pdev->dev, "failed to add PWM chip: %d\n", ret);
-
-	return ret;
-}
-
-static int adp5585_pwm_remove(struct platform_device *pdev)
-{
-	struct adp5585_pwm_chip *adp5585_pwm = platform_get_drvdata(pdev);
-
-	pwmchip_remove(&adp5585_pwm->chip);
+		return dev_err_probe(dev, ret, "failed to add PWM chip\n");
 
 	return 0;
 }
 
-static const struct of_device_id adp5585_pwm_of_match[] = {
-	{.compatible = "adp5585-pwm", },
-	{ /* sentinel */ }
+static const struct platform_device_id adp5585_pwm_id_table[] = {
+	{ "adp5585-pwm" },
+	{ /* Sentinel */ }
 };
-MODULE_DEVICE_TABLE(of, adp5585_pwm_of_match);
+MODULE_DEVICE_TABLE(platform, adp5585_pwm_id_table);
 
 static struct platform_driver adp5585_pwm_driver = {
 	.driver	= {
-		.name	= "adp5585-pwm",
-		.of_match_table = adp5585_pwm_of_match,
+		.name = "adp5585-pwm",
 	},
-	.probe		= adp5585_pwm_probe,
-	.remove		= adp5585_pwm_remove,
+	.probe = adp5585_pwm_probe,
+	.id_table = adp5585_pwm_id_table,
 };
 module_platform_driver(adp5585_pwm_driver);
 
 MODULE_AUTHOR("Xiaoning Wang <xiaoning.wang@nxp.com>");
 MODULE_DESCRIPTION("ADP5585 PWM Driver");
-MODULE_LICENSE("GPL v2");
+MODULE_LICENSE("GPL");

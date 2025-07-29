@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright 2022 NXP
+ * Copyright 2022, 2024 NXP
  */
 
 #include <linux/arm-smccc.h>
@@ -8,14 +8,15 @@
 #include <linux/device.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
+#include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/platform_device.h>
 #include <linux/regulator/consumer.h>
 #include <linux/suspend.h>
 #include <linux/mfd/syscon.h>
 #include <linux/regmap.h>
-#include <linux/firmware/imx/ele_base_msg.h>
-#include <linux/firmware/imx/se_fw_inc.h>
+#include <linux/firmware/imx/se_api.h>
+#include <linux/thermal.h>
 
 #define FSL_SIP_DDR_DVFS                0xc2000004
 #define DDR_DFS_GET_FSP_COUNT		0x10
@@ -35,6 +36,8 @@
 #define VDD_SOC_ND_VOLTAGE		850000
 #define VDD_SOC_OD_VOLTAGE		900000
 
+#define MAX_COOLING_LEVEL 1
+
 enum SYS_PLL_CLKS {
 	SYS_PLL_PFD0,
 	SYS_PLL_PFD0_DIV2,
@@ -42,6 +45,12 @@ enum SYS_PLL_CLKS {
 	SYS_PLL_PFD1_DIV2,
 	SYS_PLL_PFD2,
 	SYS_PLL_PFD2_DIV2,
+	/*
+	 * If SYS_PLL_PFD_END is selected for the parent clock of
+	 * a clock, it means that the parent clock of this clock
+	 * does not need to be changed.
+	 */
+	SYS_PLL_PFD_END,
 };
 
 enum mode_type {
@@ -56,6 +65,7 @@ enum clk_path_index {
 	M33_ROOT,
 	WAKEUP_AXI,
 	MEDIA_AXI,
+	MEDIA_APB,
 	ML_AXI,
 	NIC_AXI,
 	A55_PERIPH,
@@ -74,17 +84,24 @@ struct critical_clk_path {
 	unsigned long current_rate;
 	/* mode rate */
 	unsigned long mode_rate[MODE_END];
+	/* mode parent */
+	enum SYS_PLL_CLKS mode_parent[MODE_END];
 };
 
-#define CLK_PATH(n, o_rate, n_rate, l_rate)		\
+#define CLK_PATH(n, o_rate, o_parent, \
+					n_rate, n_parent, \
+					l_rate, l_parent) \
 	{						\
 		.name = #n,				\
 		.mode_rate = {o_rate, n_rate, l_rate },	\
+		.mode_parent = {o_parent, n_parent, l_parent} \
 	}
 
 struct operating_mode {
+	bool cooling_actived;
+	bool suspend_prepared;
+	enum mode_type manual_mode;
 	enum mode_type current_mode;
-	enum mode_type resume_mode;
 	bool auto_gate_enabled;
 	unsigned int ssi_strap;
 	/* critical clocks */
@@ -95,25 +112,64 @@ static struct operating_mode system_run_mode;
 
 static struct operating_mode system_run_mode_91 = {
 	.paths = {
-		CLK_PATH(m33_root, 250000000, 200000000, 133000000),
-		CLK_PATH(wakeup_axi, 400000000, 250000000, 200000000),
-		CLK_PATH(media_axi, 400000000, 200000000, 200000000),
-		CLK_PATH(ml_axi, 1000000000, 800000000, 500000000),
-		CLK_PATH(nic_axi, 500000000, 333000000, 200000000),
-		CLK_PATH(a55_periph, 400000000, 333000000, 200000000),
-		CLK_PATH(a55_core, 1700000000, 1400000000, 900000000),
+		[M33_ROOT] = CLK_PATH(m33_root, 0, SYS_PLL_PFD_END,
+								200000000, SYS_PLL_PFD1_DIV2,
+								133000000, SYS_PLL_PFD1_DIV2),
+		[WAKEUP_AXI] = CLK_PATH(wakeup_axi, 0, SYS_PLL_PFD_END,
+								250000000, SYS_PLL_PFD0,
+								200000000, SYS_PLL_PFD1),
+		[MEDIA_AXI] = CLK_PATH(media_axi, 0, SYS_PLL_PFD_END,
+								333000000, SYS_PLL_PFD0,
+								200000000, SYS_PLL_PFD1),
+		[MEDIA_APB] = CLK_PATH(media_apb, 0, SYS_PLL_PFD_END,
+								125000000, SYS_PLL_PFD0_DIV2,
+								133000000, SYS_PLL_PFD1_DIV2),
+		[ML_AXI] = CLK_PATH(ml_axi, 0, SYS_PLL_PFD_END,
+								800000000, SYS_PLL_PFD1,
+								500000000, SYS_PLL_PFD0),
+		[NIC_AXI] = CLK_PATH(nic_axi, 0, SYS_PLL_PFD_END,
+								333000000, SYS_PLL_PFD0,
+								250000000, SYS_PLL_PFD0),
+		[A55_PERIPH] = CLK_PATH(a55_periph, 0, SYS_PLL_PFD_END,
+								333000000, SYS_PLL_PFD0,
+								200000000, SYS_PLL_PFD1),
+		[A55_CORE] = CLK_PATH(a55_core, 0, SYS_PLL_PFD_END,
+								1400000000, SYS_PLL_PFD_END,
+								900000000, SYS_PLL_PFD_END),
 	},
 };
 
 static struct operating_mode system_run_mode_93 = {
 	.paths = {
-		CLK_PATH(m33_root, 250000000, 200000000, 133000000),
-		CLK_PATH(wakeup_axi, 400000000, 312500000, 200000000),
-		CLK_PATH(media_axi, 400000000, 333000000, 200000000),
-		CLK_PATH(ml_axi, 1000000000, 800000000, 500000000),
-		CLK_PATH(nic_axi, 500000000, 400000000, 250000000),
-		CLK_PATH(a55_periph, 400000000, 333000000, 200000000),
-		CLK_PATH(a55_core, 1700000000, 1400000000, 900000000),
+		[M33_ROOT] = CLK_PATH(m33_root, 250000000, SYS_PLL_PFD0_DIV2,
+								200000000, SYS_PLL_PFD1_DIV2,
+								133000000, SYS_PLL_PFD1_DIV2),
+		/*
+		 * the parent of wakeup axi clock in OD mode depends
+		 * on its initial rate, here it is temporarily set
+		 * to SYS_PLL_PFD_END
+		 */
+		[WAKEUP_AXI] = CLK_PATH(wakeup_axi, 400000000, SYS_PLL_PFD_END,
+								312500000, SYS_PLL_PFD2,
+								200000000, SYS_PLL_PFD1),
+		[MEDIA_AXI] = CLK_PATH(media_axi, 400000000, SYS_PLL_PFD1,
+								333000000, SYS_PLL_PFD0,
+								200000000, SYS_PLL_PFD1),
+		[MEDIA_APB] = CLK_PATH(media_apb, 133000000, SYS_PLL_PFD1_DIV2,
+								125000000, SYS_PLL_PFD0_DIV2,
+								133000000, SYS_PLL_PFD1_DIV2),
+		[ML_AXI] = CLK_PATH(ml_axi, 1000000000, SYS_PLL_PFD0,
+								800000000, SYS_PLL_PFD1,
+								500000000, SYS_PLL_PFD0),
+		[NIC_AXI] = CLK_PATH(nic_axi, 500000000, SYS_PLL_PFD0,
+								400000000, SYS_PLL_PFD1,
+								250000000, SYS_PLL_PFD0),
+		[A55_PERIPH] = CLK_PATH(a55_periph, 400000000, SYS_PLL_PFD1,
+								333000000, SYS_PLL_PFD0,
+								200000000, SYS_PLL_PFD1),
+		[A55_CORE] = CLK_PATH(a55_core, 1700000000, SYS_PLL_PFD_END,
+								1400000000, SYS_PLL_PFD_END,
+								900000000, SYS_PLL_PFD_END),
 	},
 };
 
@@ -132,8 +188,13 @@ static unsigned int num_fsp;
 static unsigned int fsp_table[3];
 static struct regulator *soc_reg;
 static struct regmap *regmap;
-static struct device *se_dev;
+static void *se_data;
 DEFINE_MUTEX(mode_mutex);
+
+struct lpm_ctx {
+	unsigned int level;
+	struct thermal_cooling_device *cdev;
+};
 
 /* both HWFFC & SWFFC need to call this function */
 static int scaling_dram_freq(unsigned int fsp_index)
@@ -148,47 +209,52 @@ static int scaling_dram_freq(unsigned int fsp_index)
 	return 0;
 }
 
-static void sys_freq_scaling(enum mode_type new_mode)
+static void lpm_update_clk(struct critical_clk_path *path,
+			   enum clk_path_index clk, enum mode_type mode)
+{
+	if (mode == SWFFC_MODE)
+		mode = LD_MODE;
+
+	if (path[clk].mode_parent[mode] != SYS_PLL_PFD_END)
+		clk_set_parent(path[clk].clk,
+			       clks[path[clk].mode_parent[mode]].clk);
+
+	clk_set_rate(path[clk].clk, path[clk].mode_rate[mode]);
+}
+
+/* update all clocks except except_clk */
+static void lpm_update_all_clks(struct critical_clk_path *path,
+				enum mode_type mode, enum clk_path_index except_clk)
 {
 	int i;
-	struct critical_clk_path *path = system_run_mode.paths;
 
-	mutex_lock(&mode_mutex);
+	for (i = 0; i < CLK_PATH_END; i++) {
+		if (i == except_clk)
+			continue;
+
+		lpm_update_clk(path, i, mode);
+	}
+}
+
+/* Caller should hold mode_mutex lock */
+static void sys_freq_scaling(enum mode_type new_mode)
+{
+	struct critical_clk_path *path = system_run_mode.paths;
 
 	if (new_mode == system_run_mode.current_mode) {
 		pr_debug("System already in target mode, do nothing\n");
-		mutex_unlock(&mode_mutex);
 		return;
 	}
 
 	if (new_mode == OD_MODE) {
 		/* increase the voltage first */
-		ele_voltage_change_req(se_dev, true);
+		imx_se_voltage_change_req(se_data, true);
 		regulator_set_voltage_tol(soc_reg, VDD_SOC_OD_VOLTAGE, 0);
-		ele_voltage_change_req(se_dev, false);
+		imx_se_voltage_change_req(se_data, false);
 
 		/* Increase the NIC_AXI first */
-		clk_set_parent(path[NIC_AXI].clk, clks[SYS_PLL_PFD0].clk);
-		clk_set_rate(path[NIC_AXI].clk, path[NIC_AXI].mode_rate[OD_MODE]);
-
-		for (i = 0; i < CLK_PATH_END; i++) {
-			/* NIC_AXI has been changed before, skip it */
-			if (i == NIC_AXI)
-				continue;
-
-			if (i == M33_ROOT) {
-				clk_set_parent(path[i].clk, clks[SYS_PLL_PFD0_DIV2].clk);
-			} else if (i == MEDIA_AXI || i == A55_PERIPH) {
-				clk_set_parent(path[i].clk, clks[SYS_PLL_PFD1].clk);
-			} else if (i == ML_AXI) {
-				clk_set_parent(path[i].clk, clks[SYS_PLL_PFD0].clk);
-			} else if (i == WAKEUP_AXI) {
-				clk_set_parent(path[i].clk, path[i].initial_rate > 312500000 ?
-						clks[SYS_PLL_PFD1].clk : clks[SYS_PLL_PFD2].clk);
-			}
-
-			clk_set_rate(path[i].clk, path[i].mode_rate[OD_MODE]);
-		}
+		lpm_update_clk(path, NIC_AXI, new_mode);
+		lpm_update_all_clks(path, new_mode, NIC_AXI);
 
 		/* Scaling up the DDR frequency */
 		scaling_dram_freq(0x0);
@@ -197,81 +263,67 @@ static void sys_freq_scaling(enum mode_type new_mode)
 		/*
 		 * if switch from LD mode to ND mode, voltage should be increase firstly.
 		 */
-		if (system_run_mode.current_mode == LD_MODE)
+		if (system_run_mode.current_mode == LD_MODE || no_od_mode) {
 			regulator_set_voltage_tol(soc_reg, VDD_SOC_ND_VOLTAGE, 0);
-
-		for (i = 0; i < CLK_PATH_END; i++) {
-			if (i == M33_ROOT) {
-				clk_set_parent(path[i].clk, clks[SYS_PLL_PFD1_DIV2].clk);
-			} else if (i == MEDIA_AXI || i == A55_PERIPH) {
-				clk_set_parent(path[i].clk, clks[SYS_PLL_PFD0].clk);
-			} else if (i == ML_AXI) {
-				clk_set_parent(path[i].clk, clks[SYS_PLL_PFD1].clk);
-			} else if (i == NIC_AXI) {
-				if (of_machine_is_compatible("fsl,imx93"))
-					clk_set_parent(path[i].clk, clks[SYS_PLL_PFD1].clk);
-				else
-					clk_set_parent(path[i].clk, clks[SYS_PLL_PFD0].clk);
-			} else if (i == WAKEUP_AXI) {
-				if (of_machine_is_compatible("fsl,imx93"))
-					clk_set_parent(path[i].clk, clks[SYS_PLL_PFD2].clk);
-				else if (of_machine_is_compatible("fsl,imx91"))
-					clk_set_parent(path[i].clk, clks[SYS_PLL_PFD0].clk);
-			}
-
-				clk_set_rate(path[i].clk, path[i].mode_rate[ND_MODE]);
+			lpm_update_clk(path, NIC_AXI, new_mode);
 		}
+
+		lpm_update_all_clks(path, new_mode, NIC_AXI);
 
 		/* Scaling down the ddr frequency. */
 		scaling_dram_freq(no_od_mode ? 0x0 : 0x1);
 
-		if (system_run_mode.current_mode != LD_MODE)
+		if (system_run_mode.current_mode != LD_MODE && !no_od_mode) {
+			lpm_update_clk(path, NIC_AXI, new_mode);
 			regulator_set_voltage_tol(soc_reg, VDD_SOC_ND_VOLTAGE, 0);
+		}
 
 		pr_info("System switching to ND mode...\n");
 	} else if (new_mode == LD_MODE || new_mode == SWFFC_MODE) {
-		for (i = 0; i < CLK_PATH_END; i++) {
-			/*
-			 * NIC AXI frequency should be changed after all other clock
-			 * has been slow down. Especially NIC AXI should be reduced
-			 * after A55 related clocks.
-			 */
-			if (i == NIC_AXI)
-				continue;
-
-			if (i == M33_ROOT) {
-				clk_set_parent(path[i].clk, clks[SYS_PLL_PFD1_DIV2].clk);
-			} else if (i == MEDIA_AXI || i == A55_PERIPH) {
-				clk_set_parent(path[i].clk, clks[SYS_PLL_PFD1].clk);
-			} else if (i == ML_AXI) {
-				clk_set_parent(path[i].clk, clks[SYS_PLL_PFD0].clk);
-			} else if (i == WAKEUP_AXI) {
-				clk_set_parent(path[i].clk, clks[SYS_PLL_PFD1].clk);
-			}
-
-			clk_set_rate(path[i].clk, path[i].mode_rate[LD_MODE]);
-		}
-
-		clk_set_parent(path[NIC_AXI].clk, clks[SYS_PLL_PFD0].clk);
-		clk_set_rate(path[NIC_AXI].clk, path[NIC_AXI].mode_rate[LD_MODE]);
+		/*
+		 * NIC AXI frequency should be changed after all other clock
+		 * has been slow down. Especially NIC AXI should be reduced
+		 * after A55 related clocks.
+		 */
+		lpm_update_all_clks(path, new_mode, NIC_AXI);
+		lpm_update_clk(path, NIC_AXI, new_mode);
 
 		/* Scaling down the ddr frequency. */
 		scaling_dram_freq(new_mode == LD_MODE ? 0x1 : 0x2);
 
 		if (!no_od_mode)
-			ele_voltage_change_req(se_dev, true);
+			imx_se_voltage_change_req(se_data, true);
 
 		regulator_set_voltage_tol(soc_reg, VDD_SOC_LD_VOLTAGE, 0);
 
 		if (!no_od_mode)
-			ele_voltage_change_req(se_dev, false);
+			imx_se_voltage_change_req(se_data, false);
 
 		pr_info("System switching to LD/SWFFC mode...\n");
 	}
 
 	system_run_mode.current_mode = new_mode;
+}
 
-	mutex_unlock(&mode_mutex);
+/* Caller should hold mode_mutex lock */
+static void lpm_switch_to_new_mode(enum mode_type new_mode)
+{
+	/* Skip if set to the same mode */
+	if (new_mode == system_run_mode.current_mode)
+		return;
+
+	/* make sure auto clock gating is disabled before DDR frequency scaling */
+	regmap_update_bits(regmap, AUTO_CG_CTRL, AUTO_CG_EN, 0);
+
+	if ((system_run_mode.current_mode != OD_MODE && new_mode == SWFFC_MODE) ||
+	    (system_run_mode.current_mode == SWFFC_MODE && new_mode != OD_MODE))
+		sys_freq_scaling(no_od_mode ? ND_MODE : OD_MODE);
+
+	sys_freq_scaling(new_mode);
+
+	if (system_run_mode.auto_gate_enabled ||
+	    (system_run_mode.current_mode == OD_MODE && fsp_table[0] >= 3733))
+		regmap_update_bits(regmap, AUTO_CG_CTRL, AUTO_CG_EN, AUTO_CG_EN);
 }
 
 static ssize_t lpm_enable_show(struct device *dev, struct device_attribute *attr,
@@ -290,6 +342,29 @@ static ssize_t lpm_enable_show(struct device *dev, struct device_attribute *attr
 	default:
 		return sprintf(buf, "Unknown system mode\n");
 	}
+}
+
+/* Caller should hold mode_mutex lock */
+static enum mode_type lpm_get_tartget_mode(void)
+{
+	enum mode_type new_mode;
+
+	if (system_run_mode.suspend_prepared) {
+		new_mode = no_od_mode ? ND_MODE : OD_MODE;
+	} else if (!system_run_mode.cooling_actived) {
+		new_mode = system_run_mode.manual_mode;
+	} else {
+		new_mode = ld_mode_enabled ? LD_MODE : ND_MODE;
+
+		/*
+		 * manual setting mode is preferred if it makes the
+		 * system colder
+		 */
+		if (new_mode < system_run_mode.manual_mode)
+			new_mode = system_run_mode.manual_mode;
+	}
+
+	return new_mode;
 }
 
 static ssize_t lpm_enable_store(struct device *dev,
@@ -315,18 +390,13 @@ static ssize_t lpm_enable_store(struct device *dev,
 	if (new_mode == OD_MODE && no_od_mode)
 		return -EINVAL;
 
-	/* make sure auto clock gating is disabled before DDR frequency scaling */
-	regmap_update_bits(regmap, AUTO_CG_CTRL, AUTO_CG_EN, 0);
+	mutex_lock(&mode_mutex);
 
-	if ((system_run_mode.current_mode != OD_MODE && new_mode == SWFFC_MODE) ||
-	    (system_run_mode.current_mode == SWFFC_MODE && new_mode != OD_MODE)) 
-		sys_freq_scaling(no_od_mode ? ND_MODE : OD_MODE);
+	system_run_mode.manual_mode = new_mode;
 
-	sys_freq_scaling(new_mode);
+	lpm_switch_to_new_mode(lpm_get_tartget_mode());
 
-	if (system_run_mode.auto_gate_enabled ||
-	    (system_run_mode.current_mode == OD_MODE && fsp_table[0] >= 3733))
-		regmap_update_bits(regmap, AUTO_CG_CTRL, AUTO_CG_EN, AUTO_CG_EN);
+	mutex_unlock(&mode_mutex);
 
 	return count;
 }
@@ -381,14 +451,18 @@ static int imx93_lpm_pm_notify(struct notifier_block *nb, unsigned long event,
 	void *dummy)
 {
 	if (event == PM_SUSPEND_PREPARE) {
-		system_run_mode.resume_mode = system_run_mode.current_mode;
+		mutex_lock(&mode_mutex);
+		system_run_mode.suspend_prepared = true;
 		/* make sure auto clock gating is disabled */
 		regmap_update_bits(regmap, AUTO_CG_CTRL, AUTO_CG_EN, 0);
-		sys_freq_scaling(no_od_mode ? ND_MODE : OD_MODE);
+		sys_freq_scaling(lpm_get_tartget_mode());
 		/* save the ssi idle strap */
 		regmap_read(regmap, AUTO_CG_CTRL, &system_run_mode.ssi_strap);
+		mutex_unlock(&mode_mutex);
 	} else if (event == PM_POST_SUSPEND) {
-		sys_freq_scaling(system_run_mode.resume_mode);
+		mutex_lock(&mode_mutex);
+		system_run_mode.suspend_prepared = false;
+		sys_freq_scaling(lpm_get_tartget_mode());
 
 		/* restore the ssi idle strap */
 		regmap_update_bits(regmap, AUTO_CG_CTRL, 0xFFFF, system_run_mode.ssi_strap);
@@ -398,6 +472,7 @@ static int imx93_lpm_pm_notify(struct notifier_block *nb, unsigned long event,
 			regmap_update_bits(regmap, AUTO_CG_CTRL, HWFFC_ACG_FORCE_B | AUTO_CG_EN,
 				 HWFFC_ACG_FORCE_B | AUTO_CG_EN);
 		}
+		mutex_unlock(&mode_mutex);
 	}
 
 	return NOTIFY_OK;
@@ -406,6 +481,89 @@ static int imx93_lpm_pm_notify(struct notifier_block *nb, unsigned long event,
 static struct notifier_block imx93_lpm_pm_notifier = {
 	.notifier_call = imx93_lpm_pm_notify,
 };
+
+static int lpm_get_max_state(struct thermal_cooling_device *cdev,
+			     unsigned long *state)
+{
+	*state = MAX_COOLING_LEVEL;
+
+	return 0;
+}
+
+static int lpm_get_cur_state(struct thermal_cooling_device *cdev,
+			     unsigned long *state)
+{
+	struct lpm_ctx *ctx = cdev->devdata;
+
+	*state = ctx->level;
+
+	return 0;
+}
+
+static int lpm_set_cur_state(struct thermal_cooling_device *cdev,
+			     unsigned long state)
+{
+	struct lpm_ctx *ctx = cdev->devdata;
+
+	if (state > MAX_COOLING_LEVEL)
+		return -EINVAL;
+
+	if (state == ctx->level)
+		return 0;
+
+	mutex_lock(&mode_mutex);
+
+	if (state == 0) {
+		system_run_mode.cooling_actived = false;
+	/* cool down. */
+	} else if (state == 1) {
+		system_run_mode.cooling_actived = true;
+	} else {
+		dev_err(&cdev->device, "Unsupported cooling level: %lu\n", state);
+		return -EINVAL;
+	}
+
+	lpm_switch_to_new_mode(lpm_get_tartget_mode());
+
+	ctx->level = state;
+
+	mutex_unlock(&mode_mutex);
+
+	return 0;
+}
+
+static const struct thermal_cooling_device_ops lpm_cooling_ops = {
+	.get_max_state = lpm_get_max_state,
+	.get_cur_state = lpm_get_cur_state,
+	.set_cur_state = lpm_set_cur_state,
+};
+
+static int lpm_cooling_device_register(struct platform_device *pdev)
+{
+	int ret;
+	struct thermal_cooling_device *cdev;
+	struct device *dev = &pdev->dev;
+	struct lpm_ctx *ctx;
+
+	ctx = devm_kzalloc(dev, sizeof(*ctx), GFP_KERNEL);
+	if (!ctx)
+		return -ENOMEM;
+	platform_set_drvdata(pdev, ctx);
+
+	cdev = devm_thermal_of_cooling_device_register(dev, dev->of_node,
+						       "lpm-cooling",
+						       ctx,
+						       &lpm_cooling_ops);
+	if (IS_ERR(cdev)) {
+		ret = PTR_ERR(cdev);
+		dev_err(dev, "Failed to register lpm cooling device: %d\n",
+			ret);
+		return ret;
+	}
+	ctx->cdev = cdev;
+
+	return 0;
+}
 
 /* sysfs for user control */
 static int imx93_lpm_probe(struct platform_device *pdev)
@@ -460,8 +618,8 @@ static int imx93_lpm_probe(struct platform_device *pdev)
 	if (IS_ERR(soc_reg))
 		return PTR_ERR(soc_reg);
 
-	se_dev = get_se_dev("se-fw2");
-	if (!se_dev) {
+	se_data = imx_get_se_data_info(SOC_ID_OF_IMX93, 0);
+	if (!se_data) {
 		dev_err(&pdev->dev, "get se-fw2 failed\n");
 		return -ENODEV;
 	}
@@ -489,6 +647,11 @@ static int imx93_lpm_probe(struct platform_device *pdev)
 		path[i].initial_rate = clk_get_rate(path[i].clk);
 	}
 
+	if (path[WAKEUP_AXI].initial_rate > 312500000)
+		path[WAKEUP_AXI].mode_parent[OD_MODE] = SYS_PLL_PFD1;
+	else
+		path[WAKEUP_AXI].mode_parent[OD_MODE] = SYS_PLL_PFD2;
+
 	err = clk_bulk_get(&pdev->dev, 6, clks);
 	if (err) {
 		dev_err(&pdev->dev, "failed to get bulk clks\n");
@@ -497,6 +660,9 @@ static int imx93_lpm_probe(struct platform_device *pdev)
 
 	/* Normally, we assuming the system in boot up in OD or ND(i.MX91/P) mode */
 	system_run_mode.current_mode = no_od_mode ? ND_MODE : OD_MODE;
+	system_run_mode.manual_mode = system_run_mode.current_mode;
+
+	lpm_cooling_device_register(pdev);
 
 	/* create the sysfs file */
 	err = sysfs_create_files(&pdev->dev.kobj, imx93_lpm_attrs);

@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+// SPDX-License-Identifier: (GPL-2.0-only OR MIT)
 /*
- * Copyright 2022 NXP
+ * Copyright 2024 NXP
  */
 
 /dts-v1/;
@@ -83,9 +83,15 @@
 		power-domains = <&mlmix>;
 	};
 
+	reg_vref_1v8: regulator-adc-vref {
+		compatible = "regulator-fixed";
+		regulator-name = "VREF_1V8";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+	};
+
 	reg_rpi_3v3: regulator-rpi {
 		compatible = "regulator-fixed";
-		pinctrl-names = "default";
 		regulator-name = "VDD_RPI_3V3";
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
@@ -101,8 +107,8 @@
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
 		gpio = <&gpio3 7 GPIO_ACTIVE_HIGH>;
-		off-on-delay-us = <12000>;
 		enable-active-high;
+		off-on-delay-us = <12000>;
 	};
 
 	reg_vdd_3v3: regulator-vdd {
@@ -112,11 +118,13 @@
 		regulator-max-microvolt = <3300000>;
 	};
 
-	reg_vref_1v8: regulator-adc-vref {
+	reg_m2_pwr: regulator-m2-pwr {
 		compatible = "regulator-fixed";
-		regulator-name = "vref_1v8";
-		regulator-min-microvolt = <1800000>;
-		regulator-max-microvolt = <1800000>;
+		regulator-name = "M.2-power";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&pcal6524 13 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
 	};
 
 	reg_usdhc3_vmmc: regulator-usdhc3 {
@@ -124,6 +132,7 @@
 		regulator-name = "WLAN_EN";
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
+		vin-supply = <&reg_m2_pwr>;
 		gpio = <&pcal6524 20 GPIO_ACTIVE_HIGH>;
 		/*
 		 * IW612 wifi chip needs more delay than other wifi chips to complete
@@ -249,12 +258,9 @@
 };
 
 &lpi2c1 {
-	#address-cells = <1>;
-	#size-cells = <0>;
 	clock-frequency = <400000>;
-	pinctrl-names = "default", "sleep";
+	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpi2c1>;
-	pinctrl-1 = <&pinctrl_lpi2c1>;
 	status = "okay";
 
 	codec: wm8962@1a {
@@ -288,17 +294,10 @@
 	};
 
 	ptn5110: tcpc@50 {
-		compatible = "nxp,ptn5110";
+		compatible = "nxp,ptn5110", "tcpci";
 		reg = <0x50>;
 		interrupt-parent = <&gpio3>;
 		interrupts = <26 IRQ_TYPE_LEVEL_LOW>;
-		status = "okay";
-
-		port {
-			typec1_dr_sw: endpoint {
-				remote-endpoint = <&usb1_drd_sw>;
-			};
-		};
 
 		typec1_con: connector {
 			compatible = "usb-c-connector";
@@ -311,7 +310,27 @@
 				     PDO_VAR(5000, 20000, 3000)>;
 			op-sink-microwatt = <15000000>;
 			self-powered;
+
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				port@0 {
+					reg = <0>;
+
+					typec1_dr_sw: endpoint {
+						remote-endpoint = <&usb1_drd_sw>;
+					};
+				};
+			};
 		};
+	};
+
+	rtc@53 {
+		compatible = "nxp,pcf2131";
+		reg = <0x53>;
+		interrupt-parent = <&pcal6524>;
+		interrupts = <1 IRQ_TYPE_EDGE_FALLING>;
 	};
 
 	lsm6dsm@6a {
@@ -326,13 +345,29 @@
 };
 
 &lpi2c2 {
-	#address-cells = <1>;
-	#size-cells = <0>;
 	clock-frequency = <400000>;
-	pinctrl-names = "default", "sleep";
+	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpi2c2>;
-	pinctrl-1 = <&pinctrl_lpi2c2>;
 	status = "okay";
+
+	pcal6524: gpio@22 {
+		compatible = "nxp,pcal6524";
+		reg = <0x22>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		interrupt-parent = <&gpio3>;
+		interrupts = <26 IRQ_TYPE_LEVEL_LOW>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_pcal6524>;
+
+		m2-pcm-level-shifter-hog {
+			gpio-hog;
+			gpios = <19 GPIO_ACTIVE_HIGH>;
+			output-high;
+		};
+	};
 
 	pmic@25 {
 		compatible = "nxp,pca9451a";
@@ -408,19 +443,6 @@
 			};
 		};
 	};
-
-	pcal6524: gpio@22 {
-		compatible = "nxp,pcal6524";
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_pcal6524>;
-		reg = <0x22>;
-		gpio-controller;
-		#gpio-cells = <2>;
-		interrupt-controller;
-		#interrupt-cells = <2>;
-		interrupt-parent = <&gpio3>;
-		interrupts = <26 IRQ_TYPE_LEVEL_LOW>;
-	};
 };
 
 &lpuart1 { /* console */
@@ -433,7 +455,6 @@
 	/* BT */
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart5>;
-	pinctrl-assert-gpios = <&pcal6524 19 GPIO_ACTIVE_HIGH>;
 	status = "okay";
 
 	bluetooth {
@@ -507,6 +528,7 @@
 	pinctrl-1 = <&pinctrl_usdhc1_100mhz>;
 	pinctrl-2 = <&pinctrl_usdhc1_200mhz>;
 	bus-width = <8>;
+	fsl,tuning-step = <1>;
 	non-removable;
 	status = "okay";
 };
@@ -516,13 +538,13 @@
 	pinctrl-0 = <&pinctrl_usdhc2>, <&pinctrl_usdhc2_gpio>;
 	pinctrl-1 = <&pinctrl_usdhc2_100mhz>, <&pinctrl_usdhc2_gpio>;
 	pinctrl-2 = <&pinctrl_usdhc2_200mhz>, <&pinctrl_usdhc2_gpio>;
-	cd-gpios = <&gpio3 00 GPIO_ACTIVE_LOW>;
+	cd-gpios = <&gpio3 0 GPIO_ACTIVE_LOW>;
 	fsl,cd-gpio-wakeup-disable;
 	vmmc-supply = <&reg_usdhc2_vmmc>;
 	bus-width = <4>;
-	status = "okay";
-	no-sdio;
+	fsl,tuning-step = <1>;
 	no-mmc;
+	status = "okay";
 };
 
 &usdhc3 {
@@ -532,7 +554,6 @@
 	pinctrl-2 = <&pinctrl_usdhc3_200mhz>;
 	mmc-pwrseq = <&usdhc3_pwrseq>;
 	vmmc-supply = <&reg_usdhc3_vmmc>;
-	pinctrl-assert-gpios = <&pcal6524 13 GPIO_ACTIVE_HIGH>;
 	bus-width = <4>;
 	keep-power-in-suspend;
 	non-removable;
@@ -601,28 +622,28 @@
 
 	pinctrl_lpi2c1: lpi2c1grp {
 		fsl,pins = <
-			MX93_PAD_I2C1_SCL__LPI2C1_SCL			0x40000b9e
-			MX93_PAD_I2C1_SDA__LPI2C1_SDA			0x40000b9e
+			MX93_PAD_I2C1_SCL__LPI2C1_SCL		0x40000b9e
+			MX93_PAD_I2C1_SDA__LPI2C1_SDA		0x40000b9e
 		>;
 	};
 
 	pinctrl_lpi2c2: lpi2c2grp {
 		fsl,pins = <
-			MX93_PAD_I2C2_SCL__LPI2C2_SCL			0x40000b9e
-			MX93_PAD_I2C2_SDA__LPI2C2_SDA			0x40000b9e
+			MX93_PAD_I2C2_SCL__LPI2C2_SCL		0x40000b9e
+			MX93_PAD_I2C2_SDA__LPI2C2_SDA		0x40000b9e
 		>;
 	};
 
 	pinctrl_pcal6524: pcal6524grp {
 		fsl,pins = <
-			MX93_PAD_CCM_CLKO1__GPIO3_IO26			0x31e
+			MX93_PAD_CCM_CLKO1__GPIO3_IO26		0x31e
 		>;
 	};
 
 	pinctrl_uart1: uart1grp {
 		fsl,pins = <
-			MX93_PAD_UART1_RXD__LPUART1_RX			0x31e
-			MX93_PAD_UART1_TXD__LPUART1_TX			0x31e
+			MX93_PAD_UART1_RXD__LPUART1_RX		0x31e
+			MX93_PAD_UART1_TXD__LPUART1_TX		0x31e
 		>;
 	};
 

@@ -665,8 +665,8 @@ static int mxc_isi_m2m_querycap(struct file *file, void *priv,
 {
 	struct mxc_isi_m2m_dev *isi_m2m = video_drvdata(file);
 
-	strlcpy(cap->driver, MXC_ISI_M2M, sizeof(cap->driver));
-	strlcpy(cap->card, MXC_ISI_M2M, sizeof(cap->card));
+	strscpy(cap->driver, MXC_ISI_M2M, sizeof(cap->driver));
+	strscpy(cap->card, MXC_ISI_M2M, sizeof(cap->card));
 	snprintf(cap->bus_info, sizeof(cap->bus_info), "platform:%s.%d",
 		 dev_name(&isi_m2m->pdev->dev), isi_m2m->id);
 	cap->device_caps = V4L2_CAP_STREAMING | V4L2_CAP_VIDEO_M2M_MPLANE;
@@ -1021,7 +1021,6 @@ static void mxc_isi_axi_limit_clear(struct mxc_isi_m2m_dev *isi_m2m)
 	isi_m2m->saved_axi_limit_isi_en = 0;
 	isi_m2m->saved_axi_isi_thresh = 0;
 }
-
 static int mxc_isi_m2m_streamon(struct file *file, void *priv,
 			     enum v4l2_buf_type type)
 {
@@ -1307,7 +1306,7 @@ static int mxc_isi_m2m_ctrls_create(struct mxc_isi_m2m_dev *isi_m2m)
 
 }
 
-void mxc_isi_m2m_ctrls_delete(struct mxc_isi_m2m_dev *isi_m2m)
+static void mxc_isi_m2m_ctrls_delete(struct mxc_isi_m2m_dev *isi_m2m)
 {
 	struct mxc_isi_ctrls *ctrls = &isi_m2m->ctrls;
 
@@ -1406,7 +1405,7 @@ static int isi_m2m_probe(struct platform_device *pdev)
 
 	/* V4L2 device */
 	v4l2_dev = &isi_m2m->v4l2_dev;
-	strlcpy(v4l2_dev->name, "mx8-isi-m2m", sizeof(v4l2_dev->name));
+	strscpy(v4l2_dev->name, "mx8-isi-m2m", sizeof(v4l2_dev->name));
 
 	ret = v4l2_device_register(&pdev->dev, v4l2_dev);
 	if (ret < 0) {
@@ -1456,7 +1455,7 @@ free_m2m:
 
 }
 
-static int isi_m2m_remove(struct platform_device *pdev)
+static void isi_m2m_remove(struct platform_device *pdev)
 {
 	struct mxc_isi_m2m_dev *isi_m2m = platform_get_drvdata(pdev);
 	struct video_device *vdev = &isi_m2m->vdev;
@@ -1469,8 +1468,6 @@ static int isi_m2m_remove(struct platform_device *pdev)
 	v4l2_m2m_release(isi_m2m->m2m_dev);
 	v4l2_device_unregister(&isi_m2m->v4l2_dev);
 	pm_runtime_disable(&isi_m2m->pdev->dev);
-
-	return 0;
 }
 
 static int mxc_isi_m2m_pm_resume(struct device *dev)

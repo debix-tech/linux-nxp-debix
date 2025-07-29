@@ -680,7 +680,7 @@ static int imx_flexio_i2c_master_probe(struct platform_device *pdev)
 	i2c_dev->adapter.nr = pdev->id;
 	i2c_dev->adapter.bus_recovery_info = &imx_flexio_i2c_recovery_info;
 
-	strlcpy(i2c_dev->adapter.name, dev_name(i2c_dev->dev),
+	strscpy(i2c_dev->adapter.name, dev_name(i2c_dev->dev),
 		sizeof(i2c_dev->adapter.name));
 
 	init_completion(&i2c_dev->complete);
@@ -698,13 +698,12 @@ release_clock:
 	return err;
 }
 
-static int imx_flexio_i2c_master_remove(struct platform_device *pdev)
+static void imx_flexio_i2c_master_remove(struct platform_device *pdev)
 {
 	struct imx_flexio_i2c_master_dev *i2c_dev = platform_get_drvdata(pdev);
 
 	i2c_del_adapter(&i2c_dev->adapter);
 	clk_disable(i2c_dev->clk);
-	return 0;
 }
 
 static const struct of_device_id imx_flexio_i2c_master_of_match[] = {

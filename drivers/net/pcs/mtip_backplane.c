@@ -1865,7 +1865,7 @@ static int mtip_c73_page_received(struct mtip_backplane *priv,
 
 	err = linkmode_c73_priority_resolution(common, &resolved);
 
-	dev_info(dev,
+	dev_dbg(dev,
 		"C73 page received, LD %04x:%04x:%04x (%*pb), LP %04x:%04x:%04x (%*pb)%s%s\n",
 		C73_ADV_2(base_page), C73_ADV_1(base_page), C73_ADV_0(base_page),
 		__ETHTOOL_LINK_MODE_MASK_NBITS, advertising,

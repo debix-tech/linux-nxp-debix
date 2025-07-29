@@ -187,7 +187,7 @@ const struct fb_videomode mxc_cea_mode[64] = {
  * pixclock, since for many CEA modes, 2 frequencies are supported
  * e.g. 640x480 @ 60Hz or 59.94Hz
  */
-int mxc_edid_fb_mode_is_equal(bool use_aspect,
+static int mxc_edid_fb_mode_is_equal(bool use_aspect,
 			const struct fb_videomode *mode1,
 			const struct fb_videomode *mode2)
 {
@@ -253,10 +253,12 @@ static void get_detailed_timing(unsigned char *block,
 	else if ((mode->xres / 4) == (mode->yres / 3))
 		mode->vmode |= FB_VMODE_ASPECT_4_3;
 
-	if (mode->vmode & FB_VMODE_ASPECT_16_9)
+	if (mode->vmode & FB_VMODE_ASPECT_16_9) {
 		DPRINTK("Aspect ratio: 16:9\n");
-	if (mode->vmode & FB_VMODE_ASPECT_4_3)
+	}
+	if (mode->vmode & FB_VMODE_ASPECT_4_3) {
 		DPRINTK("Aspect ratio: 4:3\n");
+	}
 	DPRINTK("      %d MHz ",  PIXEL_CLOCK/1000000);
 	DPRINTK("%d %d %d %d ", H_ACTIVE, H_ACTIVE + H_SYNC_OFFSET,
 	       H_ACTIVE + H_SYNC_OFFSET + H_SYNC_WIDTH, H_ACTIVE + H_BLANKING);

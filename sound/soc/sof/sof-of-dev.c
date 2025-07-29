@@ -41,42 +41,17 @@ static void sof_of_probe_complete(struct device *dev)
 	pm_runtime_enable(dev);
 }
 
-static int sof_of_parse(struct platform_device *pdev)
-{
-	struct snd_sof_pdata *sof_pdata = platform_get_drvdata(pdev);
-	struct device_node *np = pdev->dev.of_node;
-	int ret;
-
-	/* firmware-name is optional in DT */
-	of_property_read_string(np, "firmware-name", &sof_pdata->fw_filename);
-
-	ret = of_property_read_string(np, "tplg-name",
-				      &sof_pdata->tplg_filename);
-	if (ret < 0)
-		return ret;
-
-	ret = of_property_read_string(np, "machine-drv-name",
-				      &sof_pdata->machine_drv_name);
-	if (ret < 0)
-		return ret;
-
-	return 0;
-}
-
 int sof_of_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	const struct sof_dev_desc *desc;
 	struct snd_sof_pdata *sof_pdata;
-	int ret;
 
 	dev_info(&pdev->dev, "DT DSP detected");
 
 	sof_pdata = devm_kzalloc(dev, sizeof(*sof_pdata), GFP_KERNEL);
 	if (!sof_pdata)
 		return -ENOMEM;
-
-	platform_set_drvdata(pdev, sof_pdata);
 
 	desc = device_get_match_data(dev);
 	if (!desc)
@@ -89,23 +64,10 @@ int sof_of_probe(struct platform_device *pdev)
 
 	sof_pdata->desc = desc;
 	sof_pdata->dev = &pdev->dev;
-	sof_pdata->fw_filename = desc->default_fw_filename[SOF_IPC];
 
-	if (fw_path)
-		sof_pdata->fw_filename_prefix = fw_path;
-	else
-		sof_pdata->fw_filename_prefix = sof_pdata->desc->default_fw_path[SOF_IPC];
-
-	if (tplg_path)
-		sof_pdata->tplg_filename_prefix = tplg_path;
-	else
-		sof_pdata->tplg_filename_prefix = sof_pdata->desc->default_tplg_path[SOF_IPC];
-
-	ret = sof_of_parse(pdev);
-	if (ret < 0) {
-		dev_err(dev, "Could not parse SOF OF DSP node\n");
-		return ret;
-	}
+	sof_pdata->ipc_file_profile_base.ipc_type = desc->ipc_default;
+	sof_pdata->ipc_file_profile_base.fw_path = fw_path;
+	sof_pdata->ipc_file_profile_base.tplg_path = tplg_path;
 
 	/* set callback to be called on successful device probe to enable runtime_pm */
 	sof_pdata->sof_probe_complete = sof_of_probe_complete;
@@ -115,14 +77,12 @@ int sof_of_probe(struct platform_device *pdev)
 }
 EXPORT_SYMBOL(sof_of_probe);
 
-int sof_of_remove(struct platform_device *pdev)
+void sof_of_remove(struct platform_device *pdev)
 {
 	pm_runtime_disable(&pdev->dev);
 
 	/* call sof helper for DSP hardware remove */
 	snd_sof_device_remove(&pdev->dev);
-
-	return 0;
 }
 EXPORT_SYMBOL(sof_of_remove);
 
@@ -133,3 +93,4 @@ void sof_of_shutdown(struct platform_device *pdev)
 EXPORT_SYMBOL(sof_of_shutdown);
 
 MODULE_LICENSE("Dual BSD/GPL");
+MODULE_DESCRIPTION("SOF support for OF/DT platforms");

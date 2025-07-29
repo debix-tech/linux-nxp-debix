@@ -43,6 +43,7 @@
 #include <asm/mach-types.h>
 #include <video/mxc_edid.h>
 
+#include "../core/fb_internal.h"
 #include "mxsfb_sii902x.h"
 
 #define DRV_NAME "sii902x"
@@ -260,6 +261,10 @@ static void sii902x_cable_connected(void)
 
 			mode = fb_find_nearest_mode(&m,
 					&sii902x.fbi->modelist);
+			if (!mode) {
+				dev_err(&sii902x.client->dev, "could not find mode\n");
+				return;
+			}
 
 			/* update fbi mode  */
 			sii902x.fbi->mode = (struct fb_videomode *)mode;

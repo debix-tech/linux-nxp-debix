@@ -8,10 +8,6 @@
 #include "imx8mq-evk.dts"
 
 / {
-	modem_reset: modem-reset {
-		reset-gpios = <&gpio3 5 GPIO_ACTIVE_HIGH>;
-	};
-
 	reg_pcie0: regulator-pcie0 {
 		compatible = "regulator-fixed";
 		regulator-name = "MPCIE_3V3";
@@ -48,15 +44,25 @@
 		reset-gpios = <&gpio1 14 GPIO_ACTIVE_LOW>;
 		gpio-controller;
 		#gpio-cells = <2>;
+
+		m2-bt-level-shifter-hog {
+			gpio-hog;
+			gpios = <5 GPIO_ACTIVE_LOW>;
+			output-low;
+		};
+	};
+};
+
+&gpio3 {
+	/* enable the M.2 BT */
+	bt-reg-on-hog {
+		/delete-property/ output-high;
+		output-low;
 	};
 };
 
 &gpio5 {
 	/delete-node/ wl-reg-on-hog; /* This pin is not used on wevk board */
-};
-
-&uart3 { /* BT */
-	pinctrl-assert-gpios = <&pca6416 5 GPIO_ACTIVE_LOW>;
 };
 
 &pcie0 {

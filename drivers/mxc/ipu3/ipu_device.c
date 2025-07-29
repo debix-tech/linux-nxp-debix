@@ -1,6 +1,6 @@
 /*
  * Copyright 2005-2015 Freescale Semiconductor, Inc. All Rights Reserved.
- * Copyright 2019-2021 NXP
+ * Copyright 2019-2021,2024 NXP
  */
 
 /*
@@ -1482,7 +1482,7 @@ static void task_mem_free(struct kref *ref)
 	kfree(tsk);
 }
 
-int create_split_child_task(struct ipu_split_task *sp_task)
+static int create_split_child_task(struct ipu_split_task *sp_task)
 {
 	int ret = 0;
 	struct ipu_task_entry *tsk;
@@ -3259,8 +3259,7 @@ static int ipu_task_thread(void *argv)
 	if (!data->is_vdoa) {
 		cpu = cpumask_first(cpu_online_mask);
 		cpumask_set_cpu(cpu, &cpu_mask);
-		ret = sched_setaffinity(data->ipu->thread[data->id]->pid,
-			&cpu_mask);
+		ret = sched_setaffinity(current->pid, &cpu_mask);
 		if (ret < 0) {
 			pr_err("%s: sched_setaffinity fail:%d.\n", __func__, ret);
 		}

@@ -109,7 +109,7 @@ dpu95_atomic_assign_plane_source_per_crtc(struct dpu95_crtc *dpu_crtc,
 	struct drm_plane_state *plane_state;
 	struct dpu95_plane_state *dpstate;
 	struct dpu95_layerblend *blend;
-	u32 src_w, src_h, dst_w, dst_h;
+	u32 src_w, dst_w;
 	union dpu95_plane_stage stage;
 	struct dpu95_plane_grp *grp;
 	struct dpu95_plane_res *res;
@@ -137,9 +137,7 @@ dpu95_atomic_assign_plane_source_per_crtc(struct dpu95_crtc *dpu_crtc,
 		res = &grp->res;
 
 		src_w = plane_state->src_w >> 16;
-		src_h = plane_state->src_h >> 16;
 		dst_w = plane_state->crtc_w;
-		dst_h = plane_state->crtc_h;
 
 		fb_is_packed_yuv422 =
 				drm_format_info_is_yuv_packed(fb->format) &&
@@ -359,7 +357,6 @@ static int dpu95_drm_atomic_check(struct drm_device *dev,
 	struct dpu95_plane_grp *plane_grp = &dpu_drm->dpu_plane_grp;
 	const struct dpu95_fetchunit_ops *fu_ops;
 	struct drm_crtc_state *crtc_state;
-	struct dpu95_crtc *dpu_crtc;
 	struct dpu95_fetchunit *fu;
 	u32 crtc_mask_prone_to_put;
 	u32 crtc_mask_in_state = 0;
@@ -372,11 +369,8 @@ static int dpu95_drm_atomic_check(struct drm_device *dev,
 		return ret;
 
 	/* Set crtc_mask_in_state. */
-	for_each_new_crtc_in_state(state, crtc, crtc_state, i) {
-		dpu_crtc = to_dpu95_crtc(crtc);
-
+	for_each_new_crtc_in_state(state, crtc, crtc_state, i)
 		crtc_mask_in_state |= drm_crtc_mask(crtc);
-	}
 
 	/*
 	 * Those CRTCs not in the state for check are prone to put,

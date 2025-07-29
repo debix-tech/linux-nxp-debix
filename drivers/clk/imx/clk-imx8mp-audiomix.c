@@ -5,6 +5,7 @@
  * Copyright (C) 2022 Marek Vasut <marex@denx.de>
  */
 
+#include <linux/auxiliary_bus.h>
 #include <linux/clk-provider.h>
 #include <linux/device.h>
 #include <linux/io.h>
@@ -13,18 +14,15 @@
 #include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
-#include <linux/reset-controller.h>
+#include <linux/slab.h>
 
 #include <dt-bindings/clock/imx8mp-clock.h>
 
 #include "clk.h"
 
-#define IMX8MP_AUDIO_BLK_CTRL_EARC_RESET	0
-#define IMX8MP_AUDIO_BLK_CTRL_EARC_PHY_RESET	1
-#define IMX8MP_AUDIO_BLK_CTRL_RESET_NUM		2
-
 #define CLKEN0			0x000
 #define CLKEN1			0x004
+#define EARC			0x200
 #define SAI1_MCLK_SEL		0x300
 #define SAI2_MCLK_SEL		0x304
 #define SAI3_MCLK_SEL		0x308
@@ -33,6 +31,11 @@
 #define SAI7_MCLK_SEL		0x314
 #define PDM_SEL			0x318
 #define SAI_PLL_GNRL_CTL	0x400
+#define SAI_PLL_FDIVL_CTL0	0x404
+#define SAI_PLL_FDIVL_CTL1	0x408
+#define SAI_PLL_SSCG_CTL	0x40C
+#define SAI_PLL_MNIT_CTL	0x410
+#define IPG_LP_CTRL		0x504
 
 #define AUDIOMIX_SAI1_IPG            0
 #define AUDIOMIX_SAI1_MCLK1          1
@@ -132,30 +135,11 @@ static const struct clk_parent_data clk_imx8mp_audiomix_pll_bypass_sels[] = {
 	{ .fw_name = "sai_pll_ref_sel", .name = "sai_pll_ref_sel" },
 };
 
-static int shared_count_pdm;
-
 #define CLK_GATE(gname, cname)						\
 	{								\
 		gname"_cg",						\
 		IMX8MP_CLK_AUDIOMIX_##cname,				\
 		{ .fw_name = "ahb", .name = "ahb" }, NULL, 1,		\
-		CLKEN0 + 4 * !!(AUDIOMIX_##cname / 32),	\
-		1, AUDIOMIX_##cname % 32			\
-	}
-
-#define CLK_GATE_SHARED(gname, cname, pname, reg, width, shift, shcount)\
-	{								\
-		gname,							\
-		IMX8MP_CLK_AUDIOMIX_##cname,				\
-		pname,							\
-		reg, width, shift, shcount				\
-	}
-
-#define CLK_GATE_PARENT(gname, cname, pname)						\
-	{								\
-		gname"_cg",						\
-		IMX8MP_CLK_AUDIOMIX_##cname,				\
-		{ .fw_name = pname, .name = pname }, NULL, 1,		\
 		CLKEN0 + 4 * !!(AUDIOMIX_##cname / 32),	\
 		1, AUDIOMIX_##cname % 32			\
 	}
@@ -212,6 +196,15 @@ static int shared_count_pdm;
 		PDM_SEL, 2, 0						\
 	}
 
+#define CLK_GATE_PARENT(gname, cname, pname)						\
+	{								\
+		gname"_cg",						\
+		IMX8MP_CLK_AUDIOMIX_##cname,				\
+		{ .fw_name = pname, .name = pname }, NULL, 1,		\
+		CLKEN0 + 4 * !!(AUDIOMIX_##cname / 32),			\
+		1, AUDIOMIX_##cname % 32				\
+	}
+
 struct clk_imx8mp_audiomix_sel {
 	const char			*name;
 	int				clkid;
@@ -225,6 +218,7 @@ struct clk_imx8mp_audiomix_sel {
 
 static struct clk_imx8mp_audiomix_sel sels[] = {
 	CLK_GATE("asrc", ASRC_IPG),
+	CLK_GATE("pdm", PDM_IPG),
 	CLK_GATE("earc", EARC_IPG),
 	CLK_GATE("ocrama", OCRAMA_IPG),
 	CLK_GATE("aud2htx", AUD2HTX_IPG),
@@ -246,192 +240,135 @@ static struct clk_imx8mp_audiomix_sel sels[] = {
 	CLK_SAIn(7)
 };
 
-struct clk_imx8mp_audiomix_shared_gate {
-	const char			*name;
-	int				clkid;
-	const char			*parents;
-	u16				reg;
-	u8				width;
-	u8				shift;
-	int				*shcount;
+static const u16 audiomix_regs[] = {
+	CLKEN0,
+	CLKEN1,
+	EARC,
+	SAI1_MCLK_SEL,
+	SAI2_MCLK_SEL,
+	SAI3_MCLK_SEL,
+	SAI5_MCLK_SEL,
+	SAI6_MCLK_SEL,
+	SAI7_MCLK_SEL,
+	PDM_SEL,
+	SAI_PLL_GNRL_CTL,
+	SAI_PLL_FDIVL_CTL0,
+	SAI_PLL_FDIVL_CTL1,
+	SAI_PLL_SSCG_CTL,
+	SAI_PLL_MNIT_CTL,
+	IPG_LP_CTRL,
 };
 
-static struct clk_imx8mp_audiomix_shared_gate pdms[] = {
-	CLK_GATE_SHARED("pdm_ipg_clk", PDM_IPG, "audio_ahb_root", 0, 1, AUDIOMIX_PDM_IPG, &shared_count_pdm),
-	CLK_GATE_SHARED("pdm_root_clk", PDM_ROOT, "pdm_sel", 0, 1, AUDIOMIX_PDM_IPG, &shared_count_pdm),
-};
-
-struct pm_safekeep_info {
-	uint32_t *regs_values;
-	uint32_t *regs_offsets;
-	uint32_t regs_num;
-};
-
-struct reset_hw {
-	u32 offset;
-	u32 shift;
-	u32 mask;
-	unsigned long asserted;
-};
-
-struct imx_blk_ctrl_drvdata {
+struct clk_imx8mp_audiomix_priv {
 	void __iomem *base;
-	struct reset_controller_dev rcdev;
-	struct reset_hw *rst_hws;
-	struct pm_safekeep_info pm_info;
+	u32 regs_save[ARRAY_SIZE(audiomix_regs)];
 
-	spinlock_t *lock;
+	/* Must be last */
+	struct clk_hw_onecell_data clk_data;
 };
 
-struct imx_blk_ctrl_dev_data {
-	u32 pm_runtime_saved_regs_num;
-	u32 pm_runtime_saved_regs[];
-};
+#if IS_ENABLED(CONFIG_RESET_CONTROLLER)
 
-static int imx_blk_ctrl_init_runtime_pm_safekeeping(struct device *dev)
+static void clk_imx8mp_audiomix_reset_unregister_adev(void *_adev)
 {
-	const struct imx_blk_ctrl_dev_data *dev_data = of_device_get_match_data(dev);
-	struct imx_blk_ctrl_drvdata *drvdata = dev_get_drvdata(dev);
-	struct pm_safekeep_info *pm_info = &drvdata->pm_info;
-	u32 regs_num = dev_data->pm_runtime_saved_regs_num;
-	const u32 *regs_offsets = dev_data->pm_runtime_saved_regs;
+	struct auxiliary_device *adev = _adev;
 
-	if (!dev_data->pm_runtime_saved_regs_num)
+	auxiliary_device_delete(adev);
+	auxiliary_device_uninit(adev);
+}
+
+static void clk_imx8mp_audiomix_reset_adev_release(struct device *dev)
+{
+	struct auxiliary_device *adev = to_auxiliary_dev(dev);
+
+	kfree(adev);
+}
+
+static int clk_imx8mp_audiomix_reset_controller_register(struct device *dev,
+							 struct clk_imx8mp_audiomix_priv *priv)
+{
+	struct auxiliary_device *adev __free(kfree) = NULL;
+	int ret;
+
+	if (!of_property_present(dev->of_node, "#reset-cells"))
 		return 0;
 
-	pm_info->regs_values = devm_kzalloc(dev,
-					    sizeof(u32) * regs_num,
-					    GFP_KERNEL);
-	if (WARN_ON(IS_ERR(pm_info->regs_values)))
-		return PTR_ERR(pm_info->regs_values);
+	adev = kzalloc(sizeof(*adev), GFP_KERNEL);
+	if (!adev)
+		return -ENOMEM;
 
-	pm_info->regs_offsets = kmemdup(regs_offsets,
-					regs_num * sizeof(u32), GFP_KERNEL);
-	if (WARN_ON(IS_ERR(pm_info->regs_offsets)))
-		return PTR_ERR(pm_info->regs_offsets);
+	adev->name = "reset";
+	adev->dev.parent = dev;
+	adev->dev.release = clk_imx8mp_audiomix_reset_adev_release;
 
-	pm_info->regs_num = regs_num;
+	ret = auxiliary_device_init(adev);
+	if (ret)
+		return ret;
 
+	ret = auxiliary_device_add(adev);
+	if (ret) {
+		auxiliary_device_uninit(adev);
+		return ret;
+	}
+
+	return devm_add_action_or_reset(dev, clk_imx8mp_audiomix_reset_unregister_adev,
+					no_free_ptr(adev));
+}
+
+#else /* !CONFIG_RESET_CONTROLLER */
+
+static int clk_imx8mp_audiomix_reset_controller_register(struct clk_imx8mp_audiomix_priv *priv)
+{
 	return 0;
 }
 
-static int imx_blk_ctrl_reset_set(struct reset_controller_dev *rcdev,
-				  unsigned long id, bool assert)
+#endif /* !CONFIG_RESET_CONTROLLER */
+
+static void clk_imx8mp_audiomix_save_restore(struct device *dev, bool save)
 {
-	struct imx_blk_ctrl_drvdata *drvdata = container_of(rcdev,
-			struct imx_blk_ctrl_drvdata, rcdev);
-	unsigned int offset = drvdata->rst_hws[id].offset;
-	unsigned int shift = drvdata->rst_hws[id].shift;
-	unsigned int mask = drvdata->rst_hws[id].mask;
-	void __iomem *reg_addr = drvdata->base + offset;
-	unsigned long flags;
-	u32 reg;
+	struct clk_imx8mp_audiomix_priv *priv = dev_get_drvdata(dev);
+	void __iomem *base = priv->base;
+	int i;
 
-	if (!assert && !test_bit(1, &drvdata->rst_hws[id].asserted))
-		return -ENODEV;
-
-	if (assert && !test_and_set_bit(1, &drvdata->rst_hws[id].asserted))
-		pm_runtime_get_sync(rcdev->dev);
-
-	spin_lock_irqsave(drvdata->lock, flags);
-
-	reg = readl(reg_addr);
-	if (assert)
-		writel(reg & ~(mask << shift), reg_addr);
-	else
-		writel(reg | (mask << shift), reg_addr);
-
-	spin_unlock_irqrestore(drvdata->lock, flags);
-
-	if (!assert && test_and_clear_bit(1, &drvdata->rst_hws[id].asserted))
-		pm_runtime_put_sync(rcdev->dev);
-
-	return 0;
-}
-
-static int imx_blk_ctrl_reset_reset(struct reset_controller_dev *rcdev,
-					   unsigned long id)
-{
-	imx_blk_ctrl_reset_set(rcdev, id, true);
-	return imx_blk_ctrl_reset_set(rcdev, id, false);
-}
-
-static int imx_blk_ctrl_reset_assert(struct reset_controller_dev *rcdev,
-					   unsigned long id)
-{
-	return imx_blk_ctrl_reset_set(rcdev, id, true);
-}
-
-static int imx_blk_ctrl_reset_deassert(struct reset_controller_dev *rcdev,
-					     unsigned long id)
-{
-	return imx_blk_ctrl_reset_set(rcdev, id, false);
-}
-
-static const struct reset_control_ops imx_blk_ctrl_reset_ops = {
-	.reset		= imx_blk_ctrl_reset_reset,
-	.assert		= imx_blk_ctrl_reset_assert,
-	.deassert	= imx_blk_ctrl_reset_deassert,
-};
-
-static int imx_blk_ctrl_register_reset_controller(struct device *dev)
-{
-	struct imx_blk_ctrl_drvdata *drvdata = dev_get_drvdata(dev);
-	struct reset_hw *hws;
-
-	drvdata->rcdev.owner     = THIS_MODULE;
-	drvdata->rcdev.nr_resets = IMX8MP_AUDIO_BLK_CTRL_RESET_NUM;
-	drvdata->rcdev.ops       = &imx_blk_ctrl_reset_ops;
-	drvdata->rcdev.of_node   = dev->of_node;
-	drvdata->rcdev.dev	 = dev;
-
-	drvdata->rst_hws = devm_kzalloc(dev, sizeof(*hws) * IMX8MP_AUDIO_BLK_CTRL_RESET_NUM,
-					GFP_KERNEL);
-	hws = drvdata->rst_hws;
-
-	hws[IMX8MP_AUDIO_BLK_CTRL_EARC_RESET].offset = 0x200;
-	hws[IMX8MP_AUDIO_BLK_CTRL_EARC_RESET].shift = 0x0;
-	hws[IMX8MP_AUDIO_BLK_CTRL_EARC_RESET].mask = 0x1;
-
-	hws[IMX8MP_AUDIO_BLK_CTRL_EARC_PHY_RESET].offset = 0x200;
-	hws[IMX8MP_AUDIO_BLK_CTRL_EARC_PHY_RESET].shift = 0x1;
-	hws[IMX8MP_AUDIO_BLK_CTRL_EARC_PHY_RESET].mask = 0x1;
-
-	return devm_reset_controller_register(dev, &drvdata->rcdev);
+	if (save) {
+		for (i = 0; i < ARRAY_SIZE(audiomix_regs); i++)
+			priv->regs_save[i] = readl(base + audiomix_regs[i]);
+	} else {
+		for (i = 0; i < ARRAY_SIZE(audiomix_regs); i++)
+			writel(priv->regs_save[i], base + audiomix_regs[i]);
+	}
 }
 
 static int clk_imx8mp_audiomix_probe(struct platform_device *pdev)
 {
-	struct imx_blk_ctrl_drvdata *drvdata;
-	struct clk_hw_onecell_data *priv;
+	struct clk_imx8mp_audiomix_priv *priv;
+	struct clk_hw_onecell_data *clk_hw_data;
 	struct device *dev = &pdev->dev;
 	void __iomem *base;
 	struct clk_hw *hw;
 	int i, ret;
 
-	drvdata = devm_kzalloc(dev, sizeof(*drvdata), GFP_KERNEL);
-	if (!drvdata)
-		return -ENOMEM;
-
 	priv = devm_kzalloc(dev,
-			    struct_size(priv, hws, IMX8MP_CLK_AUDIOMIX_END),
+			    struct_size(priv, clk_data.hws, IMX8MP_CLK_AUDIOMIX_END),
 			    GFP_KERNEL);
 	if (!priv)
 		return -ENOMEM;
 
-	priv->num = IMX8MP_CLK_AUDIOMIX_END;
+	clk_hw_data = &priv->clk_data;
+	clk_hw_data->num = IMX8MP_CLK_AUDIOMIX_END;
 
 	base = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(base))
 		return PTR_ERR(base);
 
-	drvdata->base = base;
-	drvdata->lock = &imx_ccm_lock;
-	dev_set_drvdata(dev, drvdata);
+	priv->base = base;
+	dev_set_drvdata(dev, priv);
 
-	ret = imx_blk_ctrl_init_runtime_pm_safekeeping(dev);
-	if (ret)
-		return ret;
+	/*
+	 * pm_runtime_enable needs to be called before clk register.
+	 * That is to make core->rpm_enabled to be true for clock
+	 * usage.
+	 */
 	pm_runtime_get_noresume(dev);
 	pm_runtime_set_active(dev);
 	pm_runtime_enable(dev);
@@ -450,22 +387,12 @@ static int clk_imx8mp_audiomix_probe(struct platform_device *pdev)
 				0, NULL, NULL);
 		}
 
-		if (IS_ERR(hw))
-			return PTR_ERR(hw);
+		if (IS_ERR(hw)) {
+			ret = PTR_ERR(hw);
+			goto err_clk_register;
+		}
 
-		priv->hws[sels[i].clkid] = hw;
-	}
-
-	for (i = 0; i < ARRAY_SIZE(pdms); i++) {
-		hw = imx_dev_clk_hw_gate_shared(dev, pdms[i].name,
-						pdms[i].parents,
-						base + pdms[i].reg,
-						pdms[i].shift,
-						pdms[i].shcount);
-		if (IS_ERR(hw))
-			return PTR_ERR(hw);
-
-		priv->hws[pdms[i].clkid] = hw;
+		clk_hw_data->hws[sels[i].clkid] = hw;
 	}
 
 	/* SAI PLL */
@@ -474,149 +401,103 @@ static int clk_imx8mp_audiomix_probe(struct platform_device *pdev)
 		ARRAY_SIZE(clk_imx8mp_audiomix_pll_parents),
 		CLK_SET_RATE_NO_REPARENT, base + SAI_PLL_GNRL_CTL,
 		0, 2, 0, NULL, NULL);
-	priv->hws[IMX8MP_CLK_AUDIOMIX_SAI_PLL_REF_SEL] = hw;
+	clk_hw_data->hws[IMX8MP_CLK_AUDIOMIX_SAI_PLL_REF_SEL] = hw;
 
 	hw = imx_dev_clk_hw_pll14xx(dev, "sai_pll", "sai_pll_ref_sel",
 				    base + 0x400, &imx_1443x_pll);
-	if (IS_ERR(hw))
-		return PTR_ERR(hw);
-	priv->hws[IMX8MP_CLK_AUDIOMIX_SAI_PLL] = hw;
+	if (IS_ERR(hw)) {
+		ret = PTR_ERR(hw);
+		goto err_clk_register;
+	}
+	clk_hw_data->hws[IMX8MP_CLK_AUDIOMIX_SAI_PLL] = hw;
 
 	hw = devm_clk_hw_register_mux_parent_data_table(dev,
 		"sai_pll_bypass", clk_imx8mp_audiomix_pll_bypass_sels,
 		ARRAY_SIZE(clk_imx8mp_audiomix_pll_bypass_sels),
 		CLK_SET_RATE_NO_REPARENT | CLK_SET_RATE_PARENT,
 		base + SAI_PLL_GNRL_CTL, 16, 1, 0, NULL, NULL);
-	if (IS_ERR(hw))
-		return PTR_ERR(hw);
-	priv->hws[IMX8MP_CLK_AUDIOMIX_SAI_PLL_BYPASS] = hw;
-
-	hw = devm_clk_hw_register_gate(dev, "sai_pll_out", "sai_pll_bypass",
-				       CLK_SET_RATE_PARENT, base + SAI_PLL_GNRL_CTL, 13,
-				       0, NULL);
-	if (IS_ERR(hw))
-		return PTR_ERR(hw);
-	priv->hws[IMX8MP_CLK_AUDIOMIX_SAI_PLL_OUT] = hw;
-
-	hw = devm_clk_hw_register_fixed_factor(dev, "sai_pll_out_div2",
-					       "sai_pll_out", CLK_SET_RATE_PARENT, 1, 2);
-	if (IS_ERR(hw))
-		return PTR_ERR(hw);
-
-	ret = devm_of_clk_add_hw_provider(&pdev->dev, of_clk_hw_onecell_get, priv);
-	if (ret)
-		return ret;
-
-	ret = imx_blk_ctrl_register_reset_controller(dev);
-	if (ret)
-		return ret;
-
-	pm_runtime_put(dev);
-
-	return 0;
-}
-
-static void imx_blk_ctrl_read_write(struct device *dev, bool write)
-{
-	struct imx_blk_ctrl_drvdata *drvdata = dev_get_drvdata(dev);
-	struct pm_safekeep_info *pm_info = &drvdata->pm_info;
-	void __iomem *base = drvdata->base;
-	unsigned long flags;
-	int i;
-
-	if (!pm_info->regs_num)
-		return;
-
-	spin_lock_irqsave(drvdata->lock, flags);
-
-	for (i = 0; i < pm_info->regs_num; i++) {
-		u32 offset = pm_info->regs_offsets[i];
-
-		if (write)
-			writel(pm_info->regs_values[i], base + offset);
-		else
-			pm_info->regs_values[i] = readl(base + offset);
+	if (IS_ERR(hw)) {
+		ret = PTR_ERR(hw);
+		goto err_clk_register;
 	}
 
-	spin_unlock_irqrestore(drvdata->lock, flags);
+	clk_hw_data->hws[IMX8MP_CLK_AUDIOMIX_SAI_PLL_BYPASS] = hw;
 
+	hw = devm_clk_hw_register_gate(dev, "sai_pll_out", "sai_pll_bypass",
+				       CLK_SET_RATE_PARENT,
+				       base + SAI_PLL_GNRL_CTL, 13,
+				       0, NULL);
+	if (IS_ERR(hw)) {
+		ret = PTR_ERR(hw);
+		goto err_clk_register;
+	}
+	clk_hw_data->hws[IMX8MP_CLK_AUDIOMIX_SAI_PLL_OUT] = hw;
+
+	hw = devm_clk_hw_register_fixed_factor(dev, "sai_pll_out_div2",
+					       "sai_pll_out",
+					       CLK_SET_RATE_PARENT, 1, 2);
+	if (IS_ERR(hw)) {
+		ret = PTR_ERR(hw);
+		goto err_clk_register;
+	}
+
+	ret = devm_of_clk_add_hw_provider(&pdev->dev, of_clk_hw_onecell_get,
+					  clk_hw_data);
+	if (ret)
+		goto err_clk_register;
+
+	ret = clk_imx8mp_audiomix_reset_controller_register(dev, priv);
+	if (ret)
+		goto err_clk_register;
+
+	pm_runtime_put_sync(dev);
+	return 0;
+
+err_clk_register:
+	pm_runtime_put_sync(dev);
+	pm_runtime_disable(dev);
+	return ret;
 }
 
-static int imx_blk_ctrl_runtime_suspend(struct device *dev)
+static void clk_imx8mp_audiomix_remove(struct platform_device *pdev)
 {
-	imx_blk_ctrl_read_write(dev, false);
+	pm_runtime_disable(&pdev->dev);
+}
+
+static int clk_imx8mp_audiomix_runtime_suspend(struct device *dev)
+{
+	clk_imx8mp_audiomix_save_restore(dev, true);
 
 	return 0;
 }
 
-static int imx_blk_ctrl_runtime_resume(struct device *dev)
+static int clk_imx8mp_audiomix_runtime_resume(struct device *dev)
 {
-	imx_blk_ctrl_read_write(dev, true);
+	clk_imx8mp_audiomix_save_restore(dev, false);
 
 	return 0;
 }
 
-static const struct dev_pm_ops imx_audiomix_pm_ops = {
-	SET_RUNTIME_PM_OPS(imx_blk_ctrl_runtime_suspend,
-			   imx_blk_ctrl_runtime_resume, NULL)
+static const struct dev_pm_ops clk_imx8mp_audiomix_pm_ops = {
+	RUNTIME_PM_OPS(clk_imx8mp_audiomix_runtime_suspend,
+		       clk_imx8mp_audiomix_runtime_resume, NULL)
 	SET_NOIRQ_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
-			   pm_runtime_force_resume)
-};
-
-#define	IMX_AUDIO_BLK_CTRL_CLKEN0		0x0
-#define	IMX_AUDIO_BLK_CTRL_CLKEN1		0x4
-#define	IMX_AUDIO_BLK_CTRL_EARC			0x200
-#define	IMX_AUDIO_BLK_CTRL_SAI1_MCLK_SEL	0x300
-#define	IMX_AUDIO_BLK_CTRL_SAI2_MCLK_SEL	0x304
-#define	IMX_AUDIO_BLK_CTRL_SAI3_MCLK_SEL	0x308
-#define	IMX_AUDIO_BLK_CTRL_SAI5_MCLK_SEL	0x30C
-#define	IMX_AUDIO_BLK_CTRL_SAI6_MCLK_SEL	0x310
-#define	IMX_AUDIO_BLK_CTRL_SAI7_MCLK_SEL	0x314
-#define	IMX_AUDIO_BLK_CTRL_PDM_CLK		0x318
-#define	IMX_AUDIO_BLK_CTRL_SAI_PLL_GNRL_CTL	0x400
-#define	IMX_AUDIO_BLK_CTRL_SAI_PLL_FDIVL_CTL0	0x404
-#define	IMX_AUDIO_BLK_CTRL_SAI_PLL_FDIVL_CTL1	0x408
-#define	IMX_AUDIO_BLK_CTRL_SAI_PLL_SSCG_CTL	0x40C
-#define	IMX_AUDIO_BLK_CTRL_SAI_PLL_MNIT_CTL	0x410
-#define	IMX_AUDIO_BLK_CTRL_IPG_LP_CTRL		0x504
-
-#define IMX_MEDIA_BLK_CTRL_SFT_RSTN		0x0
-#define IMX_MEDIA_BLK_CTRL_CLK_EN		0x4
-
-const struct imx_blk_ctrl_dev_data imx8mp_audiomix_dev_data = {
-	.pm_runtime_saved_regs_num = 16,
-	.pm_runtime_saved_regs = {
-		IMX_AUDIO_BLK_CTRL_CLKEN0,
-		IMX_AUDIO_BLK_CTRL_CLKEN1,
-		IMX_AUDIO_BLK_CTRL_EARC,
-		IMX_AUDIO_BLK_CTRL_SAI1_MCLK_SEL,
-		IMX_AUDIO_BLK_CTRL_SAI2_MCLK_SEL,
-		IMX_AUDIO_BLK_CTRL_SAI3_MCLK_SEL,
-		IMX_AUDIO_BLK_CTRL_SAI5_MCLK_SEL,
-		IMX_AUDIO_BLK_CTRL_SAI6_MCLK_SEL,
-		IMX_AUDIO_BLK_CTRL_SAI7_MCLK_SEL,
-		IMX_AUDIO_BLK_CTRL_PDM_CLK,
-		IMX_AUDIO_BLK_CTRL_SAI_PLL_GNRL_CTL,
-		IMX_AUDIO_BLK_CTRL_SAI_PLL_FDIVL_CTL0,
-		IMX_AUDIO_BLK_CTRL_SAI_PLL_FDIVL_CTL1,
-		IMX_AUDIO_BLK_CTRL_SAI_PLL_SSCG_CTL,
-		IMX_AUDIO_BLK_CTRL_SAI_PLL_MNIT_CTL,
-		IMX_AUDIO_BLK_CTRL_IPG_LP_CTRL
-	},
+				      pm_runtime_force_resume)
 };
 
 static const struct of_device_id clk_imx8mp_audiomix_of_match[] = {
-	{ .compatible = "fsl,imx8mp-audio-blk-ctrl", .data = &imx8mp_audiomix_dev_data, },
+	{ .compatible = "fsl,imx8mp-audio-blk-ctrl" },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, clk_imx8mp_audiomix_of_match);
 
 static struct platform_driver clk_imx8mp_audiomix_driver = {
 	.probe	= clk_imx8mp_audiomix_probe,
+	.remove = clk_imx8mp_audiomix_remove,
 	.driver = {
 		.name = "imx8mp-audio-blk-ctrl",
 		.of_match_table = clk_imx8mp_audiomix_of_match,
-		.pm = &imx_audiomix_pm_ops,
+		.pm = pm_ptr(&clk_imx8mp_audiomix_pm_ops),
 	},
 };
 

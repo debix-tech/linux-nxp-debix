@@ -1380,6 +1380,10 @@ static const struct of_device_id usbmisc_imx_dt_ids[] = {
 		.data = &imx7ulp_usbmisc_ops,
 	},
 	{
+		.compatible = "fsl,imx8ulp-usbmisc",
+		.data = &imx7ulp_usbmisc_ops,
+	},
+	{
 		.compatible = "fsl,imx95-usbmisc",
 		.data = &imx95_usbmisc_ops,
 	},

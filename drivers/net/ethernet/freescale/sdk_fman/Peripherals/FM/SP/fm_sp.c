@@ -36,6 +36,7 @@
 
  @Description   FM PCD Storage profile  ...
 *//***************************************************************************/
+#define __ERR_MODULE__  MODULE_FM_SP
 
 #include "std_ext.h"
 #include "error_ext.h"
@@ -48,8 +49,6 @@
 #include "fm_common.h"
 #include "fsl_fman_sp.h"
 
-
-#if (DPAA_VERSION >= 11)
 static t_Error CheckParamsGeneratedInternally(t_FmVspEntry *p_FmVspEntry)
 {
     t_Error err = E_OK;
@@ -86,8 +85,6 @@ static t_Error CheckParams(t_FmVspEntry *p_FmVspEntry)
 
     return err;
 }
-#endif /* (DPAA_VERSION >= 11) */
-
 
 /*****************************************************************************/
 /*              Inter-module API routines                                    */
@@ -376,15 +373,7 @@ t_Error FmSpBuildBufferStructure(t_FmSpIntContextDataCopy   *p_FmSpIntContextDat
     if (p_BufferPrefixContent->manipExtraSpace)
     {
         uint8_t extraSpace;
-#ifdef FM_CAPWAP_SUPPORT
-        if ((p_BufferPrefixContent->manipExtraSpace + CAPWAP_FRAG_EXTRA_SPACE) >= 256)
-            RETURN_ERROR(MAJOR, E_INVALID_VALUE,
-                         ("p_BufferPrefixContent->manipExtraSpace should be less than %d",
-                          256-CAPWAP_FRAG_EXTRA_SPACE));
-        extraSpace = (uint8_t)(p_BufferPrefixContent->manipExtraSpace + CAPWAP_FRAG_EXTRA_SPACE);
-#else
         extraSpace = p_BufferPrefixContent->manipExtraSpace;
-#endif /* FM_CAPWAP_SUPPORT */
         p_FmSpBufferOffsets->manipOffset = p_FmSpBufMargins->startMargins;
         p_FmSpBufMargins->startMargins += extraSpace;
         *internalBufferOffset = extraSpace;
@@ -400,8 +389,6 @@ t_Error FmSpBuildBufferStructure(t_FmSpIntContextDataCopy   *p_FmSpIntContextDat
 }
 /*********************** End of inter-module routines ************************/
 
-
-#if (DPAA_VERSION >= 11)
 /*****************************************************************************/
 /*              API routines                                                 */
 /*****************************************************************************/
@@ -757,5 +744,3 @@ uint8_t * FM_VSP_GetBufferHashResult(t_Handle h_FmVsp, char *p_Data)
 
     return (uint8_t *)PTR_MOVE(p_Data, p_FmVspEntry->bufferOffsets.hashResultOffset);
 }
-
-#endif /* (DPAA_VERSION >= 11) */

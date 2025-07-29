@@ -27,7 +27,7 @@
 };
 
 &flexspi1 {
-	pinctrl-names = "default", "sleep";
+	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexspi1>;
 	status = "okay";
 

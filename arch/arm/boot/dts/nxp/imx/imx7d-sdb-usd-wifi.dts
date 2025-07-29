@@ -34,15 +34,13 @@
 };
 
 &iomuxc {
-	imx7d-sdb {
-		pinctrl_usdhc1_vsel_gpio: usdhc1_gpiovselgrp {
-			fsl,pins = <
-				MX7D_PAD_SD1_CD_B__GPIO5_IO0		0x59 /* CD */
-				MX7D_PAD_SD1_WP__GPIO5_IO1		0x59 /* WP */
-				MX7D_PAD_SD1_RESET_B__GPIO5_IO2		0x59 /* vmmc */
-				MX7D_PAD_GPIO1_IO08__GPIO1_IO8		0x59 /* VSELECT */
-			>;
-		};
+	pinctrl_usdhc1_vsel_gpio: usdhc1_gpiovselgrp {
+		fsl,pins = <
+			MX7D_PAD_SD1_CD_B__GPIO5_IO0		0x59 /* CD */
+			MX7D_PAD_SD1_WP__GPIO5_IO1		0x59 /* WP */
+			MX7D_PAD_SD1_RESET_B__GPIO5_IO2		0x59 /* vmmc */
+			MX7D_PAD_GPIO1_IO08__GPIO1_IO8		0x59 /* VSELECT */
+		>;
 	};
 };
 

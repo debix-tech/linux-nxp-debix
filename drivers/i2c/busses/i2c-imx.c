@@ -59,7 +59,6 @@
 #define DRIVER_NAME "imx-i2c"
 
 #define I2C_IMX_CHECK_DELAY 30000 /* Time to check for bus idle, in NS */
-#define IMX_I2C_MAX_E_BIT_RATE	384000	/* 384kHz from e7805 errata*/
 
 /*
  * Enable DMA if transfer byte size is bigger than this threshold.
@@ -225,7 +224,6 @@ enum imx_i2c_type {
 	IMX1_I2C,
 	IMX21_I2C,
 	VF610_I2C,
-	IMX7D_I2C,
 };
 
 struct imx_i2c_hwdata {
@@ -268,10 +266,6 @@ struct imx_i2c_struct {
 	unsigned int		bitrate;
 	const struct imx_i2c_hwdata	*hwdata;
 	struct i2c_bus_recovery_info rinfo;
-
-	struct pinctrl *pinctrl;
-	struct pinctrl_state *pinctrl_pins_default;
-	struct pinctrl_state *pinctrl_pins_gpio;
 
 	struct imx_i2c_dma	*dma;
 	int			layerscape_bus_recover;
@@ -342,16 +336,6 @@ static const struct platform_device_id imx_i2c_devtype[] = {
 };
 MODULE_DEVICE_TABLE(platform, imx_i2c_devtype);
 
-static const struct imx_i2c_hwdata imx7d_i2c_hwdata = {
-	.devtype		= IMX7D_I2C,
-	.regshift		= IMX_I2C_REGSHIFT,
-	.clk_div		= imx_i2c_clk_div,
-	.ndivs			= ARRAY_SIZE(imx_i2c_clk_div),
-	.i2sr_clr_opcode	= I2SR_CLR_OPCODE_W0C,
-	.i2cr_ien_opcode	= I2CR_IEN_OPCODE_1,
-
-};
-
 static const struct of_device_id i2c_imx_dt_ids[] = {
 	{ .compatible = "fsl,imx1-i2c", .data = &imx1_i2c_hwdata, },
 	{ .compatible = "fsl,imx21-i2c", .data = &imx21_i2c_hwdata, },
@@ -366,7 +350,6 @@ static const struct of_device_id i2c_imx_dt_ids[] = {
 	{ .compatible = "fsl,imx8mp-i2c", .data = &imx6_i2c_hwdata, },
 	{ .compatible = "fsl,imx8mq-i2c", .data = &imx6_i2c_hwdata, },
 	{ .compatible = "fsl,vf610-i2c", .data = &vf610_i2c_hwdata, },
-	{ .compatible = "fsl,imx7d-i2c", .data = &imx7d_i2c_hwdata, },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, i2c_imx_dt_ids);
@@ -385,11 +368,6 @@ static inline int is_imx1_i2c(struct imx_i2c_struct *i2c_imx)
 static inline int is_vf610_i2c(struct imx_i2c_struct *i2c_imx)
 {
 	return i2c_imx->hwdata->devtype == VF610_I2C;
-}
-
-static inline int is_imx7d_i2c(struct imx_i2c_struct *i2c_imx)
-{
-	return i2c_imx->hwdata->devtype == IMX7D_I2C;
 }
 
 static inline void imx_i2c_write_reg(unsigned int val,
@@ -780,7 +758,7 @@ static void i2c_imx_stop(struct imx_i2c_struct *i2c_imx, bool atomic)
 		i2c_imx_bus_busy(i2c_imx, 0, atomic);
 
 	/* Disable I2C controller */
-	temp = i2c_imx->hwdata->i2cr_ien_opcode ^ I2CR_IEN,
+	temp = i2c_imx->hwdata->i2cr_ien_opcode ^ I2CR_IEN;
 	imx_i2c_write_reg(temp, i2c_imx, IMX_I2C_I2CR);
 }
 
@@ -1552,24 +1530,6 @@ static int i2c_imx_xfer_atomic(struct i2c_adapter *adapter,
 	return result;
 }
 
-static void i2c_imx_prepare_recovery(struct i2c_adapter *adap)
-{
-	struct imx_i2c_struct *i2c_imx;
-
-	i2c_imx = container_of(adap, struct imx_i2c_struct, adapter);
-
-	pinctrl_select_state(i2c_imx->pinctrl, i2c_imx->pinctrl_pins_gpio);
-}
-
-static void i2c_imx_unprepare_recovery(struct i2c_adapter *adap)
-{
-	struct imx_i2c_struct *i2c_imx;
-
-	i2c_imx = container_of(adap, struct imx_i2c_struct, adapter);
-
-	pinctrl_select_state(i2c_imx->pinctrl, i2c_imx->pinctrl_pins_default);
-}
-
 /*
  * We switch SCL and SDA to their GPIO function and do some bitbanging
  * for bus recovery. These alternative pinmux settings can be
@@ -1580,43 +1540,13 @@ static void i2c_imx_unprepare_recovery(struct i2c_adapter *adap)
 static int i2c_imx_init_recovery_info(struct imx_i2c_struct *i2c_imx,
 		struct platform_device *pdev)
 {
-	struct i2c_bus_recovery_info *rinfo = &i2c_imx->rinfo;
+	struct i2c_bus_recovery_info *bri = &i2c_imx->rinfo;
 
-	i2c_imx->pinctrl = devm_pinctrl_get(&pdev->dev);
-	if (!i2c_imx->pinctrl) {
-		dev_info(&pdev->dev, "pinctrl unavailable, bus recovery not supported\n");
-		return 0;
-	}
-	if (IS_ERR(i2c_imx->pinctrl)) {
-		dev_info(&pdev->dev, "can't get pinctrl, bus recovery not supported\n");
-		return PTR_ERR(i2c_imx->pinctrl);
-	}
+	bri->pinctrl = devm_pinctrl_get(&pdev->dev);
+	if (IS_ERR(bri->pinctrl))
+		return PTR_ERR(bri->pinctrl);
 
-	i2c_imx->pinctrl_pins_default = pinctrl_lookup_state(i2c_imx->pinctrl,
-			PINCTRL_STATE_DEFAULT);
-	i2c_imx->pinctrl_pins_gpio = pinctrl_lookup_state(i2c_imx->pinctrl,
-			"gpio");
-	rinfo->sda_gpiod = devm_gpiod_get(&pdev->dev, "sda", GPIOD_IN);
-	rinfo->scl_gpiod = devm_gpiod_get(&pdev->dev, "scl", GPIOD_OUT_HIGH_OPEN_DRAIN);
-
-	if (PTR_ERR(rinfo->sda_gpiod) == -EPROBE_DEFER ||
-	    PTR_ERR(rinfo->scl_gpiod) == -EPROBE_DEFER) {
-		return -EPROBE_DEFER;
-	} else if (IS_ERR(rinfo->sda_gpiod) ||
-		   IS_ERR(rinfo->scl_gpiod) ||
-		   IS_ERR(i2c_imx->pinctrl_pins_default) ||
-		   IS_ERR(i2c_imx->pinctrl_pins_gpio)) {
-		dev_dbg(&pdev->dev, "recovery information incomplete\n");
-		return 0;
-	}
-
-	dev_dbg(&pdev->dev, "using scl%s for recovery\n",
-		rinfo->sda_gpiod ? ",sda" : "");
-
-	rinfo->prepare_recovery = i2c_imx_prepare_recovery;
-	rinfo->unprepare_recovery = i2c_imx_unprepare_recovery;
-	rinfo->recover_bus = i2c_generic_scl_recovery;
-	i2c_imx->adapter.bus_recovery_info = rinfo;
+	i2c_imx->adapter.bus_recovery_info = bri;
 
 	return 0;
 }
@@ -1769,14 +1699,6 @@ static int i2c_imx_probe(struct platform_device *pdev)
 		goto clk_notifier_unregister;
 	}
 
-	/*
-	 * This limit caused by an i.MX7D hardware issue(e7805 in Errata).
-	 * If there is no limit, when the bitrate set up to 400KHz, it will
-	 * cause the SCK low level period less than 1.3us.
-	 */
-	if (is_imx7d_i2c(i2c_imx) && i2c_imx->bitrate > IMX_I2C_MAX_E_BIT_RATE)
-		i2c_imx->bitrate = IMX_I2C_MAX_E_BIT_RATE;
-
 	i2c_imx_reset_regs(i2c_imx);
 
 	/* Init optional bus recovery */
@@ -1856,7 +1778,7 @@ static void i2c_imx_remove(struct platform_device *pdev)
 	pm_runtime_disable(&pdev->dev);
 }
 
-static int __maybe_unused i2c_imx_runtime_suspend(struct device *dev)
+static int i2c_imx_runtime_suspend(struct device *dev)
 {
 	struct imx_i2c_struct *i2c_imx = dev_get_drvdata(dev);
 
@@ -1866,7 +1788,7 @@ static int __maybe_unused i2c_imx_runtime_suspend(struct device *dev)
 	return 0;
 }
 
-static int __maybe_unused i2c_imx_runtime_resume(struct device *dev)
+static int i2c_imx_runtime_resume(struct device *dev)
 {
 	struct imx_i2c_struct *i2c_imx = dev_get_drvdata(dev);
 	int ret;
@@ -1892,9 +1814,8 @@ static int i2c_imx_resume(struct device *dev)
 }
 
 static const struct dev_pm_ops i2c_imx_pm_ops = {
-	SET_NOIRQ_SYSTEM_SLEEP_PM_OPS(i2c_imx_suspend, i2c_imx_resume)
-	SET_RUNTIME_PM_OPS(i2c_imx_runtime_suspend,
-			   i2c_imx_runtime_resume, NULL)
+	NOIRQ_SYSTEM_SLEEP_PM_OPS(i2c_imx_suspend, i2c_imx_resume)
+	RUNTIME_PM_OPS(i2c_imx_runtime_suspend, i2c_imx_runtime_resume, NULL)
 };
 
 static struct platform_driver i2c_imx_driver = {
@@ -1902,7 +1823,7 @@ static struct platform_driver i2c_imx_driver = {
 	.remove_new = i2c_imx_remove,
 	.driver = {
 		.name = DRIVER_NAME,
-		.pm = &i2c_imx_pm_ops,
+		.pm = pm_ptr(&i2c_imx_pm_ops),
 		.of_match_table = i2c_imx_dt_ids,
 		.acpi_match_table = i2c_imx_acpi_ids,
 	},

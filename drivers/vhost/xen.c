@@ -14,6 +14,7 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/vhost.h>
+#include <linux/vmalloc.h>
 #include <xen/grant_table.h>
 #include <xen/xen.h>
 #include <xen/xenbus.h>

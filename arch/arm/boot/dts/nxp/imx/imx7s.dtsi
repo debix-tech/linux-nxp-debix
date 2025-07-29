@@ -586,6 +586,7 @@
 					nvmem-cells = <&tempmon_calib>,	<&fuse_grade>;
 					nvmem-cell-names = "calib", "temp_grade";
 					clocks = <&clks IMX7D_PLL_SYS_MAIN_CLK>;
+					#thermal-sensor-cells = <0>;
 				};
 			};
 
@@ -663,7 +664,6 @@
 				#interrupt-cells = <3>;
 				interrupt-parent = <&intc>;
 				fsl,mf-mix-wakeup-irq = <0x54410000 0xc00 0x0 0x1040640>;
-				#power-domain-cells = <1>;
 
 				pgc {
 					#address-cells = <1>;
@@ -726,8 +726,8 @@
 				clocks = <&clks IMX7D_ECSPI4_ROOT_CLK>,
 					<&clks IMX7D_ECSPI4_ROOT_CLK>;
 				clock-names = "ipg", "per";
-				dmas = <&sdma 6 7 1>, <&sdma 7 7 2>;
 				dma-names = "rx", "tx";
+				dmas = <&sdma 6 7 1>, <&sdma 7 7 2>;
 				status = "disabled";
 			};
 
@@ -807,10 +807,8 @@
 				compatible = "fsl,imx7-csi";
 				reg = <0x30710000 0x10000>;
 				interrupts = <GIC_SPI 7 IRQ_TYPE_LEVEL_HIGH>;
-				clocks = <&clks IMX7D_CLK_DUMMY>,
-					 <&clks IMX7D_CSI_MCLK_ROOT_CLK>,
-					 <&clks IMX7D_CLK_DUMMY>;
-				clock-names = "axi", "mclk", "dcic";
+				clocks = <&clks IMX7D_CSI_MCLK_ROOT_CLK>;
+				clock-names = "mclk";
 				status = "disabled";
 
 				port {
@@ -893,8 +891,8 @@
 					clocks = <&clks IMX7D_ECSPI1_ROOT_CLK>,
 						<&clks IMX7D_ECSPI1_ROOT_CLK>;
 					clock-names = "ipg", "per";
-					dmas = <&sdma 0 7 1>, <&sdma 1 7 2>;
 					dma-names = "rx", "tx";
+					dmas = <&sdma 0 7 1>, <&sdma 1 7 2>;
 					status = "disabled";
 				};
 
@@ -907,8 +905,8 @@
 					clocks = <&clks IMX7D_ECSPI2_ROOT_CLK>,
 						<&clks IMX7D_ECSPI2_ROOT_CLK>;
 					clock-names = "ipg", "per";
-					dmas = <&sdma 2 7 1>, <&sdma 3 7 2>;
 					dma-names = "rx", "tx";
+					dmas = <&sdma 2 7 1>, <&sdma 3 7 2>;
 					status = "disabled";
 				};
 
@@ -921,8 +919,8 @@
 					clocks = <&clks IMX7D_ECSPI3_ROOT_CLK>,
 						<&clks IMX7D_ECSPI3_ROOT_CLK>;
 					clock-names = "ipg", "per";
-					dmas = <&sdma 4 7 1>, <&sdma 5 7 2>;
 					dma-names = "rx", "tx";
+					dmas = <&sdma 4 7 1>, <&sdma 5 7 2>;
 					status = "disabled";
 				};
 
@@ -1064,7 +1062,7 @@
 			i2c1: i2c@30a20000 {
 				#address-cells = <1>;
 				#size-cells = <0>;
-				compatible = "fsl,imx7d-i2c", "fsl,imx21-i2c";
+				compatible = "fsl,imx7s-i2c", "fsl,imx21-i2c";
 				reg = <0x30a20000 0x10000>;
 				interrupts = <GIC_SPI 35 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&clks IMX7D_I2C1_ROOT_CLK>;
@@ -1074,7 +1072,7 @@
 			i2c2: i2c@30a30000 {
 				#address-cells = <1>;
 				#size-cells = <0>;
-				compatible = "fsl,imx7d-i2c", "fsl,imx21-i2c";
+				compatible = "fsl,imx7s-i2c", "fsl,imx21-i2c";
 				reg = <0x30a30000 0x10000>;
 				interrupts = <GIC_SPI 36 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&clks IMX7D_I2C2_ROOT_CLK>;
@@ -1084,7 +1082,7 @@
 			i2c3: i2c@30a40000 {
 				#address-cells = <1>;
 				#size-cells = <0>;
-				compatible = "fsl,imx7d-i2c", "fsl,imx21-i2c";
+				compatible = "fsl,imx7s-i2c", "fsl,imx21-i2c";
 				reg = <0x30a40000 0x10000>;
 				interrupts = <GIC_SPI 37 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&clks IMX7D_I2C3_ROOT_CLK>;
@@ -1094,7 +1092,7 @@
 			i2c4: i2c@30a50000 {
 				#address-cells = <1>;
 				#size-cells = <0>;
-				compatible = "fsl,imx7d-i2c", "fsl,imx21-i2c";
+				compatible = "fsl,imx7s-i2c", "fsl,imx21-i2c";
 				reg = <0x30a50000 0x10000>;
 				interrupts = <GIC_SPI 38 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&clks IMX7D_I2C4_ROOT_CLK>;

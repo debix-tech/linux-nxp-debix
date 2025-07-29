@@ -51,8 +51,6 @@
 
 /* lpi2c7 work as a lpi2c master bus */
 &lpi2c5 {
-	#address-cells = <1>;
-	#size-cells = <0>;
 	clock-frequency = <400000>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpi2c5>;
@@ -65,8 +63,6 @@
  * at 7 bit address 0x64 on lpi2c6.
  */
 &lpi2c7 {
-	#address-cells = <1>;
-	#size-cells = <0>;
 	clock-frequency = <400000>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpi2c7>;

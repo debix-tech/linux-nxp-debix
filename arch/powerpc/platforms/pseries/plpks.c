@@ -150,7 +150,7 @@ static int plpks_gen_password(void)
 		ospasswordlength = maxpwsize;
 		ospassword = kzalloc(maxpwsize, GFP_KERNEL);
 		if (!ospassword) {
-			kfree(password);
+			kfree_sensitive(password);
 			return -ENOMEM;
 		}
 		memcpy(ospassword, password, ospasswordlength);
@@ -163,7 +163,7 @@ static int plpks_gen_password(void)
 		}
 	}
 out:
-	kfree(password);
+	kfree_sensitive(password);
 
 	return pseries_status_to_err(rc);
 }
@@ -683,7 +683,7 @@ void __init plpks_early_init_devtree(void)
 out:
 	fdt_nop_property(fdt, chosen_node, "ibm,plpks-pw");
 	// Since we've cleared the password, we must update the FDT checksum
-	early_init_dt_verify(fdt);
+	early_init_dt_verify(fdt, __pa(fdt));
 }
 
 static __init int pseries_plpks_init(void)

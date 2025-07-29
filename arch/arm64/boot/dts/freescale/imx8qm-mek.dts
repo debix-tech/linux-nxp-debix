@@ -58,17 +58,6 @@
 		default-brightness-level = <80>;
 	};
 
-	modem_reset: modem-reset {
-		compatible = "gpio-reset";
-		pinctrl-names = "default", "sleep";
-		pinctrl-0 = <&pinctrl_modem_reset>;
-		pinctrl-1 = <&pinctrl_modem_reset_sleep>;
-		reset-gpios = <&lsio_gpio4 22 GPIO_ACTIVE_LOW>;
-		reset-delay-us = <2000>;
-		reset-post-delay-ms = <40>;
-		#reset-cells = <0>;
-	};
-
 	cbtl04gp {
 		compatible = "nxp,cbtl04gp";
 		pinctrl-names = "default";
@@ -923,10 +912,9 @@
 	status = "okay";
 };
 
-&lpuart1 { /* BT */
+&lpuart1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpuart1>;
-	resets = <&modem_reset>;
 	status = "okay";
 
 	bluetooth {
@@ -934,16 +922,16 @@
 	};
 };
 
-&lpuart2 { /* Dbg console */
+&lpuart2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpuart2>;
-	status = "disabled";
+	status = "okay";
 };
 
-&lpuart3 { /* MKbus */
+&lpuart3 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpuart3>;
-	status = "disabled";
+	status = "okay";
 };
 
 &flexcan1 {
@@ -1038,18 +1026,9 @@
 	};
 };
 
-&phyx2_0{
-	fsl,refclk-pad-mode = <IMX8_PCIE_REFCLK_PAD_INPUT>;
-	status = "okay";
-};
-
-&phyx2_1{
-	fsl,refclk-pad-mode = <IMX8_PCIE_REFCLK_PAD_INPUT>;
-	status = "okay";
-};
-
-&phyx1{
-	fsl,refclk-pad-mode = <IMX8_PCIE_REFCLK_PAD_INPUT>;
+&hsio_phy {
+	fsl,hsio-cfg = "pciea-pcieb-sata";
+	fsl,refclk-pad-mode = "input";
 	status = "okay";
 };
 
@@ -1059,6 +1038,8 @@
 	reset-gpio = <&lsio_gpio4 29 GPIO_ACTIVE_LOW>;
 	host-wake-gpio = <&lsio_gpio4 28 GPIO_ACTIVE_LOW>;
 	vpcie-supply = <&reg_pciea>;
+	phys = <&hsio_phy 0 PHY_TYPE_PCIE 0>;
+	phy-names = "pcie-phy";
 	status = "okay";
 };
 
@@ -1066,7 +1047,9 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_pcieb>;
 	reset-gpio = <&lsio_gpio5 0 GPIO_ACTIVE_LOW>;
-	status = "okay";
+	phys = <&hsio_phy 1 PHY_TYPE_PCIE 1>;
+	phy-names = "pcie-phy";
+	status = "disabled";
 };
 
 &sata {
@@ -1245,176 +1228,12 @@
 	};
 };
 
-&isi_0 {
-	status = "okay";
-
-	cap_device {
-		status = "okay";
-	};
-
-	m2m_device {
-		status = "okay";
-	};
-};
-
-&isi_1 {
-	status = "okay";
-
-	cap_device {
-		status = "okay";
-	};
-};
-
-&isi_2 {
-	status = "okay";
-
-	cap_device {
-		status = "okay";
-	};
-};
-
-&isi_3 {
-	status = "okay";
-
-	cap_device {
-		status = "okay";
-	};
-};
-
-&isi_4 {
-	status = "okay";
-
-	cap_device {
-		status = "okay";
-	};
-};
-
-&isi_5 {
-	status = "okay";
-
-	cap_device {
-		status = "okay";
-	};
-};
-
-&isi_6 {
-	status = "okay";
-
-	cap_device {
-		status = "okay";
-	};
-};
-
-&isi_7 {
-	status = "okay";
-
-	cap_device {
-		status = "okay";
-	};
-};
-
-&irqsteer_csi0 {
-	status = "okay";
-};
-
-&irqsteer_csi1 {
-	status = "okay";
-};
-
-&mipi_csi_0 {
-	virtual-channel;
-	status = "okay";
-
-	/* Camera 0  MIPI CSI-2 (CSIS0) */
-	port {
-		mipi_csi0_ep: endpoint {
-			remote-endpoint = <&max9286_0_ep>;
-			data-lanes = <1 2 3 4>;
-		};
-	};
-};
-
-&mipi_csi_1 {
-	#address-cells = <1>;
-	#size-cells = <0>;
-	virtual-channel;
-	status = "okay";
-
-	/* Camera 1  MIPI CSI-2 (CSIS1) */
-	port@1 {
-		reg = <1>;
-		mipi_csi1_ep: endpoint {
-			remote-endpoint = <&max9286_1_ep>;
-			data-lanes = <1 2 3 4>;
-		};
-	};
-};
-
 &jpegdec {
        status = "okay";
 };
 
 &jpegenc {
        status = "okay";
-};
-
-&i2c_mipi_csi0 {
-	#address-cells = <1>;
-	#size-cells = <0>;
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_i2c_mipi_csi0>;
-	clock-frequency = <100000>;
-	status = "okay";
-
-	max9286_mipi@6a {
-		compatible = "maxim,max9286_mipi";
-		reg = <0x6a>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_mipi_csi0>;
-		clocks = <&clk_dummy>;
-		clock-names = "capture_mclk";
-		mclk = <27000000>;
-		mclk_source = <0>;
-		pwn-gpios = <&lsio_gpio1 27 GPIO_ACTIVE_HIGH>;
-		virtual-channel;
-		status = "okay";
-		port {
-			max9286_0_ep: endpoint {
-				remote-endpoint = <&mipi_csi0_ep>;
-				data-lanes = <1 2 3 4>;
-			};
-		};
-	};
-};
-
-&i2c_mipi_csi1 {
-	#address-cells = <1>;
-	#size-cells = <0>;
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_i2c_mipi_csi1>;
-	clock-frequency = <100000>;
-	status = "okay";
-
-	max9286_mipi@6a {
-		compatible = "maxim,max9286_mipi";
-		reg = <0x6a>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_mipi_csi1>;
-		clocks = <&clk_dummy>;
-		clock-names = "capture_mclk";
-		mclk = <27000000>;
-		mclk_source = <0>;
-		pwn-gpios = <&lsio_gpio1 30 GPIO_ACTIVE_HIGH>;
-		virtual-channel;
-		status = "okay";
-		port {
-			max9286_1_ep: endpoint {
-				remote-endpoint = <&mipi_csi1_ep>;
-				data-lanes = <1 2 3 4>;
-			};
-		};
-	};
-
 };
 
 &iomuxc {
@@ -1599,24 +1418,24 @@
 
 	pinctrl_lpuart1: lpuart1grp {
 		fsl,pins = <
-			IMX8QM_UART1_RX_DMA_UART1_RX		0x06000020
-			IMX8QM_UART1_TX_DMA_UART1_TX		0x06000020
-			IMX8QM_UART1_CTS_B_DMA_UART1_CTS_B	0x06000020
-			IMX8QM_UART1_RTS_B_DMA_UART1_RTS_B	0x06000020
+			IMX8QM_UART1_RX_DMA_UART1_RX				0x06000020
+			IMX8QM_UART1_TX_DMA_UART1_TX				0x06000020
+			IMX8QM_UART1_CTS_B_DMA_UART1_CTS_B			0x06000020
+			IMX8QM_UART1_RTS_B_DMA_UART1_RTS_B			0x06000020
 		>;
 	};
 
 	pinctrl_lpuart2: lpuart2grp {
 		fsl,pins = <
-			IMX8QM_UART0_RTS_B_DMA_UART2_RX		0x06000020
-			IMX8QM_UART0_CTS_B_DMA_UART2_TX		0x06000020
+			IMX8QM_UART0_RTS_B_DMA_UART2_RX				0x06000020
+			IMX8QM_UART0_CTS_B_DMA_UART2_TX				0x06000020
 		>;
 	};
 
 	pinctrl_lpuart3: lpuart3grp {
 		fsl,pins = <
-			IMX8QM_M41_GPIO0_00_DMA_UART3_RX		0x06000020
-			IMX8QM_M41_GPIO0_01_DMA_UART3_TX		0x06000020
+			IMX8QM_M41_GPIO0_00_DMA_UART3_RX			0x06000020
+			IMX8QM_M41_GPIO0_01_DMA_UART3_TX			0x06000020
 		>;
 	};
 
@@ -1629,18 +1448,6 @@
 	pinctrl_pwm_lvds1: pwmlvds1grp {
 		fsl,pins = <
 			IMX8QM_LVDS1_GPIO00_LVDS1_PWM0_OUT		0x00000020
-		>;
-	};
-
-	pinctrl_modem_reset: modemresetgrp {
-		fsl,pins = <
-			IMX8QM_QSPI1A_DQS_LSIO_GPIO4_IO22		0x06000021
-		>;
-	};
-
-	pinctrl_modem_reset_sleep: modemreset_sleepgrp {
-		fsl,pins = <
-			IMX8QM_QSPI1A_DQS_LSIO_GPIO4_IO22		0x07800021
 		>;
 	};
 

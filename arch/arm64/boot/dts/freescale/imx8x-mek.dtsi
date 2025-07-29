@@ -58,14 +58,6 @@
 		reg = <0x00000000 0x80000000 0 0x40000000>;
 	};
 
-	modem_reset: modem-reset {
-		compatible = "gpio-reset";
-		reset-gpios = <&pca9557_a 1 GPIO_ACTIVE_LOW>;
-		reset-delay-us = <2000>;
-		reset-post-delay-ms = <40>;
-		#reset-cells = <0>;
-	};
-
 	cbtl04gp {
 		compatible = "nxp,cbtl04gp";
 		pinctrl-names = "default";
@@ -439,7 +431,7 @@
 		fsl,txs-rxm;
 	};
 
-	ov5640: ov5640@3c {
+	ov5640_pi: ov5640@3c {
 		compatible = "ovti,ov5640";
 		reg = <0x3c>;
 		pinctrl-names = "default";
@@ -450,20 +442,9 @@
 		clock-names = "xclk";
 		powerdown-gpios = <&lsio_gpio3 2 GPIO_ACTIVE_HIGH>;
 		reset-gpios = <&lsio_gpio3 3 GPIO_ACTIVE_LOW>;
-		csi_id = <0>;
 		mclk = <24000000>;
 		mclk_source = <0>;
-		status = "okay";
-		port {
-			ov5640_ep: endpoint {
-				remote-endpoint = <&parallel_csi_ep>;
-				bus-type = <5>; /* V4L2_FWNODE_BUS_TYPE_PARALLEL */
-				bus-width = <8>;
-				vsync-active = <0>;
-				hsync-active = <1>;
-				pclk-sample = <1>;
-			};
-		};
+		status = "disabled";
 	};
 };
 
@@ -1028,7 +1009,6 @@
 &lpuart1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpuart1>;
-	resets = <&modem_reset>;
 	status = "okay";
 
 	bluetooth {
@@ -1045,6 +1025,14 @@
 &lpuart3 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpuart3>;
+	status = "okay";
+};
+
+&mu_m0 {
+	status = "okay";
+};
+
+&mu1_m0 {
 	status = "okay";
 };
 
@@ -1086,8 +1074,9 @@
 	};
 };
 
-&phyx1 {
-	fsl,refclk-pad-mode = <IMX8_PCIE_REFCLK_PAD_INPUT>;
+&hsio_phy {
+	fsl,hsio-cfg = "pciea-x2-pcieb";
+	fsl,refclk-pad-mode = "input";
 	status = "okay";
 };
 
@@ -1096,6 +1085,8 @@
 	pinctrl-0 = <&pinctrl_pcieb>;
 	reset-gpio = <&lsio_gpio4 0 GPIO_ACTIVE_LOW>;
 	vpcie-supply = <&reg_pcieb>;
+	phys = <&hsio_phy 0 PHY_TYPE_PCIE 0>;
+	phy-names = "pcie-phy";
 	status = "okay";
 };
 
@@ -1186,118 +1177,12 @@
 	status = "okay";
 };
 
-&isi_0 {
-	status = "okay";
-
-	cap_device {
-		status = "okay";
-	};
-
-	m2m_device {
-		status = "okay";
-	};
-};
-
-&isi_1 {
-	status = "okay";
-
-	cap_device {
-		status = "okay";
-	};
-};
-
-&isi_2 {
-	status = "okay";
-
-	cap_device {
-		status = "okay";
-	};
-};
-
-&isi_3 {
-	status = "okay";
-
-	cap_device {
-		status = "okay";
-	};
-};
-
-&isi_4 {
-	interface = <6 0 2>;
-	status = "okay";
-
-	cap_device {
-		status = "okay";
-	};
-};
-
-&irqsteer_csi0 {
-	status = "okay";
-};
-
-
-&mipi_csi_0 {
-	virtual-channel;
-	status = "okay";
-
-	/* Camera 0  MIPI CSI-2 (CSIS0) */
-	port {
-		mipi_csi0_ep: endpoint {
-			remote-endpoint = <&max9286_0_ep>;
-			data-lanes = <1 2 3 4>;
-		};
-	};
-};
-
-&cameradev {
-	parallel_csi;
-	status = "okay";
-};
-
-&parallel_csi {
-	status = "okay";
-	port {
-		parallel_csi_ep: endpoint {
-			remote-endpoint = <&ov5640_ep>;
-		};
-	};
-};
-
 &jpegdec {
 	status = "okay";
 };
 
 &jpegenc {
 	status = "okay";
-};
-
-&i2c_mipi_csi0 {
-	#address-cells = <1>;
-	#size-cells = <0>;
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_i2c_mipi_csi0>;
-	clock-frequency = <100000>;
-	status = "okay";
-
-	max9286_mipi@6a {
-		compatible = "maxim,max9286_mipi";
-		reg = <0x6a>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_mipi_csi0>;
-		clocks = <&clk_dummy>;
-		clock-names = "capture_mclk";
-		mclk = <27000000>;
-		mclk_source = <0>;
-		pwn-gpios = <&lsio_gpio3 7 GPIO_ACTIVE_HIGH>;
-		virtual-channel;
-		status = "okay";
-		port {
-			max9286_0_ep: endpoint {
-				remote-endpoint = <&mipi_csi0_ep>;
-				data-lanes = <1 2 3 4>;
-			};
-		};
-	};
 };
 
 &iomuxc {

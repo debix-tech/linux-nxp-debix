@@ -32,11 +32,8 @@
 static const struct imx_rproc_att neutron_rproc_att_imx95[] = {
 	/* dev addr , sys addr  , size	    , flags */
 
-	/* DTCM-Data NON-SECURE 16K */
-	{ 0x00040000, 0x4AB08000, 0x00004000, ATT_OWN | ATT_IOMEM },
-
-	/* DTCM-Ring NON-SECURE 16K */
-	{ 0x00044000, 0x4AB0C000, 0x00004000, ATT_OWN | ATT_IOMEM },
+	/* DTCM-Data NON-SECURE 32K */
+	{ 0x00040000, 0x4AB08000, 0x00008000, ATT_OWN | ATT_IOMEM },
 
 	/* ITCM NON-SECURE 64K */
 	{ 0x00000000, 0x4AB10000, 0x00010000, ATT_OWN | ATT_IOMEM },
@@ -271,7 +268,7 @@ err_put_rproc:
 	return ret;
 }
 
-static int neutron_rproc_remove(struct platform_device *pdev)
+static void neutron_rproc_remove(struct platform_device *pdev)
 {
 	struct rproc *rproc = platform_get_drvdata(pdev);
 
@@ -279,8 +276,6 @@ static int neutron_rproc_remove(struct platform_device *pdev)
 
 	rproc_del(rproc);
 	rproc_free(rproc);
-
-	return 0;
 }
 
 static const struct of_device_id neutron_rproc_of_match[] = {

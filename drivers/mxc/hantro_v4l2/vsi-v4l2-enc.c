@@ -55,9 +55,9 @@ static int vsi_enc_querycap(
 	if (hwinfo->encformat == 0)
 		return -ENODEV;
 
-	strlcpy(cap->driver, "vsi_v4l2", sizeof("vsi_v4l2"));
-	strlcpy(cap->card, "vsi_v4l2enc", sizeof("vsi_v4l2enc"));
-	strlcpy(cap->bus_info, "platform:vsi_v4l2enc", sizeof("platform:vsi_v4l2enc"));
+	strscpy(cap->driver, "vsi_v4l2", sizeof("vsi_v4l2"));
+	strscpy(cap->card, "vsi_v4l2enc", sizeof("vsi_v4l2enc"));
+	strscpy(cap->bus_info, "platform:vsi_v4l2enc", sizeof("platform:vsi_v4l2enc"));
 
 	cap->device_caps = V4L2_CAP_VIDEO_M2M_MPLANE | V4L2_CAP_STREAMING;
 	cap->capabilities = cap->device_caps | V4L2_CAP_DEVICE_CAPS;
@@ -87,7 +87,7 @@ static int vsi_enc_reqbufs(
 	if (!binputqueue(p->type) && p->count == 0)
 		set_bit(CTX_FLAG_ENC_FLUSHBUF, &ctx->flag);
 	v4l2_klog(LOGLVL_BRIEF, "%llx:%s:%d ask for %d buffer, got %d:%d:%d",
-		ctx->ctxid, __func__, p->type, p->count, q->num_buffers, ret, ctx->status);
+		ctx->ctxid, __func__, p->type, p->count, vb2_get_num_buffers(q), ret, ctx->status);
 	return ret;
 }
 
@@ -114,7 +114,7 @@ static int vsi_enc_create_bufs(struct file *filp, void *priv,
 		set_bit(CTX_FLAG_ENC_FLUSHBUF, &ctx->flag);
 	v4l2_klog(LOGLVL_BRIEF, "%llx:%s:%d create for %d buffer, got %d:%d:%d\n",
 		ctx->ctxid, __func__, create->format.type, create->count,
-		q->num_buffers, ret, ctx->status);
+		vb2_get_num_buffers(q), ret, ctx->status);
 	return ret;
 }
 
@@ -245,8 +245,8 @@ static int vsi_enc_trystartenc(struct vsi_v4l2_ctx *ctx)
 		if ((ctx->status == VSI_STATUS_INIT ||
 			ctx->status == ENC_STATUS_STOPPED ||
 			ctx->status == ENC_STATUS_EOS) &&
-			ctx->input_que.queued_count >= ctx->input_que.min_buffers_needed &&
-			ctx->output_que.queued_count >= ctx->output_que.min_buffers_needed) {
+			ctx->input_que.queued_count >= ctx->input_que.min_queued_buffers &&
+			ctx->output_que.queued_count >= ctx->output_que.min_queued_buffers) {
 			ret = vsiv4l2_execcmd(ctx, V4L2_DAEMON_VIDIOC_STREAMON, NULL);
 			if (ret == 0) {
 				ctx->status = ENC_STATUS_ENCODING;
@@ -506,7 +506,7 @@ static int vsi_enc_enum_fmt(struct file *file, void *prv, struct v4l2_fmtdesc *f
 		return -EINVAL;
 
 	if (pfmt->name && strlen(pfmt->name))
-		strlcpy(f->description, pfmt->name, strlen(pfmt->name) + 1);
+		strscpy(f->description, pfmt->name, strlen(pfmt->name) + 1);
 	f->pixelformat = pfmt->fourcc;
 	f->flags = pfmt->flag;
 	v4l2_klog(LOGLVL_CONFIG, "%s:%d:%d:%x", __func__, f->index, f->type, pfmt->fourcc);
@@ -1491,7 +1491,7 @@ static int v4l2_enc_open(struct file *filp)
 	q = &ctx->input_que;
 	q->type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
 	q->io_modes = VB2_MMAP | VB2_USERPTR | VB2_DMABUF;
-	q->min_buffers_needed = MIN_FRAME_4ENC;
+	q->min_queued_buffers = MIN_FRAME_4ENC;
 	q->drv_priv = &ctx->fh;
 	q->lock = &ctx->ctxlock;
 	q->buf_struct_size = sizeof(struct vsi_vpu_buf);		//used to alloc mem control structures in reqbuf
@@ -1508,7 +1508,7 @@ static int v4l2_enc_open(struct file *filp)
 	q = &ctx->output_que;
 	q->type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
 	q->io_modes = VB2_MMAP | VB2_USERPTR | VB2_DMABUF;
-	q->min_buffers_needed = 1;
+	q->min_queued_buffers = 1;
 	q->drv_priv = &ctx->fh;
 	q->lock = &ctx->ctxlock;
 	q->buf_struct_size = sizeof(struct vsi_vpu_buf);

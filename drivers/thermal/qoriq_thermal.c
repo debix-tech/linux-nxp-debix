@@ -30,7 +30,6 @@
 #define TMU_VER1		0x1
 #define TMU_VER2		0x2
 #define TMU_VER93		0x3
-#define TMU_TEMP_PASSIVE_COOL_DELTA	10000
 
 #define REGS_TMR	0x000	/* Mode Register */
 #define TMR_DISABLE	0x0
@@ -47,13 +46,6 @@
 #define REGS_TIER	0x020	/* Interrupt Enable Register */
 #define TIER_DISABLE	0x0
 
-#define REGS_TIDR	0x24
-#define TMRTRCTR	0x70
-#define TMRTRCTR_EN	BIT(31)
-#define TMRTRCTR_TEMP(x)	((x) & 0xFF)
-#define TMFTRCTR	0x74
-#define TMFTRCTR_EN	BIT(31)
-#define TMFTRCTR_TEMP(x)	((x) & 0xFF)
 
 #define REGS_TTCFGR	0x080	/* Temperature Configuration Register */
 #define REGS_TSCFGR	0x084	/* Sensor Configuration Register */
@@ -82,9 +74,6 @@
  */
 struct qoriq_sensor {
 	int				id;
-	struct thermal_zone_device	*tzd;
-	int				temp_passive;
-	int				temp_critical;
 };
 
 struct qoriq_tmu_data {
@@ -93,12 +82,6 @@ struct qoriq_tmu_data {
 	struct regmap *regmap;
 	struct clk *clk;
 	struct qoriq_sensor	sensor[SITES_MAX];
-};
-
-enum tmu_trip {
-	TMU_TRIP_PASSIVE,
-	TMU_TRIP_CRITICAL,
-	TMU_TRIP_NUM,
 };
 
 static struct qoriq_tmu_data *qoriq_sensor_to_data(struct qoriq_sensor *s)
@@ -110,7 +93,7 @@ static int tmu_get_temp(struct thermal_zone_device *tz, int *temp)
 {
 	struct qoriq_sensor *qsensor = thermal_zone_device_priv(tz);
 	struct qoriq_tmu_data *qdata = qoriq_sensor_to_data(qsensor);
-	u32 val, tidr;
+	u32 val;
 	/*
 	 * REGS_TRITSR(id) has the following layout:
 	 *
@@ -135,15 +118,6 @@ static int tmu_get_temp(struct thermal_zone_device *tz, int *temp)
 	if (!(val & TMR_ME))
 		return -EAGAIN;
 
-	/* ERR052243: If there raising or falling edge happens, try later */
-	if (qdata->ver == TMU_VER93) {
-		regmap_read(qdata->regmap, REGS_TIDR, &tidr);
-		if (tidr & GENMASK(25, 24)) {
-			regmap_write(qdata->regmap, REGS_TIDR, GENMASK(25, 24));
-			return -EAGAIN;
-		}
-	}
-
 	if (regmap_read_poll_timeout(qdata->regmap,
 				     REGS_TRITSR(qsensor->id),
 				     val,
@@ -151,15 +125,6 @@ static int tmu_get_temp(struct thermal_zone_device *tz, int *temp)
 				     USEC_PER_MSEC,
 				     10 * USEC_PER_MSEC))
 		return -ENODATA;
-
-	/*ERR052243: If there raising or falling edge happens, try later */
-	if (qdata->ver == TMU_VER93) {
-		regmap_read(qdata->regmap, REGS_TIDR, &tidr);
-		if (tidr & GENMASK(25, 24)) {
-			regmap_write(qdata->regmap, REGS_TIDR, GENMASK(25, 24));
-			return -EAGAIN;
-		}
-	}
 
 	if (qdata->ver == TMU_VER1) {
 		*temp = (val & GENMASK(7, 0)) * MILLIDEGREE_PER_DEGREE;
@@ -174,54 +139,14 @@ static int tmu_get_temp(struct thermal_zone_device *tz, int *temp)
 	return 0;
 }
 
-static int tmu_get_trend(struct thermal_zone_device *tz,
-			 const struct thermal_trip *trip,
-			 enum thermal_trend *trend)
-
-{
-	struct qoriq_sensor *qsensor = tz->devdata;
-	int trip_temp;
-
-	if (!qsensor->tzd)
-		return 0;
-
-	trip_temp = (trip->type == THERMAL_TRIP_PASSIVE) ? qsensor->temp_passive :
-					     qsensor->temp_critical;
-
-	if (qsensor->tzd->temperature >=
-		(trip_temp - TMU_TEMP_PASSIVE_COOL_DELTA))
-		*trend = THERMAL_TREND_RAISING;
-	else
-		*trend = THERMAL_TREND_DROPPING;
-
-	return 0;
-}
-
-static int tmu_set_trip_temp(struct thermal_zone_device *tz, int trip,
-			     int temp)
-{
-	struct qoriq_sensor *qsensor = tz->devdata;
-
-	if (trip == TMU_TRIP_CRITICAL)
-		qsensor->temp_critical = temp;
-
-	if (trip == TMU_TRIP_PASSIVE)
-		qsensor->temp_passive = temp;
-
-	return 0;
-}
-
 static const struct thermal_zone_device_ops tmu_tz_ops = {
 	.get_temp = tmu_get_temp,
-	.get_trend = tmu_get_trend,
-	.set_trip_temp = tmu_set_trip_temp,
 };
 
 static int qoriq_tmu_register_tmu_zone(struct device *dev,
 				       struct qoriq_tmu_data *qdata)
 {
-	int i, id, sites = 0;
-	struct thermal_trip trip;
+	int id, sites = 0;
 
 	for (id = 0; id < SITES_MAX; id++) {
 		struct thermal_zone_device *tzd;
@@ -246,26 +171,7 @@ static int qoriq_tmu_register_tmu_zone(struct device *dev,
 		else
 			sites |= 0x1 << id;
 
-		sensor->tzd = tzd;
-
 		devm_thermal_add_hwmon_sysfs(dev, tzd);
-
-		/* first thermal zone takes care of system-wide device cooling */
-		if (id == 0) {
-
-			for (i = 0; i < thermal_zone_get_num_trips(sensor->tzd); i++) {
-				ret = thermal_zone_get_trip(sensor->tzd, i, &trip);
-				if (ret)
-					continue;
-
-				if (trip.type == THERMAL_TRIP_CRITICAL) {
-					sensor->temp_critical = trip.temperature;
-				} else if(trip.type == THERMAL_TRIP_PASSIVE) {
-					sensor->temp_passive = trip.temperature;
-				}
-			}
-		}
-
 	}
 
 	if (sites) {
@@ -326,14 +232,12 @@ static void qoriq_tmu_init_device(struct qoriq_tmu_data *data)
 	regmap_write(data->regmap, REGS_TIER, TIER_DISABLE);
 
 	/* Set update_interval */
+
 	if (data->ver == TMU_VER1) {
 		regmap_write(data->regmap, REGS_TMTMIR, TMTMIR_DEFAULT);
 	} else if (data->ver == TMU_VER93) {
 		regmap_write(data->regmap, REGS_V2_TMTMIR, TMTMIR_DEFAULT);
 		regmap_write(data->regmap, REGS_V2_TEUMR(0), TEUMR0_V21);
-		/* ERR052243: Set the raising & falling edge monitor */
-		regmap_write(data->regmap, TMRTRCTR, TMRTRCTR_EN | TMRTRCTR_TEMP(0x7));
-		regmap_write(data->regmap, TMFTRCTR, TMFTRCTR_EN | TMFTRCTR_TEMP(0x7));
 	} else {
 		regmap_write(data->regmap, REGS_V2_TMTMIR, TMTMIR_DEFAULT);
 		regmap_write(data->regmap, REGS_V2_TEUMR(0), TEUMR0_V2);
@@ -453,7 +357,7 @@ static int qoriq_tmu_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int __maybe_unused qoriq_tmu_suspend(struct device *dev)
+static int qoriq_tmu_suspend(struct device *dev)
 {
 	struct qoriq_tmu_data *data = dev_get_drvdata(dev);
 	int ret;
@@ -473,7 +377,7 @@ static int __maybe_unused qoriq_tmu_suspend(struct device *dev)
 	return 0;
 }
 
-static int __maybe_unused qoriq_tmu_resume(struct device *dev)
+static int qoriq_tmu_resume(struct device *dev)
 {
 	int ret;
 	struct qoriq_tmu_data *data = dev_get_drvdata(dev);
@@ -492,8 +396,8 @@ static int __maybe_unused qoriq_tmu_resume(struct device *dev)
 	return regmap_update_bits(data->regmap, REGS_TMR, TMR_ME, TMR_ME);
 }
 
-static SIMPLE_DEV_PM_OPS(qoriq_tmu_pm_ops,
-			 qoriq_tmu_suspend, qoriq_tmu_resume);
+static DEFINE_SIMPLE_DEV_PM_OPS(qoriq_tmu_pm_ops,
+				qoriq_tmu_suspend, qoriq_tmu_resume);
 
 static const struct of_device_id qoriq_tmu_match[] = {
 	{ .compatible = "fsl,qoriq-tmu", },
@@ -506,7 +410,7 @@ MODULE_DEVICE_TABLE(of, qoriq_tmu_match);
 static struct platform_driver qoriq_tmu = {
 	.driver	= {
 		.name		= "qoriq_thermal",
-		.pm		= &qoriq_tmu_pm_ops,
+		.pm		= pm_sleep_ptr(&qoriq_tmu_pm_ops),
 		.of_match_table	= qoriq_tmu_match,
 	},
 	.probe	= qoriq_tmu_probe,

@@ -221,7 +221,7 @@ static int max17135_detect(struct i2c_client *client,
 	}
 
 	if (info)
-		strlcpy(info->type, "max17135_sensor", I2C_NAME_SIZE);
+		strscpy(info->type, "max17135_sensor", I2C_NAME_SIZE);
 
 	return 0;
 }

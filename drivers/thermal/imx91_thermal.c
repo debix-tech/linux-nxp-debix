@@ -49,8 +49,6 @@
 #define TRIM1			0x2E0
 #define TRIM2			0x2F0
 
-#define TMU_TEMP_PASSIVE_COOL_DELTA	10000
-
 #define TMU_TEMP_LOW_LIMIT	-40000
 #define TMU_TEMP_HIGH_LIMIT	125000
 
@@ -65,10 +63,7 @@ enum measure_mode {
 
 struct tmu_sensor {
 	struct imx91_tmu *priv;
-	u32 hw_id;
 	struct thermal_zone_device *tzd;
-	int temp_passive;
-	int temp_critical;
 };
 
 struct imx91_tmu {
@@ -121,43 +116,8 @@ static int imx91_tmu_get_temp(struct thermal_zone_device *tz, int *temp)
 	return 0;
 }
 
-static int imx91_tmu_get_trend(struct thermal_zone_device *tz,
-		const struct thermal_trip *trip, enum thermal_trend *trend)
-{
-	int trip_temp;
-	struct tmu_sensor *sensor = tz->devdata;
-
-	if (!sensor->tzd)
-		return 0;
-
-	trip_temp = (trip->type == THERMAL_TRIP_PASSIVE) ?
-					sensor->temp_passive : sensor->temp_critical;
-
-	if (sensor->tzd->temperature >= (trip_temp - TMU_TEMP_PASSIVE_COOL_DELTA))
-		*trend = THERMAL_TREND_RAISING;
-	else
-		*trend = THERMAL_TREND_DROPPING;
-
-	return 0;
-}
-
-static int imx91_tmu_set_trip_temp(struct thermal_zone_device *tz, int trip, int temp)
-{
-	struct tmu_sensor *sensor = tz->devdata;
-
-	if (trip == TMU_TRIP_CRITICAL)
-		sensor->temp_critical = temp;
-
-	if (trip == TMU_TRIP_PASSIVE)
-		sensor->temp_passive = temp;
-
-	return 0;
-}
-
 static struct thermal_zone_device_ops tmu_tz_ops = {
 	.get_temp = imx91_tmu_get_temp,
-	.get_trend = imx91_tmu_get_trend,
-	.set_trip_temp = imx91_tmu_set_trip_temp,
 };
 
 static int imx91_init_from_nvmem_cells(struct imx91_tmu *tmu)
@@ -185,7 +145,6 @@ static int imx91_init_from_nvmem_cells(struct imx91_tmu *tmu)
 
 static int imx91_tmu_probe(struct platform_device *pdev)
 {
-	struct thermal_trip trip;
 	struct imx91_tmu *tmu;
 	unsigned long rate;
 	u32 div;
@@ -215,19 +174,6 @@ static int imx91_tmu_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "failed to register thermal zone sensor: %d\n", ret);
 		return ret;
 	}
-	tmu->sensors.hw_id = 0;
-
-	for (i = 0; i < thermal_zone_get_num_trips(tmu->sensors.tzd); i++) {
-		ret = thermal_zone_get_trip(tmu->sensors.tzd, i, &trip);
-		if (ret)
-			continue;
-
-		if (trip.type == THERMAL_TRIP_CRITICAL)
-			tmu->sensors.temp_critical = trip.temperature;
-		else if (trip.type == THERMAL_TRIP_PASSIVE)
-			tmu->sensors.temp_passive = trip.temperature;
-	}
-
 	platform_set_drvdata(pdev, tmu);
 
 	ret = clk_prepare_enable(tmu->clk);
@@ -299,7 +245,7 @@ free_cooling:
 	return ret;
 }
 
-static int imx91_tmu_remove(struct platform_device *pdev)
+static void imx91_tmu_remove(struct platform_device *pdev)
 {
 	struct imx91_tmu *tmu = platform_get_drvdata(pdev);
 
@@ -309,8 +255,6 @@ static int imx91_tmu_remove(struct platform_device *pdev)
 
 	clk_disable_unprepare(tmu->clk);
 	platform_set_drvdata(pdev, NULL);
-
-	return 0;
 }
 
 static int __maybe_unused imx91_tmu_suspend(struct device *dev)

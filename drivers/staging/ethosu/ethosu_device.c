@@ -356,7 +356,7 @@ int ethosu_dev_init(struct ethosu_device *edev,
 		return ret;
 
 	dma_set_mask_and_coherent(edev->dev, DMA_BIT_MASK(DMA_ADDR_BITS));
-	arch_setup_dma_ops(edev->dev, 0, 0, NULL, true);
+	arch_setup_dma_ops(edev->dev, true);
 
 	ret = ethosu_rpmsg_init(&edev->erp, ethosu_rpmsg_rx, edev);
 	if (ret)

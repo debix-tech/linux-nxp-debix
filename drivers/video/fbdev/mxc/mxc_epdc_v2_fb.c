@@ -511,7 +511,6 @@ static int pxp_clear_wb_work_func(struct mxc_epdc_fb_data *fb_data);
 static int epdc_working_buffer_update(struct mxc_epdc_fb_data *fb_data,
 				      struct update_data_list *upd_data_list,
 				      struct mxcfb_rect *update_region);
-extern void pxp_get_collision_info(struct pxp_collision_info *info);
 
 #ifdef DEBUG
 static void dump_pxp_config(struct mxc_epdc_fb_data *fb_data,
@@ -5771,7 +5770,7 @@ out:
 	return ret;
 }
 
-static int mxc_epdc_fb_remove(struct platform_device *pdev)
+static void mxc_epdc_fb_remove(struct platform_device *pdev)
 {
 	struct update_data_list *plist, *temp_list;
 	struct mxc_epdc_fb_data *fb_data = platform_get_drvdata(pdev);
@@ -5826,8 +5825,6 @@ static int mxc_epdc_fb_remove(struct platform_device *pdev)
 		regmap_update_bits(fb_data->gpr, fb_data->req_gpr,
 			1 << fb_data->req_bit, 1 << fb_data->req_bit);
 	platform_set_drvdata(pdev, NULL);
-
-	return 0;
 }
 
 #ifdef CONFIG_PM_SLEEP

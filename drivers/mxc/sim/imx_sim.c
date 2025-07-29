@@ -1282,7 +1282,7 @@ static void sim_polling_delay(struct sim_t *sim, u32 delay)
 	__raw_writel(SIM_XMT_STATUS_GPCNT, sim->ioaddr + XMT_STATUS);
 }
 
-void sim_clear_rx_buf(struct sim_t *sim)
+static void sim_clear_rx_buf(struct sim_t *sim)
 {
 	unsigned int i;
 	for (i = 0; i < SIM_RCV_BUFFER_SIZE; i++)
@@ -1813,13 +1813,11 @@ static int sim_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int sim_remove(struct platform_device *pdev)
+static void sim_remove(struct platform_device *pdev)
 {
 	pm_runtime_disable(&pdev->dev);
 
 	misc_deregister(&sim_dev);
-
-	return 0;
 }
 
 static int __maybe_unused sim_suspend(struct device *dev)

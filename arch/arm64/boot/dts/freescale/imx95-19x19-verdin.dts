@@ -12,6 +12,18 @@
 		ethernet2 = &enetc_port2;
 	};
 
+	chosen {
+		stdout-path = &lpuart1;
+		#address-cells = <2>;
+		#size-cells = <2>;
+		/* will be updated by U-boot when booting Xen */
+		module@0 {
+			bootargs = "console=hvc0 loglevel=8 root=/dev/mmcblk1p2 rw rootwait";
+			compatible = "xen,linux-zimage", "xen,multiboot-module";
+			reg = <0x00000000 0x9e000000 0x00000000 0x2000000>;
+		};
+	};
+
 	dummy_reg: dummy_reg {
 		compatible = "regulator-fixed";
 		regulator-name = "dummy_reg";
@@ -121,12 +133,6 @@
 	status = "okay";
 };
 
-&netc_prb_ierb {
-	netc-interfaces = <NXP_NETC_RGMII
-			   NXP_NETC_RGMII
-			   NXP_NETC_SERIAL>;
-};
-
 &i2c6_gpio_expander_21 {
 	status = "disabled";
 };
@@ -157,7 +163,7 @@
 };
 
 &lpi2c4 {
-	/delete-node/ codec@1a;
+	/delete-node/ audio-codec@1a;
 
 	wm8904: codec@1a {
 		#sound-dai-cells = <0>;
@@ -228,6 +234,12 @@
 
 &lpspi7 {
 	status = "disabled";
+};
+
+&lpuart5 {
+	bluetooth {
+		fw-init-baudrate = <115200>;
+	};
 };
 
 &scmi_iomuxc {

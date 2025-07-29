@@ -37,6 +37,8 @@
 
  @Description   FM PCD ...
 *//***************************************************************************/
+#define __ERR_MODULE__  MODULE_FM_PCD
+
 #include "std_ext.h"
 #include "error_ext.h"
 #include "string_ext.h"
@@ -50,9 +52,9 @@
 #include "fm_common.h"
 #include "fm_pcd.h"
 #include "fm_pcd_ipc.h"
+#include "fm_prs.h"
 #include "fm_hc.h"
 #include "fm_muram_ext.h"
-
 
 /****************************************/
 /*       static functions               */
@@ -1372,7 +1374,6 @@ t_Handle FM_PCD_NetEnvCharacteristicsSet(t_Handle h_FmPcd, t_FmPcdNetEnvParams  
                 p_FmPcd->netEnvs[netEnvCurrId].units[i].hdrs[k].hdr = HEADER_TYPE_USER_DEFINED_SHIM1;
                 p_FmPcd->netEnvs[netEnvCurrId].units[i].hdrs[k].opt = 0;
             }
-#if (DPAA_VERSION >= 11) || ((DPAA_VERSION == 10) && defined(FM_CAPWAP_SUPPORT))
             /* UDP_LITE  */
             if (p_FmPcd->netEnvs[netEnvCurrId].units[i].hdrs[k].hdr == HEADER_TYPE_UDP_LITE)
             {
@@ -1381,7 +1382,6 @@ t_Handle FM_PCD_NetEnvCharacteristicsSet(t_Handle h_FmPcd, t_FmPcdNetEnvParams  
                 p_FmPcd->netEnvs[netEnvCurrId].units[i].hdrs[k].hdr = HEADER_TYPE_UDP;
                 p_FmPcd->netEnvs[netEnvCurrId].units[i].hdrs[k].opt = 0;
             }
-#endif /* (DPAA_VERSION >= 11) || ((DPAA_VERSION == 10) && defined(FM_CAPWAP_SUPPORT)) */
 
             /* IP FRAG  */
             if ((p_FmPcd->netEnvs[netEnvCurrId].units[i].hdrs[k].hdr == HEADER_TYPE_IPv4) &&
@@ -1424,7 +1424,6 @@ t_Handle FM_PCD_NetEnvCharacteristicsSet(t_Handle h_FmPcd, t_FmPcdNetEnvParams  
                     p_FmPcd->netEnvs[netEnvCurrId].units[p_NetEnvParams->numOfDistinctionUnits++].hdrs[0].opt = 0;
                 }
             }
-#if (DPAA_VERSION >= 11)
             /* CAPWAP FRAG  */
             if ((p_FmPcd->netEnvs[netEnvCurrId].units[i].hdrs[k].hdr == HEADER_TYPE_CAPWAP) &&
                 (p_FmPcd->netEnvs[netEnvCurrId].units[i].hdrs[k].opt == CAPWAP_FRAG_1))
@@ -1435,7 +1434,6 @@ t_Handle FM_PCD_NetEnvCharacteristicsSet(t_Handle h_FmPcd, t_FmPcdNetEnvParams  
                 p_FmPcd->netEnvs[netEnvCurrId].units[i].hdrs[k].hdr = HEADER_TYPE_USER_DEFINED_SHIM2;
                 p_FmPcd->netEnvs[netEnvCurrId].units[i].hdrs[k].opt = 0;
             }
-#endif /* (DPAA_VERSION >= 11) */
         }
     }
 

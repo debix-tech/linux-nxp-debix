@@ -74,23 +74,22 @@ config MXC_TVIN_ADV7180
 	help
 	  If you plan to use the adv7180 video decoder with your MXC system, say Y here.
 
-choice
-	prompt "Select Overlay Rounting"
-	default MXC_IPU_DEVICE_QUEUE_SDC
-	depends on VIDEO_MXC_IPU_CAMERA && FB_MXC_SYNC_PANEL
-
 config MXC_IPU_DEVICE_QUEUE_SDC
 	tristate "Queue ipu device for overlay library"
 	depends on VIDEO_MXC_IPU_CAMERA
+	default m
 	help
 	  Use case CSI->MEM->IPU DEVICE->SDC:
 		Images from sensor will be frist recieved in memory,then
 		queue to ipu device for processing if needed, and displaying
 		it on synchronous display with SDC use case.
 
+	  Note that, can only choose either MXC_IPU_DEVICE_QUEUE_SDC or
+	  MXC_IPU_PRP_VF_SDC.
+
 config MXC_IPU_PRP_VF_SDC
 	bool "Pre-Processor VF SDC library"
-	depends on VIDEO_MXC_IPU_CAMERA
+	depends on VIDEO_MXC_IPU_CAMERA && (MXC_IPU_DEVICE_QUEUE_SDC=n)
 	help
 	  Use case PRP_VF_SDC:
 		Preprocessing image from smart sensor for viewfinder and
@@ -100,7 +99,8 @@ config MXC_IPU_PRP_VF_SDC
 		MEM -> IC (ROT) -> MEM
 		MEM -> SDC (FG/BG)
 
-endchoice
+	  Note that, can only choose either MXC_IPU_DEVICE_QUEUE_SDC or
+	  MXC_IPU_PRP_VF_SDC.
 
 config MXC_IPU_PRP_ENC
 	tristate "Pre-processor Encoder library"

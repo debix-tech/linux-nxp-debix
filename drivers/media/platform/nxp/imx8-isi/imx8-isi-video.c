@@ -166,6 +166,51 @@ static const struct mxc_isi_format_info mxc_isi_formats[] = {
 		.color_planes	= 1,
 		.depth		= { 32 },
 		.encoding	= MXC_ISI_ENC_RGB,
+	}, {
+		.mbus_code	= MEDIA_BUS_FMT_RGB888_1X24,
+		.fourcc		= V4L2_PIX_FMT_BGRA32,
+		.type		= MXC_ISI_VIDEO_CAP | MXC_ISI_VIDEO_M2M_CAP,
+		.isi_out_format	= CHNL_IMG_CTRL_FORMAT_RGBA8888,
+		.mem_planes	= 1,
+		.color_planes	= 1,
+		.depth		= { 32 },
+		.encoding	= MXC_ISI_ENC_RGB,
+	}, {
+		.mbus_code	= MEDIA_BUS_FMT_RGB888_1X24,
+		.fourcc		= V4L2_PIX_FMT_RGBA32,
+		.type		= MXC_ISI_VIDEO_CAP | MXC_ISI_VIDEO_M2M_CAP,
+		.isi_out_format	= CHNL_IMG_CTRL_FORMAT_ABGR8888,
+		.mem_planes	= 1,
+		.color_planes	= 1,
+		.depth		= { 32 },
+		.encoding	= MXC_ISI_ENC_RGB,
+	}, {
+		.mbus_code	= MEDIA_BUS_FMT_RGB888_1X24,
+		.fourcc		= V4L2_PIX_FMT_BGRX32,
+		.type		= MXC_ISI_VIDEO_CAP | MXC_ISI_VIDEO_M2M_CAP,
+		.isi_out_format	= CHNL_IMG_CTRL_FORMAT_RGBX888,
+		.mem_planes	= 1,
+		.color_planes	= 1,
+		.depth		= { 32 },
+		.encoding	= MXC_ISI_ENC_RGB,
+	}, {
+		.mbus_code	= MEDIA_BUS_FMT_RGB888_1X24,
+		.fourcc		= V4L2_PIX_FMT_RGBX32,
+		.type		= MXC_ISI_VIDEO_CAP | MXC_ISI_VIDEO_M2M_CAP,
+		.isi_out_format	= CHNL_IMG_CTRL_FORMAT_XBGR888,
+		.mem_planes	= 1,
+		.color_planes	= 1,
+		.depth		= { 32 },
+		.encoding	= MXC_ISI_ENC_RGB,
+	}, {
+		.mbus_code	= MEDIA_BUS_FMT_RGB888_1X24,
+		.fourcc		= V4L2_PIX_FMT_ARGB2101010,
+		.type		= MXC_ISI_VIDEO_CAP | MXC_ISI_VIDEO_M2M_CAP,
+		.isi_out_format	= CHNL_IMG_CTRL_FORMAT_A2RGB10,
+		.mem_planes	= 1,
+		.color_planes	= 1,
+		.depth		= { 32 },
+		.encoding	= MXC_ISI_ENC_RGB,
 	},
 	/*
 	 * RAW formats
@@ -528,6 +573,7 @@ static void mxc_isi_video_frame_write_done(struct mxc_isi_pipe *pipe,
 					   u32 status)
 {
 	struct mxc_isi_video *video = &pipe->video;
+	const struct mxc_isi_plat_data *pdata = pipe->isi->pdata;
 	struct device *dev = pipe->isi->dev;
 	struct mxc_isi_buffer *next_buf;
 	struct mxc_isi_buffer *buf;
@@ -589,7 +635,7 @@ static void mxc_isi_video_frame_write_done(struct mxc_isi_pipe *pipe,
 	 */
 
 	/* Check which buffer has just completed. */
-	buf_id = pipe->isi->pdata->buf_active_reverse
+	buf_id = pdata->buf_active_reverse
 	       ? (status & CHNL_STS_BUF1_ACTIVE ? MXC_ISI_BUF2 : MXC_ISI_BUF1)
 	       : (status & CHNL_STS_BUF1_ACTIVE ? MXC_ISI_BUF1 : MXC_ISI_BUF2);
 
@@ -643,6 +689,7 @@ static void mxc_isi_video_frame_write_done(struct mxc_isi_pipe *pipe,
 	}
 
 	mxc_isi_channel_set_outbuf(pipe, next_buf->dma_addrs, buf_id);
+	mxc_isi_channel_set_max_size(pipe, &next_buf->v4l2_buf, pdata->buf_max_size);
 	next_buf->id = buf_id;
 
 	/*
@@ -749,7 +796,7 @@ static int mxc_isi_video_validate_format(struct mxc_isi_video *video)
 
 	info = mxc_isi_format_by_fourcc(video->pix.pixelformat,
 					MXC_ISI_VIDEO_CAP);
-	format = v4l2_subdev_get_try_format(sd, state, MXC_ISI_PIPE_PAD_SOURCE);
+	format = v4l2_subdev_state_get_format(state, MXC_ISI_PIPE_PAD_SOURCE);
 
 	if (format->code != info->mbus_code ||
 	    format->width != video->pix.width ||
@@ -805,6 +852,7 @@ static void mxc_isi_video_return_buffers(struct mxc_isi_video *video,
 
 static void mxc_isi_video_queue_first_buffers(struct mxc_isi_video *video)
 {
+	const struct mxc_isi_plat_data *pdata = video->pipe->isi->pdata;
 	unsigned int discard;
 	unsigned int i;
 
@@ -832,6 +880,7 @@ static void mxc_isi_video_queue_first_buffers(struct mxc_isi_video *video)
 		buf = list_first_entry(list, struct mxc_isi_buffer, list);
 
 		mxc_isi_channel_set_outbuf(video->pipe, buf->dma_addrs, buf_id);
+		mxc_isi_channel_set_max_size(video->pipe, &buf->v4l2_buf, pdata->buf_max_size);
 		buf->id = buf_id;
 		list_move_tail(&buf->list, &video->out_active);
 	}
@@ -897,6 +946,7 @@ int mxc_isi_video_buffer_prepare(struct mxc_isi_dev *isi, struct vb2_buffer *vb2
 				 const struct mxc_isi_format_info *info,
 				 const struct v4l2_pix_format_mplane *pix)
 {
+	struct vb2_v4l2_buffer *v4l2_buf = to_vb2_v4l2_buffer(vb2);
 	unsigned int i;
 
 	for (i = 0; i < info->mem_planes; i++) {
@@ -910,6 +960,8 @@ int mxc_isi_video_buffer_prepare(struct mxc_isi_dev *isi, struct vb2_buffer *vb2
 
 		vb2_set_plane_payload(vb2, i, size);
 	}
+
+	v4l2_buf->field = pix->field;
 
 	return 0;
 }
@@ -1190,6 +1242,9 @@ static int mxc_isi_video_streamon(struct file *file, void *priv,
 
 	if (vb2_queue_is_busy(&video->vb2_q, file))
 		return -EBUSY;
+
+	if (video->is_streaming)
+		return 0;
 
 	/*
 	 * Get a pipeline for the video node and start it. This must be done
@@ -1490,7 +1545,7 @@ int mxc_isi_video_register(struct mxc_isi_pipe *pipe,
 	q->mem_ops = &vb2_dma_contig_memops;
 	q->buf_struct_size = sizeof(struct mxc_isi_buffer);
 	q->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
-	q->min_buffers_needed = 2;
+	q->min_queued_buffers = 2;
 	q->lock = &video->lock;
 	q->dev = pipe->isi->dev;
 

@@ -74,7 +74,7 @@ static const char *const lvds0_sels[] = {
 	"lvds0_bypass_clk",
 };
 
-static const char * const lvds1_sels[] = {
+static const char *const lvds1_sels[] = {
 	"clk_dummy",
 	"clk_dummy",
 	"clk_dummy",
@@ -124,7 +124,7 @@ static const char * const pi_pll0_sels[] = {
 
 static inline bool clk_on_imx8dxl(struct device_node *node)
 {
-	return of_device_is_compatible(node, "fsl,imx8dxl-clk") != 0;
+	return of_device_is_compatible(node, "fsl,imx8dxl-clk");
 }
 
 static int imx8qxp_clk_probe(struct platform_device *pdev)
@@ -152,6 +152,7 @@ static int imx8qxp_clk_probe(struct platform_device *pdev)
 	imx_clk_scu("pwm5_clk", IMX_SC_R_PWM_5, IMX_SC_PM_CLK_PER);
 	imx_clk_scu("pwm6_clk", IMX_SC_R_PWM_6, IMX_SC_PM_CLK_PER);
 	imx_clk_scu("pwm7_clk", IMX_SC_R_PWM_7, IMX_SC_PM_CLK_PER);
+	imx_clk_scu("gpt0_clk", IMX_SC_R_GPT_0, IMX_SC_PM_CLK_PER);
 	imx_clk_scu("gpt1_clk", IMX_SC_R_GPT_1, IMX_SC_PM_CLK_PER);
 	imx_clk_scu("gpt2_clk", IMX_SC_R_GPT_2, IMX_SC_PM_CLK_PER);
 	imx_clk_scu("gpt3_clk", IMX_SC_R_GPT_3, IMX_SC_PM_CLK_PER);

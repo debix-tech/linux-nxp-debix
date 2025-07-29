@@ -8,8 +8,7 @@
 #include <linux/delay.h>
 #include <linux/dmaengine.h>
 #include <linux/module.h>
-#include <linux/of_address.h>
-#include <linux/of_device.h>
+#include <linux/of.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/pm_qos.h>
 #include <linux/pm_runtime.h>
@@ -387,12 +386,7 @@ static int fsl_sai_set_dai_fmt_tr(struct snd_soc_dai *cpu_dai,
 
 static int fsl_sai_set_dai_fmt(struct snd_soc_dai *cpu_dai, unsigned int fmt)
 {
-	struct fsl_sai *sai = snd_soc_dai_get_drvdata(cpu_dai);
 	int ret;
-
-	if (sai->masterflag[FSL_FMT_TRANSMITTER])
-		fmt = (fmt & (~SND_SOC_DAIFMT_MASTER_MASK)) |
-				sai->masterflag[FSL_FMT_TRANSMITTER];
 
 	ret = fsl_sai_set_dai_fmt_tr(cpu_dai, fmt, true);
 	if (ret) {
@@ -400,15 +394,21 @@ static int fsl_sai_set_dai_fmt(struct snd_soc_dai *cpu_dai, unsigned int fmt)
 		return ret;
 	}
 
-	if (sai->masterflag[FSL_FMT_RECEIVER])
-		fmt = (fmt & (~SND_SOC_DAIFMT_MASTER_MASK)) |
-				sai->masterflag[FSL_FMT_RECEIVER];
-
 	ret = fsl_sai_set_dai_fmt_tr(cpu_dai, fmt, false);
 	if (ret)
 		dev_err(cpu_dai->dev, "Cannot set rx format: %d\n", ret);
 
 	return ret;
+}
+
+static int fsl_sai_set_dai_fmt_tx(struct snd_soc_dai *cpu_dai, unsigned int fmt)
+{
+	return fsl_sai_set_dai_fmt_tr(cpu_dai, fmt, true);
+}
+
+static int fsl_sai_set_dai_fmt_rx(struct snd_soc_dai *cpu_dai, unsigned int fmt)
+{
+	return fsl_sai_set_dai_fmt_tr(cpu_dai, fmt, false);
 }
 
 static int fsl_sai_set_bclk(struct snd_soc_dai *dai, bool tx, u32 freq)
@@ -735,7 +735,7 @@ static int fsl_sai_hw_free(struct snd_pcm_substream *substream,
 			   FSL_SAI_CR3_TRCE_MASK, 0);
 
 	if (!sai->is_consumer_mode[tx] &&
-			sai->mclk_streams & BIT(substream->stream)) {
+	    sai->mclk_streams & BIT(substream->stream)) {
 		clk_disable_unprepare(sai->mclk_clk[sai->mclk_id[tx]]);
 		sai->mclk_streams &= ~BIT(substream->stream);
 	}
@@ -928,6 +928,30 @@ static const struct snd_soc_dai_ops fsl_sai_pcm_dai_ops = {
 	.startup	= fsl_sai_startup,
 };
 
+static const struct snd_soc_dai_ops fsl_sai_pcm_dai_tx_ops = {
+	.probe		= fsl_sai_dai_probe,
+	.set_bclk_ratio	= fsl_sai_set_dai_bclk_ratio,
+	.set_sysclk	= fsl_sai_set_dai_sysclk,
+	.set_fmt	= fsl_sai_set_dai_fmt_tx,
+	.set_tdm_slot	= fsl_sai_set_dai_tdm_slot,
+	.hw_params	= fsl_sai_hw_params,
+	.hw_free	= fsl_sai_hw_free,
+	.trigger	= fsl_sai_trigger,
+	.startup	= fsl_sai_startup,
+};
+
+static const struct snd_soc_dai_ops fsl_sai_pcm_dai_rx_ops = {
+	.probe		= fsl_sai_dai_probe,
+	.set_bclk_ratio	= fsl_sai_set_dai_bclk_ratio,
+	.set_sysclk	= fsl_sai_set_dai_sysclk,
+	.set_fmt	= fsl_sai_set_dai_fmt_rx,
+	.set_tdm_slot	= fsl_sai_set_dai_tdm_slot,
+	.hw_params	= fsl_sai_hw_params,
+	.hw_free	= fsl_sai_hw_free,
+	.trigger	= fsl_sai_trigger,
+	.startup	= fsl_sai_startup,
+};
+
 static int fsl_sai_dai_resume(struct snd_soc_component *component)
 {
 	struct fsl_sai *sai = snd_soc_component_get_drvdata(component);
@@ -945,26 +969,55 @@ static int fsl_sai_dai_resume(struct snd_soc_component *component)
 	return 0;
 }
 
-static struct snd_soc_dai_driver fsl_sai_dai_template = {
-	.playback = {
-		.stream_name = "CPU-Playback",
-		.channels_min = 1,
-		.channels_max = 32,
-		.rate_min = 8000,
-		.rate_max = 2822400,
-		.rates = SNDRV_PCM_RATE_KNOT,
-		.formats = FSL_SAI_FORMATS,
+static struct snd_soc_dai_driver fsl_sai_dai_template[] = {
+	{
+		.name = "sai-tx-rx",
+		.playback = {
+			.stream_name = "CPU-Playback",
+			.channels_min = 1,
+			.channels_max = 32,
+			.rate_min = 8000,
+			.rate_max = 2822400,
+			.rates = SNDRV_PCM_RATE_KNOT,
+			.formats = FSL_SAI_FORMATS,
+		},
+		.capture = {
+			.stream_name = "CPU-Capture",
+			.channels_min = 1,
+			.channels_max = 32,
+			.rate_min = 8000,
+			.rate_max = 2822400,
+			.rates = SNDRV_PCM_RATE_KNOT,
+			.formats = FSL_SAI_FORMATS,
+		},
+		.ops = &fsl_sai_pcm_dai_ops,
 	},
-	.capture = {
-		.stream_name = "CPU-Capture",
-		.channels_min = 1,
-		.channels_max = 32,
-		.rate_min = 8000,
-		.rate_max = 2822400,
-		.rates = SNDRV_PCM_RATE_KNOT,
-		.formats = FSL_SAI_FORMATS,
+	{
+		.name = "sai-tx",
+		.playback = {
+			.stream_name = "CPU-Playback",
+			.channels_min = 1,
+			.channels_max = 32,
+				.rate_min = 8000,
+			.rate_max = 2822400,
+			.rates = SNDRV_PCM_RATE_KNOT,
+			.formats = FSL_SAI_FORMATS,
+		},
+		.ops = &fsl_sai_pcm_dai_tx_ops,
 	},
-	.ops = &fsl_sai_pcm_dai_ops,
+	{
+		.name = "sai-rx",
+		.capture = {
+			.stream_name = "CPU-Capture",
+			.channels_min = 1,
+			.channels_max = 32,
+			.rate_min = 8000,
+			.rate_max = 2822400,
+			.rates = SNDRV_PCM_RATE_KNOT,
+			.formats = FSL_SAI_FORMATS,
+		},
+		.ops = &fsl_sai_pcm_dai_rx_ops,
+	},
 };
 
 static const struct snd_soc_component_driver fsl_component = {
@@ -1433,11 +1486,6 @@ static int fsl_sai_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	if (of_find_property(np, "fsl,txm-rxs", NULL) != NULL) {
-		sai->masterflag[FSL_FMT_TRANSMITTER] = SND_SOC_DAIFMT_BP_FP;
-		sai->masterflag[FSL_FMT_RECEIVER] = SND_SOC_DAIFMT_BC_FC;
-	}
-
 	irq = platform_get_irq(pdev, 0);
 	if (irq < 0)
 		return irq;
@@ -1449,15 +1497,15 @@ static int fsl_sai_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	memcpy(&sai->cpu_dai_drv, &fsl_sai_dai_template,
-	       sizeof(fsl_sai_dai_template));
+	memcpy(&sai->cpu_dai_drv, fsl_sai_dai_template,
+	       sizeof(*fsl_sai_dai_template) * ARRAY_SIZE(fsl_sai_dai_template));
 
 	/* Sync Tx with Rx as default by following old DT binding */
 	sai->synchronous[RX] = true;
 	sai->synchronous[TX] = false;
-	sai->cpu_dai_drv.symmetric_rate = 1;
-	sai->cpu_dai_drv.symmetric_channels = 1;
-	sai->cpu_dai_drv.symmetric_sample_bits = 1;
+	sai->cpu_dai_drv[0].symmetric_rate = 1;
+	sai->cpu_dai_drv[0].symmetric_channels = 1;
+	sai->cpu_dai_drv[0].symmetric_sample_bits = 1;
 
 	if (of_property_read_bool(np, "fsl,sai-synchronous-rx") &&
 	    of_property_read_bool(np, "fsl,sai-asynchronous")) {
@@ -1474,9 +1522,9 @@ static int fsl_sai_probe(struct platform_device *pdev)
 		/* Discard all settings for asynchronous mode */
 		sai->synchronous[RX] = false;
 		sai->synchronous[TX] = false;
-		sai->cpu_dai_drv.symmetric_rate = 0;
-		sai->cpu_dai_drv.symmetric_channels = 0;
-		sai->cpu_dai_drv.symmetric_sample_bits = 0;
+		sai->cpu_dai_drv[0].symmetric_rate = 0;
+		sai->cpu_dai_drv[0].symmetric_channels = 0;
+		sai->cpu_dai_drv[0].symmetric_sample_bits = 0;
 	}
 
 	sai->mclk_direction_output = of_property_read_bool(np, "fsl,sai-mclk-direction-output");
@@ -1577,7 +1625,7 @@ static int fsl_sai_probe(struct platform_device *pdev)
 	}
 
 	ret = devm_snd_soc_register_component(dev, &fsl_component,
-					      &sai->cpu_dai_drv, 1);
+					      sai->cpu_dai_drv, ARRAY_SIZE(fsl_sai_dai_template));
 	if (ret)
 		goto err_component_register;
 
@@ -1839,7 +1887,7 @@ static const struct dev_pm_ops fsl_sai_pm_ops = {
 
 static struct platform_driver fsl_sai_driver = {
 	.probe = fsl_sai_probe,
-	.remove_new = fsl_sai_remove,
+	.remove = fsl_sai_remove,
 	.driver = {
 		.name = "fsl-sai",
 		.pm = &fsl_sai_pm_ops,

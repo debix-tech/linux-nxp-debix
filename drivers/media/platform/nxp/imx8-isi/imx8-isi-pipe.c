@@ -40,6 +40,16 @@ static const struct mxc_isi_bus_format_info mxc_isi_bus_formats[] = {
 		.pads		= BIT(MXC_ISI_PIPE_PAD_SINK),
 		.encoding	= MXC_ISI_ENC_YUV,
 	}, {
+		.mbus_code	= MEDIA_BUS_FMT_UYVY8_2X8,
+		.output		= MEDIA_BUS_FMT_YUV8_1X24,
+		.pads		= BIT(MXC_ISI_PIPE_PAD_SINK),
+		.encoding	= MXC_ISI_ENC_YUV,
+	}, {
+		.mbus_code	= MEDIA_BUS_FMT_YUYV8_2X8,
+		.output		= MEDIA_BUS_FMT_YUV8_1X24,
+		.pads		= BIT(MXC_ISI_PIPE_PAD_SINK),
+		.encoding	= MXC_ISI_ENC_YUV,
+	}, {
 		.mbus_code	= MEDIA_BUS_FMT_YUV8_1X24,
 		.output		= MEDIA_BUS_FMT_YUV8_1X24,
 		.pads		= BIT(MXC_ISI_PIPE_PAD_SOURCE),
@@ -326,10 +336,10 @@ int mxc_isi_pipe_enable(struct mxc_isi_pipe *pipe)
 	/* Configure the pipeline. */
 	state = v4l2_subdev_lock_and_get_active_state(sd);
 
-	sink_fmt = v4l2_subdev_get_try_format(sd, state, MXC_ISI_PIPE_PAD_SINK);
-	src_fmt = v4l2_subdev_get_try_format(sd, state, MXC_ISI_PIPE_PAD_SOURCE);
-	compose = v4l2_subdev_get_try_compose(sd, state, MXC_ISI_PIPE_PAD_SINK);
-	crop = *v4l2_subdev_get_try_crop(sd, state, MXC_ISI_PIPE_PAD_SOURCE);
+	sink_fmt = v4l2_subdev_state_get_format(state, MXC_ISI_PIPE_PAD_SINK);
+	src_fmt = v4l2_subdev_state_get_format(state, MXC_ISI_PIPE_PAD_SOURCE);
+	compose = v4l2_subdev_state_get_compose(state, MXC_ISI_PIPE_PAD_SINK);
+	crop = *v4l2_subdev_state_get_crop(state, MXC_ISI_PIPE_PAD_SOURCE);
 
 	sink_info = mxc_isi_bus_format_by_code(sink_fmt->code,
 					       MXC_ISI_PIPE_PAD_SINK);
@@ -389,7 +399,7 @@ mxc_isi_pipe_get_pad_format(struct mxc_isi_pipe *pipe,
 			    struct v4l2_subdev_state *state,
 			    unsigned int pad)
 {
-	return v4l2_subdev_get_try_format(&pipe->sd, state, pad);
+	return v4l2_subdev_state_get_format(state, pad);
 }
 
 static struct v4l2_rect *
@@ -397,7 +407,7 @@ mxc_isi_pipe_get_pad_crop(struct mxc_isi_pipe *pipe,
 			  struct v4l2_subdev_state *state,
 			  unsigned int pad)
 {
-	return v4l2_subdev_get_try_crop(&pipe->sd, state, pad);
+	return v4l2_subdev_state_get_crop(state, pad);
 }
 
 static struct v4l2_rect *
@@ -405,11 +415,11 @@ mxc_isi_pipe_get_pad_compose(struct mxc_isi_pipe *pipe,
 			     struct v4l2_subdev_state *state,
 			     unsigned int pad)
 {
-	return v4l2_subdev_get_try_compose(&pipe->sd, state, pad);
+	return v4l2_subdev_state_get_compose(state, pad);
 }
 
-static int mxc_isi_pipe_init_cfg(struct v4l2_subdev *sd,
-				 struct v4l2_subdev_state *state)
+static int mxc_isi_pipe_init_state(struct v4l2_subdev *sd,
+				   struct v4l2_subdev_state *state)
 {
 	struct mxc_isi_pipe *pipe = to_isi_pipe(sd);
 	struct v4l2_mbus_framefmt *fmt_source;
@@ -749,7 +759,6 @@ static int mxc_isi_pipe_set_selection(struct v4l2_subdev *sd,
 }
 
 static const struct v4l2_subdev_pad_ops mxc_isi_pipe_subdev_pad_ops = {
-	.init_cfg = mxc_isi_pipe_init_cfg,
 	.enum_mbus_code = mxc_isi_pipe_enum_mbus_code,
 	.get_fmt = v4l2_subdev_get_fmt,
 	.set_fmt = mxc_isi_pipe_set_fmt,
@@ -759,6 +768,10 @@ static const struct v4l2_subdev_pad_ops mxc_isi_pipe_subdev_pad_ops = {
 
 static const struct v4l2_subdev_ops mxc_isi_pipe_subdev_ops = {
 	.pad = &mxc_isi_pipe_subdev_pad_ops,
+};
+
+static const struct v4l2_subdev_internal_ops mxc_isi_pipe_internal_ops = {
+	.init_state = mxc_isi_pipe_init_state,
 };
 
 /* -----------------------------------------------------------------------------
@@ -834,6 +847,7 @@ int mxc_isi_pipe_init(struct mxc_isi_dev *isi, unsigned int id)
 
 	sd = &pipe->sd;
 	v4l2_subdev_init(sd, &mxc_isi_pipe_subdev_ops);
+	sd->internal_ops = &mxc_isi_pipe_internal_ops;
 	sd->flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
 	snprintf(sd->name, sizeof(sd->name), "mxc_isi.%d", pipe->id);
 	sd->dev = isi->dev;
@@ -899,8 +913,8 @@ int mxc_isi_pipe_acquire(struct mxc_isi_pipe *pipe,
 	int ret;
 
 	state = v4l2_subdev_lock_and_get_active_state(sd);
-	sink_fmt = v4l2_subdev_get_try_format(sd, state, MXC_ISI_PIPE_PAD_SINK);
-	src_fmt = v4l2_subdev_get_try_format(sd, state, MXC_ISI_PIPE_PAD_SOURCE);
+	sink_fmt = v4l2_subdev_state_get_format(state, MXC_ISI_PIPE_PAD_SINK);
+	src_fmt = v4l2_subdev_state_get_format(state, MXC_ISI_PIPE_PAD_SOURCE);
 	v4l2_subdev_unlock_state(state);
 
 	sink_info = mxc_isi_bus_format_by_code(sink_fmt->code,

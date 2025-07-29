@@ -1,5 +1,6 @@
 /*
  * Copyright 2005-2015 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright 2024 NXP
  */
 
 /*
@@ -43,7 +44,7 @@ static int _calc_resize_coeffs(struct ipu_soc *ipu,
 				uint32_t *resizeCoeff,
 				uint32_t *downsizeCoeff);
 
-void _ipu_vdi_set_top_field_man(struct ipu_soc *ipu, bool top_field_0)
+static void _ipu_vdi_set_top_field_man(struct ipu_soc *ipu, bool top_field_0)
 {
 	uint32_t reg;
 
@@ -55,7 +56,7 @@ void _ipu_vdi_set_top_field_man(struct ipu_soc *ipu, bool top_field_0)
 	ipu_vdi_write(ipu, reg, VDI_C);
 }
 
-void _ipu_vdi_set_motion(struct ipu_soc *ipu, ipu_motion_sel motion_sel)
+static void _ipu_vdi_set_motion(struct ipu_soc *ipu, ipu_motion_sel motion_sel)
 {
 	uint32_t reg;
 
@@ -70,19 +71,6 @@ void _ipu_vdi_set_motion(struct ipu_soc *ipu, ipu_motion_sel motion_sel)
 
 	ipu_vdi_write(ipu, reg, VDI_C);
 	dev_dbg(ipu->dev, "VDI_C = \t0x%08X\n", reg);
-}
-
-void ic_dump_register(struct ipu_soc *ipu)
-{
-	printk(KERN_DEBUG "IC_CONF = \t0x%08X\n", ipu_ic_read(ipu, IC_CONF));
-	printk(KERN_DEBUG "IC_PRP_ENC_RSC = \t0x%08X\n",
-	       ipu_ic_read(ipu, IC_PRP_ENC_RSC));
-	printk(KERN_DEBUG "IC_PRP_VF_RSC = \t0x%08X\n",
-	       ipu_ic_read(ipu, IC_PRP_VF_RSC));
-	printk(KERN_DEBUG "IC_PP_RSC = \t0x%08X\n", ipu_ic_read(ipu, IC_PP_RSC));
-	printk(KERN_DEBUG "IC_IDMAC_1 = \t0x%08X\n", ipu_ic_read(ipu, IC_IDMAC_1));
-	printk(KERN_DEBUG "IC_IDMAC_2 = \t0x%08X\n", ipu_ic_read(ipu, IC_IDMAC_2));
-	printk(KERN_DEBUG "IC_IDMAC_3 = \t0x%08X\n", ipu_ic_read(ipu, IC_IDMAC_3));
 }
 
 void _ipu_ic_enable_task(struct ipu_soc *ipu, ipu_channel_t channel)

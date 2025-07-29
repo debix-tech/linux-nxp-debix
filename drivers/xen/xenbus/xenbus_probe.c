@@ -94,9 +94,9 @@ match_device(const struct xenbus_device_id *arr, struct xenbus_device *dev)
 	return NULL;
 }
 
-int xenbus_match(struct device *_dev, struct device_driver *_drv)
+int xenbus_match(struct device *_dev, const struct device_driver *_drv)
 {
-	struct xenbus_driver *drv = to_xenbus_driver(_drv);
+	const struct xenbus_driver *drv = to_xenbus_driver(_drv);
 
 	if (!drv->ids)
 		return 0;
@@ -313,7 +313,7 @@ int xenbus_dev_probe(struct device *_dev)
 	if (err) {
 		dev_warn(&dev->dev, "watch_otherend on %s failed.\n",
 		       dev->nodename);
-		return err;
+		goto fail_remove;
 	}
 
 	dev->spurious_threshold = 1;
@@ -322,6 +322,12 @@ int xenbus_dev_probe(struct device *_dev)
 			 dev->nodename);
 
 	return 0;
+fail_remove:
+	if (drv->remove) {
+		down(&dev->reclaim_sem);
+		drv->remove(dev);
+		up(&dev->reclaim_sem);
+	}
 fail_put:
 	module_put(drv->driver.owner);
 fail:

@@ -23,17 +23,14 @@
 	/* Place Holder */
 };
 
-&mipi_csi0 {
-	assigned-clock-rates =  <316800000>,
-				<316800000>,
-				<316800000>,
-				<105600000>,
-				<79200000>,
-				<46000000>;
-};
-
 &epdc {
 	/* Place Holder */
+};
+
+&mipi_csi {
+	assigned-clock-rates =  <105600000>,
+				<46000000>,
+				<79200000>;
 };
 
 &dsp {

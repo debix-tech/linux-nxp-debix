@@ -6,8 +6,8 @@
  * Author: Jose Abreu <Jose.Abreu@synopsys.com>
  */
 
-#define SYNOPSYS_XPCS_ID		0x7996ced0
-#define SYNOPSYS_XPCS_MASK		0xffffffff
+#include <linux/bits.h>
+#include <linux/pcs/pcs-xpcs.h>
 
 /* Vendor regs access */
 #define DW_VENDOR			BIT(15)
@@ -55,6 +55,8 @@
 /* Clause 37 Defines */
 /* VR MII MMD registers offsets */
 #define DW_VR_MII_MMD_CTRL		0x0000
+#define DW_VR_MII_MMD_STS		0x0001
+#define DW_VR_MII_MMD_STS_LINK_STS	BIT(2)
 #define DW_VR_MII_DIG_CTRL1		0x8000
 #define DW_VR_MII_AN_CTRL		0x8001
 #define DW_VR_MII_AN_INTR_STS		0x8002
@@ -118,6 +120,9 @@
 /* VR MII EEE Control 1 defines */
 #define DW_VR_MII_EEE_TRN_LPI		BIT(0)	/* Transparent Mode Enable */
 
+#define DW_XPCS_INFO_DECLARE(_name, _pcs, _pma)				\
+	static const struct dw_xpcs_info _name = { .pcs = _pcs, .pma = _pma }
+
 int xpcs_read(struct dw_xpcs *xpcs, int dev, u32 reg);
 int xpcs_write(struct dw_xpcs *xpcs, int dev, u32 reg, u16 val);
 int xpcs_phy_read(struct dw_xpcs *xpcs, int dev, u32 reg);
@@ -130,5 +135,6 @@ int nxp_sja1110_2500basex_pma_config(struct dw_xpcs *xpcs);
 int txgbe_xpcs_switch_mode(struct dw_xpcs *xpcs, phy_interface_t interface);
 void xpcs_phy_reg_lock(struct dw_xpcs *xpcs);
 int xpcs_phy_usxgmii_pma_config(struct dw_xpcs *xpcs);
+void xpcs_phy_reset(struct dw_xpcs *xpcs);
 u32 xpcs_phy_get_id(struct dw_xpcs *xpcs);
 int xpcs_phy_check_id(u32 id);

@@ -64,14 +64,19 @@ config PHY_FSL_IMX8M_PCIE
 	  Enable this to add support for the PCIE PHY as found on
 	  i.MX8M family of SOCs.
 
-config PHY_FSL_IMX8Q_PCIE
-	tristate "Freescale i.MX8Q PCIE PHY"
+config PHY_FSL_IMX8QM_HSIO
+	tristate "Freescale i.MX8QM HSIO PHY"
 	depends on OF && HAS_IOMEM
 	select GENERIC_PHY
 	help
-	  Enable this to add support for the PCIE PHY as found on
-	  i.MX8Q family of SOCs.
+	  Enable this to add support for the HSIO PHY as found on
+	  i.MX8QM family of SOCs.
 
+config PHY_FSL_SAMSUNG_HDMI_PHY
+	tristate "Samsung HDMI PHY support"
+	depends on OF && HAS_IOMEM && COMMON_CLK
+	help
+	  Enable this to add support for the Samsung HDMI PHY in i.MX8MP.
 endif
 
 config PHY_FSL_LYNX_XGKR_ALGORITHM
@@ -102,10 +107,3 @@ config PHY_FSL_LYNX_28G
 	  found on NXP's Layerscape platforms such as LX2160A.
 	  Used to change the protocol running on SerDes lanes at runtime.
 	  Only useful for a restricted set of Ethernet protocols.
-
-config PHY_SAMSUNG_HDMI_PHY
-	tristate "Samsung HDMI PHY support"
-	depends on OF && HAS_IOMEM
-	select GENERIC_PHY
-	help
-	  Enable this to add support for the Samsung HDMI PHY in iMX8MP.

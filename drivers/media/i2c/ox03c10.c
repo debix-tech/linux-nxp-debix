@@ -18,7 +18,51 @@
 #include "ox03c10_regs.h"
 
 #define OX03C10_I2C_ADDR		0x36
-#define OX03C10_PIXEL_RATE		90000000
+#define OX03C10_PIXEL_RATE		90000000L
+
+#define OX03C10_EXPOSURE_MIN		4U
+
+#define OX03C10_AGAIN_MIN		0x10000L /* Q16.16 for 1.0 */
+#define OX03C10_AGAIN_MAX		0xF8000L /* Q16.16 for 15.5 */
+
+#define OX03C10_DGAIN_MIN		0x10000L /* Q16.16 for 1.0 */
+#define OX03C10_DGAIN_MAX		0xFFFC0L /* Q16.16 for 15.999 */
+
+#define OX03C10_L2S_RATIO		0x200000L /* Q16.16 for 32 */
+#define OX03C10_L2VS_RATIO		0x4000000L /* Q16.16 for 1024 */
+
+#define OX03C10_GAIN_CONV_RATIO		0x751EBL /* Q16.16 for 7.32 */
+
+#define OX03C10_GAIN_VS_MIN		(OX03C10_AGAIN_MIN * OX03C10_DGAIN_MIN / 0x10000)
+#define OX03C10_GAIN_S_MIN		(OX03C10_AGAIN_MIN * OX03C10_DGAIN_MIN / 0x10000)
+#define OX03C10_GAIN_L_MIN		(OX03C10_GAIN_S_MIN * OX03C10_L2S_RATIO / 0x10000)
+
+#define OX03C10_EXPOSURE_LINES_MIN	4
+#define OX03C10_EXPOSURE_LINES_VS_MAX	4
+#define OX03C10_EXPOSURE_LINES_VS_MIN	0
+
+#define OX03C10_AGAIN_RANGE_1_MASK	0xFF000U
+#define OX03C10_AGAIN_RANGE_2_MASK	0xFE000U
+#define OX03C10_AGAIN_RANGE_3_MASK	0xFC000U
+#define OX03C10_AGAIN_RANGE_4_MASK	0xF8000U
+#define OX03C10_DGAIN_MASK		0xFFFC0U
+
+#define OX03C10_AGAIN_RANGE_1_MIN	0x10000U
+#define OX03C10_AGAIN_RANGE_1_MAX	0x20000U
+#define OX03C10_AGAIN_RANGE_2_MIN	OX03C10_AGAIN_RANGE_1_MAX
+#define OX03C10_AGAIN_RANGE_2_MAX	0x40000U
+#define OX03C10_AGAIN_RANGE_3_MIN	OX03C10_AGAIN_RANGE_2_MAX
+#define OX03C10_AGAIN_RANGE_3_MAX	0x80000U
+
+#define OX03C10_CTRL_AGAIN_MIN		((OX03C10_AGAIN_MIN * OX03C10_GAIN_CONV_RATIO) >> 16)
+#define OX03C10_CTRL_AGAIN_MAX		((OX03C10_AGAIN_MAX * OX03C10_GAIN_CONV_RATIO) >> 16)
+
+#ifdef USE_OFFSET_M
+#define OFFSET_M 0xEE /* U10.10 for 0.232621227534758f */
+#else
+#define OFFSET_M 0x00
+#endif
+#define OFFSET_VS 0x2EB /* U10.10 for 0.729738894540522f */
 
 #define OX03C10_PWL_LUT_SIZE		132
 
@@ -82,9 +126,6 @@ static const struct ox03c10_reg {
 	{ 0x4211, 0xff }, { 0x421e, 0x02 }, { 0x421f, 0x45 }, { 0x4220, 0xe1 }, { 0x4221, 0x05 },
 	{ 0x4301, 0x0f }, { 0x4307, 0x03 }, { 0x4308, 0x13 }, { 0x430a, 0x13 }, { 0x430d, 0x93 },
 	{ 0x430e, 0x14 }, { 0x430f, 0x17 }, { 0x4310, 0x95 }, { 0x4311, 0x16 }, { 0x4316, 0x00 },
-	{ 0x3208, 0x04 }, { 0x3501, 0x02 }, { 0x3508, 0x05 }, { 0x3541, 0x02 }, { 0x3548, 0x05 },
-	{ 0x3588, 0x05 }, { 0x35C1, 0x02 }, { 0x35C8, 0x05 }, { 0x483E, 0x02 }, { 0x4D2A, 0x02 },
-	{ 0x5280, 0x08 }, { 0x5480, 0x08 }, { 0x5680, 0x08 }, { 0x5880, 0x0A }, { 0x3208, 0x14 },
 	{ 0x4317, 0x28 }, { 0x4319, 0x01 }, { 0x431a, 0x00 }, { 0x431b, 0x00 }, { 0x431d, 0x2a },
 	{ 0x431e, 0x11 }, { 0x431f, 0x30 }, { 0x4320, 0x19 }, { 0x4323, 0x80 }, { 0x4324, 0x00 },
 	{ 0x4503, 0x4e }, { 0x4505, 0x00 }, { 0x4509, 0x00 }, { 0x450a, 0x00 }, { 0x4580, 0xf8 },
@@ -335,6 +376,12 @@ static const struct ox03c10_reg {
 	{ 0x3881, 0x34 }, { 0x3882, 0x02 }, { 0x3883, 0x8a }, { 0x388e, 0x01 }, { 0x388f, 0x00 },
 	{ 0x3892, 0x44 }, { 0x3826, 0x00 },
 
+	/* Declaring the registers to be included in the embedded data */
+	{ 0x3208, 0x04 }, { 0x350e, 0x02 }, { 0x3514, 0x02 }, { 0x3518, 0x03 }, { 0x354e, 0x02 },
+	{ 0x3554, 0x02 }, { 0x3558, 0x03 }, { 0x3594, 0x02 }, { 0x3598, 0x03 }, { 0x35ce, 0x02 },
+	{ 0x35d4, 0x02 }, { 0x35d8, 0x03 }, { 0x483E, 0x02 }, { 0x4D2A, 0x02 }, { 0x5280, 0x08 },
+	{ 0x5480, 0x08 }, { 0x5680, 0x08 }, { 0x5880, 0x0A }, { 0x3208, 0x14 },
+
 	{ 0x431c, 0x6e }, { 0x0100, 0x00 },
 };
 
@@ -368,23 +415,124 @@ static struct ox03c10_mode ox03c10_modes[] = {
 	},
 };
 
+static inline u32 ox03c10_get_dbl_row_time_ns(u32 hts_pixels)
+{
+	/*
+	 * According to the specifications, dbl_row_time = HTS / SCLK, where HTS is the horizontal
+	 * time size, measured in SCLK cycles and SCLK is the system clock. However, we can easily
+	 * derive the row_time from the mode.
+	 * For example:
+	 *  * using HTS/SCLK: HTS=3012 cycles and SCLK = 62MHz => dbl_row_time = 48.58us
+	 *  * using the mode where hts is 2186 pixels and the pixel clock is 90MHz:
+	 *      dbl_row_time = 2 * hts / 90000000 = 48.58us
+	 */
+
+	return 2 * (u64)hts_pixels * NSEC_PER_SEC / OX03C10_PIXEL_RATE;
+}
+
+static u32 ox03c10_us_to_dbl_rows(struct ox03c10_mode *mode, u32 exposure_us)
+{
+	u32 dbl_row_time_ns = ox03c10_get_dbl_row_time_ns(mode->hts);
+
+	return (exposure_us * 1000 + dbl_row_time_ns / 2) / dbl_row_time_ns;
+}
+
+static u32 ox03c10_dbl_rows_to_us(struct ox03c10_mode *mode, u32 exposure_in_dbl_rows)
+{
+	u32 dbl_row_time_ns = ox03c10_get_dbl_row_time_ns(mode->hts);
+
+	return (exposure_in_dbl_rows * dbl_row_time_ns) / 1000;
+}
+
+static u32 ox03c10_calc_additional_gain(struct ox03c10_mode *mode, u32 exposure_us,
+					u32 exposure_in_dbl_rows)
+{
+	u32 dbl_row_time_ns = ox03c10_get_dbl_row_time_ns(mode->hts);
+	const u64 exposure_ns = exposure_us * 1000;
+	const u64 exposure_dbl_rows_ns = exposure_in_dbl_rows * dbl_row_time_ns;
+
+	return (exposure_ns * 0x100U + exposure_dbl_rows_ns / 2) / exposure_dbl_rows_ns;
+}
+
+static u32 ox03c10_distribute_again(u32 gain, u32 min_gain, u32 max_gain, u32 *dgain)
+{
+	u64 tmp_gain;
+	u64 current_dgain = *dgain;
+	u32 res_gain = gain;
+
+	if (max_gain < res_gain) {
+		tmp_gain = res_gain;
+		res_gain = max_gain;
+		/* Carry overflow gain into digitalGain */
+		current_dgain = (tmp_gain * current_dgain) / res_gain;
+	} else {
+		/* Should not enter here, fractional gain is bad, but just for completeness sake */
+		if (min_gain > res_gain)
+			res_gain = min_gain;
+	}
+
+	tmp_gain = res_gain;
+
+	/* Select appropriate mask for Analog gain. See page 42 of data sheet */
+	if (res_gain <= OX03C10_AGAIN_RANGE_1_MAX)
+		res_gain = res_gain & OX03C10_AGAIN_RANGE_1_MASK;
+	else if (res_gain <= OX03C10_AGAIN_RANGE_2_MAX)
+		res_gain = res_gain & OX03C10_AGAIN_RANGE_2_MASK;
+	else if (res_gain <= OX03C10_AGAIN_RANGE_3_MAX)
+		res_gain = res_gain & OX03C10_AGAIN_RANGE_3_MASK;
+	else
+		res_gain = res_gain & OX03C10_AGAIN_RANGE_4_MASK;
+
+	/* Attempt to carry masked gain into digital */
+	*dgain = (u32)((current_dgain * tmp_gain + res_gain / 2U) / res_gain);
+
+	return res_gain;
+}
+
+static u32 ox03c10_distribute_dgain(u32 gain, u32 min_gain, u32 max_gain)
+{
+	gain = clamp_t(u32, gain, min_gain, max_gain);
+
+	/* Mask gain to valid settings */
+	return gain & OX03C10_DGAIN_MASK;
+}
+
 static int ox03c10_exposure_set(struct ox03c10 *sensor, struct ox03c10_exposure *exp)
 {
 	int ret = 0;
 	u8 buf[2];
 
+	if (exp->dcg != sensor->exposure.dcg) {
+		buf[0] = (exp->dcg >> 8) & 0xff;
+		buf[1] = exp->dcg & 0xff;
+		ret |= regmap_bulk_write(sensor->rmap, OX03C10_AEC_HCG_CTRL_01, buf, 2);
+	}
+
+	if (exp->spd != sensor->exposure.spd) {
+		buf[0] = (exp->spd >> 8) & 0xff;
+		buf[1] = exp->spd & 0xff;
+		ret |= regmap_bulk_write(sensor->rmap, OX03C10_AEC_SPD_CTRL_01, buf, 2);
+	}
+
+	if (exp->vs != sensor->exposure.vs) {
+		buf[0] = (exp->vs >> 8) & 0xff;
+		buf[1] = exp->vs & 0xff;
+		ret |= regmap_bulk_write(sensor->rmap, OX03C10_AEC_VS_CTRL_01, buf, 2);
+	}
+
+	sensor->exposure = *exp;
+
+	return ret ? -EIO : 0;
+}
+
+static int ox03c10_exposure_set_gh(struct ox03c10 *sensor, struct ox03c10_exposure *exp)
+{
+	int ret = 0;
+
 	if (sensor->streaming)
 		ret |= regmap_write(sensor->rmap, OX03C10_GRP_HOLD_8, 0x00); /* set group hold 0 */
 
-	buf[0] = (exp->dcg >> 8) & 0xff;
-	buf[1] = exp->dcg & 0xff;
-	ret |= regmap_bulk_write(sensor->rmap, OX03C10_AEC_HCG_CTRL_01, buf, 2);
-	buf[0] = (exp->spd >> 8) & 0xff;
-	buf[1] = exp->spd & 0xff;
-	ret |= regmap_bulk_write(sensor->rmap, OX03C10_AEC_SPD_CTRL_01, buf, 2);
-	buf[0] = (exp->vs >> 8) & 0xff;
-	buf[1] = exp->vs & 0xff;
-	ret |= regmap_bulk_write(sensor->rmap, OX03C10_AEC_VS_CTRL_01, buf, 2);
+	ret |= ox03c10_exposure_set(sensor, exp);
 
 	if (sensor->streaming) {
 		ret |= regmap_write(sensor->rmap, OX03C10_GRP_HOLD_8, 0x10); /* end group hold 0 */
@@ -399,25 +547,47 @@ static int ox03c10_analogue_gain_set(struct ox03c10 *sensor, struct ox03c10_anal
 	int ret = 0;
 	u8 buf[2];
 
-	if (sensor->streaming)
-		ret |= regmap_write(sensor->rmap, OX03C10_GRP_HOLD_8, 0x01); /* set group hold 1 */
+	if (gain->hcg != sensor->again.hcg) {
+		buf[0] = (gain->hcg >> 4) & 0xf;
+		buf[1] = (gain->hcg & 0xf) << 4;
+		ret |= regmap_bulk_write(sensor->rmap, OX03C10_AEC_HCG_CTRL_08, buf, 2);
+	}
 
-	buf[0] = (gain->hcg >> 4) & 0xf;
-	buf[1] = (gain->hcg & 0xf) << 4;
-	ret |= regmap_bulk_write(sensor->rmap, OX03C10_AEC_HCG_CTRL_08, buf, 2);
-	buf[0] = (gain->spd >> 4) & 0xf;
-	buf[1] = (gain->spd & 0xf) << 4;
-	ret |= regmap_bulk_write(sensor->rmap, OX03C10_AEC_SPD_CTRL_08, buf, 2);
-	buf[0] = (gain->lcg >> 4) & 0xf;
-	buf[1] = (gain->lcg & 0xf) << 4;
-	ret |= regmap_bulk_write(sensor->rmap, OX03C10_AEC_LCG_CTRL_08, buf, 2);
-	buf[0] = (gain->vs >> 4) & 0xf;
-	buf[1] = (gain->vs & 0xf) << 4;
-	ret |= regmap_bulk_write(sensor->rmap, OX03C10_AEC_VS_CTRL_08, buf, 2);
+	if (gain->spd != sensor->again.spd) {
+		buf[0] = (gain->spd >> 4) & 0xf;
+		buf[1] = (gain->spd & 0xf) << 4;
+		ret |= regmap_bulk_write(sensor->rmap, OX03C10_AEC_SPD_CTRL_08, buf, 2);
+	}
+
+	if (gain->lcg != sensor->again.lcg) {
+		buf[0] = (gain->lcg >> 4) & 0xf;
+		buf[1] = (gain->lcg & 0xf) << 4;
+		ret |= regmap_bulk_write(sensor->rmap, OX03C10_AEC_LCG_CTRL_08, buf, 2);
+	}
+
+	if (gain->vs != sensor->again.vs) {
+		buf[0] = (gain->vs >> 4) & 0xf;
+		buf[1] = (gain->vs & 0xf) << 4;
+		ret |= regmap_bulk_write(sensor->rmap, OX03C10_AEC_VS_CTRL_08, buf, 2);
+	}
+
+	sensor->again = *gain;
+
+	return ret ? -EIO : 0;
+}
+
+static int ox03c10_analogue_gain_set_gh(struct ox03c10 *sensor, struct ox03c10_analog_gain *gain)
+{
+	int ret = 0;
+
+	if (sensor->streaming)
+		ret |= regmap_write(sensor->rmap, OX03C10_GRP_HOLD_8, 0x00); /* set group hold 0 */
+
+	ret |= ox03c10_analogue_gain_set(sensor, gain);
 
 	if (sensor->streaming) {
-		ret |= regmap_write(sensor->rmap, OX03C10_GRP_HOLD_8, 0x11); /* end group hold 1 */
-		ret |= regmap_write(sensor->rmap, OX03C10_GRP_HOLD_8, 0xE1); /* quick launch */
+		ret |= regmap_write(sensor->rmap, OX03C10_GRP_HOLD_8, 0x10); /* end group hold 0 */
+		ret |= regmap_write(sensor->rmap, OX03C10_GRP_HOLD_8, 0xE0); /* quick launch */
 	}
 
 	return ret ? -EIO : 0;
@@ -428,38 +598,183 @@ static int ox03c10_digital_gain_set(struct ox03c10 *sensor, struct ox03c10_digit
 	int ret = 0;
 	u8 buf[3];
 
-	if (sensor->streaming)
-		ret |= regmap_write(sensor->rmap, OX03C10_GRP_HOLD_8, 0x02); /* set group hold 2 */
+	if (gain->hcg != sensor->dgain.hcg) {
+		buf[0] = (gain->hcg >> 10) & 0xf;
+		buf[1] = (gain->hcg >> 2) & 0xff;
+		buf[2] = (gain->hcg & 0x3) << 6;
+		ret |= regmap_bulk_write(sensor->rmap, OX03C10_AEC_HCG_CTRL_0A, buf, 3);
+	}
 
-	buf[0] = (gain->hcg >> 10) & 0xf;
-	buf[1] = (gain->hcg >> 2) & 0xff;
-	buf[2] = (gain->hcg & 0x3) << 6;
-	ret |= regmap_bulk_write(sensor->rmap, OX03C10_AEC_HCG_CTRL_0A, buf, 3);
-	buf[0] = (gain->spd >> 10) & 0xf;
-	buf[1] = (gain->spd >> 2) & 0xff;
-	buf[2] = (gain->spd & 0x3) << 6;
-	ret |= regmap_bulk_write(sensor->rmap, OX03C10_AEC_SPD_CTRL_0A, buf, 3);
-	buf[0] = (gain->lcg >> 10) & 0xf;
-	buf[1] = (gain->lcg >> 2) & 0xff;
-	buf[2] = (gain->lcg & 0x3) << 6;
-	ret |= regmap_bulk_write(sensor->rmap, OX03C10_AEC_LCG_CTRL_0A, buf, 3);
-	buf[0] = (gain->vs >> 10) & 0xf;
-	buf[1] = (gain->vs >> 2) & 0xff;
-	buf[2] = (gain->vs & 0x3) << 6;
-	ret |= regmap_bulk_write(sensor->rmap, OX03C10_AEC_VS_CTRL_0A, buf, 3);
+	if (gain->spd != sensor->dgain.spd) {
+		buf[0] = (gain->spd >> 10) & 0xf;
+		buf[1] = (gain->spd >> 2) & 0xff;
+		buf[2] = (gain->spd & 0x3) << 6;
+		ret |= regmap_bulk_write(sensor->rmap, OX03C10_AEC_SPD_CTRL_0A, buf, 3);
+	}
+
+	if (gain->lcg != sensor->dgain.lcg) {
+		buf[0] = (gain->lcg >> 10) & 0xf;
+		buf[1] = (gain->lcg >> 2) & 0xff;
+		buf[2] = (gain->lcg & 0x3) << 6;
+		ret |= regmap_bulk_write(sensor->rmap, OX03C10_AEC_LCG_CTRL_0A, buf, 3);
+	}
+
+	if (gain->vs != sensor->dgain.vs) {
+		buf[0] = (gain->vs >> 10) & 0xf;
+		buf[1] = (gain->vs >> 2) & 0xff;
+		buf[2] = (gain->vs & 0x3) << 6;
+		ret |= regmap_bulk_write(sensor->rmap, OX03C10_AEC_VS_CTRL_0A, buf, 3);
+	}
+
+	sensor->dgain = *gain;
+
+	return ret ? -EIO : 0;
+}
+
+static int ox03c10_digital_gain_set_gh(struct ox03c10 *sensor, struct ox03c10_digital_gain *gain)
+{
+	int ret = 0;
+
+	if (sensor->streaming)
+		ret |= regmap_write(sensor->rmap, OX03C10_GRP_HOLD_8, 0x00); /* set group hold 0 */
+
+	ret |= ox03c10_digital_gain_set(sensor, gain);
 
 	if (sensor->streaming) {
-		ret |= regmap_write(sensor->rmap, OX03C10_GRP_HOLD_8, 0x12); /* end group hold 2 */
-		ret |= regmap_write(sensor->rmap, OX03C10_GRP_HOLD_8, 0xE2); /* quick launch */
+		ret |= regmap_write(sensor->rmap, OX03C10_GRP_HOLD_8, 0x10); /* end group hold 0 */
+		ret |= regmap_write(sensor->rmap, OX03C10_GRP_HOLD_8, 0xE0); /* quick launch */
 	}
 
 	return ret ? -EIO : 0;
 }
 
+static int ox03c10_exposure_and_gains_update(struct ox03c10 *sensor, s32 exposure,
+					     s32 again, s32 dgain)
+{
+	u64 total_exposure_l, total_exposure_l_rows;
+	u32 exposure_us, exposure_dcg, exposure_vs;
+	u64 again_hcg, again_lcg, again_vs;
+	u32 dgain_hcg, dgain_lcg, dgain_vs;
+	struct ox03c10_exposure computed_exposure;
+	struct ox03c10_analog_gain computed_again;
+	struct ox03c10_digital_gain computed_dgain;
+	u64 add_gain;
+	int ret = 0;
+
+	if (sensor->streaming)
+		ret |= regmap_write(sensor->rmap, OX03C10_GRP_HOLD_8, 0x00); /* set group hold 0 */
+
+	/* save the current exposure and gains values */
+	sensor->exposure_input = exposure;
+	sensor->again_input = again;
+	sensor->dgain_input = dgain;
+
+	/*
+	 * According to specifications, the exposure and gains registers' values are in double-rows.
+	 * From here on, the algorithm uses exposure in double-rows to perform the adjustments.
+	 */
+	exposure_us = ox03c10_dbl_rows_to_us(sensor->cur_mode, exposure / 2);
+
+	exposure_dcg = exposure / 2;
+	again_hcg = (u64)again * dgain / 0x10000;
+
+	if (again_hcg < OX03C10_GAIN_L_MIN) {
+		dev_dbg(sensor->dev, "Gain below minimum (0x%llx < 0x%lx). Value adjusted.\n",
+			again_hcg, OX03C10_GAIN_L_MIN);
+
+		total_exposure_l = exposure_us * 1000 * again_hcg;
+		again_hcg = OX03C10_GAIN_L_MIN;
+		exposure_us = total_exposure_l / (1000 * again_hcg);
+		exposure_dcg = ox03c10_us_to_dbl_rows(sensor->cur_mode, exposure_us);
+
+		if (exposure_dcg < OX03C10_EXPOSURE_LINES_MIN)
+			exposure_dcg = OX03C10_EXPOSURE_LINES_MIN;
+	}
+
+	add_gain = ox03c10_calc_additional_gain(sensor->cur_mode, exposure_us, exposure_dcg);
+	again_hcg = (again_hcg * add_gain + 256 / 2) / 256;
+
+	if (again_hcg < OX03C10_GAIN_L_MIN)
+		again_hcg = OX03C10_GAIN_L_MIN;
+
+	again_lcg = again_hcg * 0x10000 / OX03C10_L2S_RATIO;
+	exposure_vs = OX03C10_EXPOSURE_LINES_VS_MAX; /* default to max */
+
+	total_exposure_l_rows = again_hcg * ((u64)exposure_dcg * 0x400 + OFFSET_M);
+	again_vs = total_exposure_l_rows * 0x10000 /
+				(OX03C10_L2VS_RATIO * ((u64)exposure_vs * 0x400 + OFFSET_M));
+
+	if (again_vs < OX03C10_GAIN_VS_MIN) {
+		again_vs = OX03C10_GAIN_VS_MIN;
+		exposure_vs = total_exposure_l_rows * 0x10000 /
+							(OX03C10_L2VS_RATIO * again_vs * 0x400);
+
+		if (exposure_vs <= OX03C10_EXPOSURE_LINES_VS_MIN)
+			exposure_vs = OX03C10_EXPOSURE_LINES_VS_MIN;
+
+		again_vs = total_exposure_l_rows * 0x10000 /
+				(OX03C10_L2VS_RATIO * ((u64)exposure_vs * 0x400 + OFFSET_VS));
+		if (again_vs < OX03C10_GAIN_VS_MIN) {
+			exposure_vs = exposure_vs * again_vs / 0x10000;
+
+			if (exposure_vs <= OX03C10_EXPOSURE_LINES_VS_MIN)
+				exposure_vs = OX03C10_EXPOSURE_LINES_VS_MIN;
+
+			again_vs = total_exposure_l_rows * 0x10000 /
+				(OX03C10_L2VS_RATIO * ((u64)exposure_vs * 0x400 + OFFSET_VS));
+		}
+	}
+
+	computed_exposure.dcg = exposure_dcg;
+	computed_exposure.spd = 0x04; /* using default */
+	computed_exposure.vs = exposure_vs;
+
+	ret |= ox03c10_exposure_set(sensor, &computed_exposure);
+
+	dgain_hcg = OX03C10_DGAIN_MIN;
+	dgain_lcg = OX03C10_DGAIN_MIN;
+	dgain_vs = OX03C10_DGAIN_MIN;
+
+	again_hcg = (again_hcg * 0x10000) / (((u64)dgain_hcg * OX03C10_GAIN_CONV_RATIO) / 0x10000);
+	again_lcg = (again_lcg * 0x10000) / dgain_lcg;
+	again_vs = (again_vs * 0x10000) / dgain_vs;
+
+	again_hcg = ox03c10_distribute_again(again_hcg, OX03C10_AGAIN_MIN,
+					     OX03C10_AGAIN_MAX, &dgain_hcg);
+	again_lcg = ox03c10_distribute_again(again_lcg, OX03C10_AGAIN_MIN,
+					     OX03C10_AGAIN_MAX, &dgain_lcg);
+	again_vs = ox03c10_distribute_again(again_vs, OX03C10_AGAIN_MIN,
+					    OX03C10_AGAIN_MAX, &dgain_vs);
+
+	computed_again.hcg = again_hcg >> 12;
+	computed_again.lcg = again_lcg >> 12;
+	computed_again.spd = 0x10; /* use the default */
+	computed_again.vs = again_vs >> 12;
+
+	ret |= ox03c10_analogue_gain_set(sensor, &computed_again);
+
+	dgain_hcg = ox03c10_distribute_dgain(dgain_hcg, OX03C10_DGAIN_MIN, OX03C10_DGAIN_MAX);
+	dgain_lcg = ox03c10_distribute_dgain(dgain_lcg, OX03C10_DGAIN_MIN, OX03C10_DGAIN_MAX);
+	dgain_vs = ox03c10_distribute_dgain(dgain_vs, OX03C10_DGAIN_MIN, OX03C10_DGAIN_MAX);
+
+	computed_dgain.hcg = dgain_hcg >> 6;
+	computed_dgain.lcg = dgain_lcg >> 6;
+	computed_dgain.spd = 0x400; /* use the default */
+	computed_dgain.vs = dgain_vs >> 6;
+
+	ret |= ox03c10_digital_gain_set(sensor, &computed_dgain);
+
+	if (sensor->streaming) {
+		ret |= regmap_write(sensor->rmap, OX03C10_GRP_HOLD_8, 0x10); /* end group hold 0 */
+		ret |= regmap_write(sensor->rmap, OX03C10_GRP_HOLD_8, 0xE0); /* quick launch */
+	}
+
+	return ret;
+}
+
 static int ox03c10_wb_gain_set(struct ox03c10 *sensor, struct ox03c10_wb_capture_gain *wb_gain)
 {
 	int i, ret = 0;
-	struct ox03c10_wb_capture_gain *gain;
 	u8 buf[8];
 	u16 base_addr[4] = {
 		OX03C10_AWB_GAIN_HCG_0,
@@ -468,25 +783,34 @@ static int ox03c10_wb_gain_set(struct ox03c10 *sensor, struct ox03c10_wb_capture
 		OX03C10_AWB_GAIN_VS_0
 	};
 
-	if (sensor->streaming)
-		ret |= regmap_write(sensor->rmap, OX03C10_GRP_HOLD_8, 0x03); /* set group hold 3 */
-
-	for (i = 0, gain = wb_gain + i * sizeof(struct ox03c10_wb_capture_gain); i < 4; i++) {
-		buf[0] = (gain->b >> 8) & 0xff;
-		buf[1] = gain->b & 0xff;
-		buf[2] = (gain->gb >> 8) & 0xff;
-		buf[3] = gain->gb & 0xff;
-		buf[4] = (gain->gr >> 8) & 0xff;
-		buf[5] = gain->gr & 0xff;
-		buf[6] = (gain->r >> 8) & 0xff;
-		buf[7] = gain->r & 0xff;
+	for (i = 0; i < 4; i++, wb_gain++) {
+		buf[0] = (wb_gain->b >> 8) & 0xff;
+		buf[1] = wb_gain->b & 0xff;
+		buf[2] = (wb_gain->gb >> 8) & 0xff;
+		buf[3] = wb_gain->gb & 0xff;
+		buf[4] = (wb_gain->gr >> 8) & 0xff;
+		buf[5] = wb_gain->gr & 0xff;
+		buf[6] = (wb_gain->r >> 8) & 0xff;
+		buf[7] = wb_gain->r & 0xff;
 
 		ret |= regmap_bulk_write(sensor->rmap, base_addr[i], buf, 8);
 	}
 
+	return ret ? -EIO : 0;
+}
+
+static int ox03c10_wb_gain_set_gh(struct ox03c10 *sensor, struct ox03c10_wb_capture_gain *wb_gain)
+{
+	int ret = 0;
+
+	if (sensor->streaming)
+		ret |= regmap_write(sensor->rmap, OX03C10_GRP_HOLD_8, 0x00); /* set group hold 0 */
+
+	ret |= ox03c10_wb_gain_set(sensor, wb_gain);
+
 	if (sensor->streaming) {
-		ret |= regmap_write(sensor->rmap, OX03C10_GRP_HOLD_8, 0x13); /* end group hold 3 */
-		ret |= regmap_write(sensor->rmap, OX03C10_GRP_HOLD_8, 0xE3); /* quick launch */
+		ret |= regmap_write(sensor->rmap, OX03C10_GRP_HOLD_8, 0x10); /* end group hold 3 */
+		ret |= regmap_write(sensor->rmap, OX03C10_GRP_HOLD_8, 0xE0); /* quick launch */
 	}
 
 	return ret ? -EIO : 0;
@@ -542,16 +866,29 @@ static int ox03c10_s_ctrl(struct v4l2_ctrl *ctrl)
 
 	switch (ctrl->id) {
 	case V4L2_CID_OX03C10_EXPOSURE:
-		return ox03c10_exposure_set(sensor, ctrl->p_new.p);
+		return ox03c10_exposure_set_gh(sensor, ctrl->p_new.p);
+
+	case V4L2_CID_EXPOSURE:
+		return ox03c10_exposure_and_gains_update(sensor, ctrl->val,
+							 sensor->again_input,
+							 sensor->dgain_input);
 
 	case V4L2_CID_OX03C10_ANALOGUE_GAIN:
-		return ox03c10_analogue_gain_set(sensor, ctrl->p_new.p);
+		return ox03c10_analogue_gain_set_gh(sensor, ctrl->p_new.p);
+
+	case V4L2_CID_ANALOGUE_GAIN:
+		return ox03c10_exposure_and_gains_update(sensor, sensor->exposure_input,
+							 ctrl->val, sensor->dgain_input);
 
 	case V4L2_CID_OX03C10_DIGITAL_GAIN:
-		return ox03c10_digital_gain_set(sensor, ctrl->p_new.p);
+		return ox03c10_digital_gain_set_gh(sensor, ctrl->p_new.p);
+
+	case V4L2_CID_DIGITAL_GAIN:
+		return ox03c10_exposure_and_gains_update(sensor, sensor->exposure_input,
+							 sensor->again_input, ctrl->val);
 
 	case V4L2_CID_OX03C10_WB_GAIN:
-		return ox03c10_wb_gain_set(sensor, ctrl->p_new.p);
+		return ox03c10_wb_gain_set_gh(sensor, ctrl->p_new.p);
 
 	case V4L2_CID_OX03C10_PWL_EN:
 		return ox03c10_pwl_enable(sensor, ctrl->val);
@@ -574,7 +911,7 @@ static int ox03c10_otp_correction_get(struct ox03c10 *sensor, void *ret_values)
 {
 	struct ox03c10_otp_correction *otp = ret_values;
 	int ret;
-	u8 reg_val[3];
+	u8 reg_val[3] = {0};
 
 	ret = regmap_bulk_read(sensor->rmap, 0x7057, reg_val, 3);
 	otp->val1 = (reg_val[0] << 16) | (reg_val[1] << 8) | reg_val[2];
@@ -607,8 +944,122 @@ static void ox03c10_ctrl_type_op_log(const struct v4l2_ctrl *ctrl)
 	/* no logging yet */
 }
 
+static struct ox03c10_exposure ox03c10_initial_exposure;
+static struct ox03c10_analog_gain ox03c10_initial_analog_gain;
+static struct ox03c10_digital_gain ox03c10_initial_digital_gain;
+static struct ox03c10_wb_capture_gain ox03c10_initial_wb_capture_gain[4];
+static struct ox03c10_pwl_ctrl ox03c10_initial_pwl_ctrl;
+static u8 ox03c10_initial_pwl_knee_points_lut[OX03C10_PWL_LUT_SIZE];
+
+static int ox03c10_get_initial_params(struct ox03c10 *sensor)
+{
+	u16 wb_base_addr[4] = {
+		OX03C10_AWB_GAIN_HCG_0,
+		OX03C10_AWB_GAIN_LCG_0,
+		OX03C10_AWB_GAIN_SPD_0,
+		OX03C10_AWB_GAIN_VS_0,
+	};
+	int ret = 0;
+	u8 buf[8];
+	int i;
+
+	/* get initial exposure */
+	ret |= regmap_bulk_read(sensor->rmap, OX03C10_AEC_HCG_CTRL_01, buf, 2);
+	ox03c10_initial_exposure.dcg = buf[0] << 8 | buf[1];
+	ret |= regmap_bulk_read(sensor->rmap, OX03C10_AEC_SPD_CTRL_01, buf, 2);
+	ox03c10_initial_exposure.spd = buf[0] << 8 | buf[1];
+	ret |= regmap_bulk_read(sensor->rmap, OX03C10_AEC_VS_CTRL_01, buf, 2);
+	ox03c10_initial_exposure.vs = buf[0] << 8 | buf[1];
+
+	/* get initial analog gains */
+	ret |= regmap_bulk_read(sensor->rmap, OX03C10_AEC_HCG_CTRL_08, buf, 2);
+	ox03c10_initial_analog_gain.hcg = ((buf[0] & 0xf) << 4) | ((buf[1] & 0xf0) >> 4);
+	ret |= regmap_bulk_read(sensor->rmap, OX03C10_AEC_SPD_CTRL_08, buf, 2);
+	ox03c10_initial_analog_gain.spd = ((buf[0] & 0xf) << 4) | ((buf[1] & 0xf0) >> 4);
+	ret |= regmap_bulk_read(sensor->rmap, OX03C10_AEC_LCG_CTRL_08, buf, 2);
+	ox03c10_initial_analog_gain.lcg = ((buf[0] & 0xf) << 4) | ((buf[1] & 0xf0) >> 4);
+	ret |= regmap_bulk_read(sensor->rmap, OX03C10_AEC_VS_CTRL_08, buf, 2);
+	ox03c10_initial_analog_gain.vs = ((buf[0] & 0xf) << 4) | ((buf[1] & 0xf0) >> 4);
+
+	/* get initial digital gains */
+	ret |= regmap_bulk_read(sensor->rmap, OX03C10_AEC_HCG_CTRL_0A, buf, 3);
+	ox03c10_initial_digital_gain.hcg = ((buf[0] & 0xf) << 10) | (buf[1] << 2) |
+					   ((buf[2] & 0x3) >> 6);
+	ret |= regmap_bulk_read(sensor->rmap, OX03C10_AEC_SPD_CTRL_0A, buf, 3);
+	ox03c10_initial_digital_gain.spd = ((buf[0] & 0xf) << 10) | (buf[1] << 2) |
+					   ((buf[2] & 0x3) >> 6);
+	ret |= regmap_bulk_read(sensor->rmap, OX03C10_AEC_LCG_CTRL_0A, buf, 3);
+	ox03c10_initial_digital_gain.lcg = ((buf[0] & 0xf) << 10) | (buf[1] << 2) |
+					   ((buf[2] & 0x3) >> 6);
+	ret |= regmap_bulk_read(sensor->rmap, OX03C10_AEC_VS_CTRL_0A, buf, 3);
+	ox03c10_initial_digital_gain.vs = ((buf[0] & 0xf) << 10) | (buf[1] << 2) |
+					  ((buf[2] & 0x3) >> 6);
+
+	/* get initial white balance settings */
+	for (i = 0; i < 4; i++) {
+		ret |= regmap_bulk_read(sensor->rmap, wb_base_addr[i], buf, 8);
+		ox03c10_initial_wb_capture_gain[i].b  = (buf[0] << 8) | buf[1];
+		ox03c10_initial_wb_capture_gain[i].gb = (buf[2] << 8) | buf[3];
+		ox03c10_initial_wb_capture_gain[i].gr = (buf[4] << 8) | buf[5];
+		ox03c10_initial_wb_capture_gain[i].r  = (buf[6] << 8) | buf[7];
+	}
+
+	/* get initial PWL control params */
+	ret |= regmap_bulk_read(sensor->rmap, OX03C10_FORMAT_REG_1F, buf, 1);
+	ox03c10_initial_pwl_ctrl.pack24bit_sel = (buf[0] & 0xc0) >> 6;
+	ox03c10_initial_pwl_ctrl.pwl_mode = (buf[0] & 0x18) >> 3;
+
+	/* get initial PWL knee points LUT */
+	ret |= regmap_bulk_read(sensor->rmap, OX03C10_PWL0_0_1,
+				ox03c10_initial_pwl_knee_points_lut, OX03C10_PWL_LUT_SIZE);
+
+	return ret ? -EIO : 0;
+}
+
+static void ox03c10_v4l2_ctrl_type_op_init(const struct v4l2_ctrl *ctrl, u32 from_idx,
+					   union v4l2_ctrl_ptr ptr)
+{
+	u32 tot_elems = ctrl->elems;
+	u32 elems = tot_elems - from_idx;
+
+	if (from_idx >= elems)
+		return;
+
+	switch (ctrl->id) {
+	case V4L2_CID_OX03C10_EXPOSURE:
+		memcpy(ptr.p, &ox03c10_initial_exposure, sizeof(ox03c10_initial_exposure));
+		break;
+
+	case V4L2_CID_OX03C10_ANALOGUE_GAIN:
+		memcpy(ptr.p, &ox03c10_initial_analog_gain, sizeof(ox03c10_initial_analog_gain));
+		break;
+
+	case V4L2_CID_OX03C10_DIGITAL_GAIN:
+		memcpy(ptr.p, &ox03c10_initial_digital_gain, sizeof(ox03c10_initial_digital_gain));
+		break;
+
+	case V4L2_CID_OX03C10_WB_GAIN:
+		memcpy(ptr.p, &ox03c10_initial_wb_capture_gain,
+		       sizeof(ox03c10_initial_wb_capture_gain));
+		break;
+
+	case V4L2_CID_OX03C10_PWL_CTRL:
+		memcpy(ptr.p, &ox03c10_initial_pwl_ctrl, sizeof(ox03c10_initial_pwl_ctrl));
+		break;
+
+	case V4L2_CID_OX03C10_PWL_KNEE_POINTS_LUT:
+		memcpy(ptr.p, &ox03c10_initial_pwl_knee_points_lut,
+		       sizeof(ox03c10_initial_pwl_knee_points_lut));
+		break;
+
+	default:
+		v4l2_ctrl_type_op_init(ctrl, from_idx, ptr);
+		break;
+	}
+}
+
 static const struct v4l2_ctrl_type_ops ox03c10_ctrl_type_ops = {
-	.init		= v4l2_ctrl_type_op_init,
+	.init		= ox03c10_v4l2_ctrl_type_op_init,
 	.validate	= v4l2_ctrl_type_op_validate,
 	.equal		= v4l2_ctrl_type_op_equal,
 	.log		= ox03c10_ctrl_type_op_log,
@@ -671,7 +1122,7 @@ static const struct v4l2_ctrl_config ox03c10_ctrl_cfgs[] = {
 		.min		= false,
 		.max		= true,
 		.step		= 1,
-		.def		= false,
+		.def		= true,
 	},
 	{
 		.ops		= &ox03c10_ctrl_ops,
@@ -717,6 +1168,7 @@ int ox03c10_v4l2_controls_init(struct ox03c10 *sensor)
 	struct device *dev = &sensor->client->dev;
 	struct v4l2_ctrl_handler *ctrl_handler = &sensor->ctrl_handler;
 	struct v4l2_fwnode_device_properties props;
+	u32 exposure_max;
 	int i;
 	u16 hblank, vblank;
 	int ret;
@@ -726,6 +1178,21 @@ int ox03c10_v4l2_controls_init(struct ox03c10 *sensor)
 		dev_err(dev, "Cannot initialize V4L2 ctrl handler.\n");
 		return ret;
 	}
+
+	exposure_max = sensor->cur_mode->vts - 24;
+	v4l2_ctrl_new_std(ctrl_handler, &ox03c10_ctrl_ops, V4L2_CID_EXPOSURE, OX03C10_EXPOSURE_MIN,
+			  exposure_max, 1, OX03C10_EXPOSURE_MIN);
+	sensor->exposure_input = OX03C10_EXPOSURE_MIN;
+
+	v4l2_ctrl_new_std(ctrl_handler, &ox03c10_ctrl_ops, V4L2_CID_ANALOGUE_GAIN,
+			  OX03C10_CTRL_AGAIN_MIN, OX03C10_CTRL_AGAIN_MAX, 1,
+			  OX03C10_CTRL_AGAIN_MIN);
+	sensor->again_input = OX03C10_AGAIN_MIN;
+
+	v4l2_ctrl_new_std(ctrl_handler, &ox03c10_ctrl_ops, V4L2_CID_DIGITAL_GAIN,
+			  OX03C10_DGAIN_MIN, OX03C10_DGAIN_MAX, 1,
+			  OX03C10_DGAIN_MIN);
+	sensor->dgain_input = OX03C10_DGAIN_MIN;
 
 	v4l2_ctrl_new_std(ctrl_handler, &ox03c10_ctrl_ops, V4L2_CID_PIXEL_RATE,
 			  OX03C10_PIXEL_RATE, OX03C10_PIXEL_RATE, 1, OX03C10_PIXEL_RATE);
@@ -788,7 +1255,7 @@ int ox03c10_streaming_start(struct ox03c10 *sensor, bool start)
 		/* Wait a maximum of 1 time frame. Worst case is 33.33ms. */
 		msleep(34);
 	} else {
-		ret |= regmap_write(sensor->rmap, OX03C10_SMIA_R0100, 1);
+		ret = regmap_write(sensor->rmap, OX03C10_SMIA_R0100, 1);
 	}
 
 	sensor->streaming = start;
@@ -812,17 +1279,30 @@ static int ox03c10_sensor_init(struct ox03c10 *sensor)
 	for (i = 0; i < ARRAY_SIZE(ox03c10_init_data); i++) {
 		reg = &ox03c10_init_data[i];
 
+		/*
+		 * Re-enable the cache after the embedded data registers ranges have been set.
+		 */
+		if (reg->addr == OX03C10_GRP_HOLD_8 && (reg->val == 0x14 || reg->val == 0x15))
+			regcache_cache_bypass(sensor->rmap, false);
+
 		ret = regmap_write(sensor->rmap, reg->addr, reg->val);
 		if (ret < 0) {
 			dev_err(&sensor->client->dev, "Failed to write addr 0x%04x with 0x%02x\n",
 				reg->addr, reg->val);
 			return ret;
 		}
+
+		/*
+		 * Make sure we bypass the cache when setting address ranges for embedded data.
+		 * Otherwise, our cache will hold a range instead of the actual value...
+		 */
+		if (reg->addr == OX03C10_GRP_HOLD_8 && (reg->val == 0x04 || reg->val == 0x05))
+			regcache_cache_bypass(sensor->rmap, true);
 	}
 
 	sensor->cur_mode = &ox03c10_modes[0];
 
-	return 0;
+	return ox03c10_get_initial_params(sensor);
 }
 
 struct ox03c10 *ox03c10_init_with_dummy_client(struct i2c_client *client,

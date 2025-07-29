@@ -36,6 +36,8 @@
 
  @Description   FM frame replicator
 *//***************************************************************************/
+#define __ERR_MODULE__ MODULE_FM_PCD
+
 #include "std_ext.h"
 #include "error_ext.h"
 #include "string_ext.h"
@@ -643,7 +645,7 @@ void  FrmReplicGroupUpdateOwner(t_Handle                   h_ReplicGroup,
     }
 }
 
-t_Error FrmReplicGroupTryLock(t_Handle h_ReplicGroup)
+static t_Error FrmReplicGroupTryLock(t_Handle h_ReplicGroup)
 {
     t_FmPcdFrmReplicGroup *p_ReplicGroup = (t_FmPcdFrmReplicGroup *)h_ReplicGroup;
 
@@ -655,7 +657,7 @@ t_Error FrmReplicGroupTryLock(t_Handle h_ReplicGroup)
     return ERROR_CODE(E_BUSY);
 }
 
-void FrmReplicGroupUnlock(t_Handle h_ReplicGroup)
+static void FrmReplicGroupUnlock(t_Handle h_ReplicGroup)
 {
     t_FmPcdFrmReplicGroup *p_ReplicGroup = (t_FmPcdFrmReplicGroup *)h_ReplicGroup;
 

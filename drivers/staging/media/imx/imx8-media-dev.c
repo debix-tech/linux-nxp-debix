@@ -622,7 +622,7 @@ static const struct v4l2_async_notifier_operations sd_async_notifier_ops = {
 	.complete = subdev_notifier_complete,
 };
 
-void mxc_sensor_notify(struct v4l2_subdev *sd, unsigned int notification,
+static void mxc_sensor_notify(struct v4l2_subdev *sd, unsigned int notification,
 		       void *arg)
 {
 }
@@ -723,7 +723,7 @@ mxc_md_parse_pcsi_entity(struct mxc_md *mxc_md, struct device_node *node)
 	return pcsidev;
 }
 
-struct mxc_hdmi_rx_info*
+static struct mxc_hdmi_rx_info*
 mxc_md_parse_hdmi_rx_entity(struct mxc_md *mxc_md, struct device_node *node)
 {
 	struct mxc_hdmi_rx_info *hdmi_rx;
@@ -1069,7 +1069,7 @@ static int mxc_md_probe(struct platform_device *pdev)
 	mxc_md->parallel_csi = of_property_read_bool(nd, "parallel_csi");
 
 	/* register media device  */
-	strlcpy(mxc_md->media_dev.model, "FSL Capture Media Device",
+	strscpy(mxc_md->media_dev.model, "FSL Capture Media Device",
 		sizeof(mxc_md->media_dev.model));
 	mxc_md->media_dev.ops = &mxc_md_ops;
 	mxc_md->media_dev.dev = dev;
@@ -1078,7 +1078,7 @@ static int mxc_md_probe(struct platform_device *pdev)
 	v4l2_dev = &mxc_md->v4l2_dev;
 	v4l2_dev->mdev = &mxc_md->media_dev;
 	v4l2_dev->notify = mxc_sensor_notify;
-	strlcpy(v4l2_dev->name, "mx8-img-md", sizeof(v4l2_dev->name));
+	strscpy(v4l2_dev->name, "mx8-img-md", sizeof(v4l2_dev->name));
 
 	media_device_init(&mxc_md->media_dev);
 
@@ -1138,12 +1138,12 @@ clean_md:
 	return ret;
 }
 
-static int mxc_md_remove(struct platform_device *pdev)
+static void mxc_md_remove(struct platform_device *pdev)
 {
 	struct mxc_md *mxc_md = platform_get_drvdata(pdev);
 
 	if (!mxc_md)
-		return 0;
+		return;
 
 	v4l2_async_nf_unregister(&mxc_md->subdev_notifier);
 	v4l2_async_nf_cleanup(&mxc_md->subdev_notifier);
@@ -1152,8 +1152,6 @@ static int mxc_md_remove(struct platform_device *pdev)
 	mxc_md_unregister_entities(mxc_md);
 	media_device_unregister(&mxc_md->media_dev);
 	media_device_cleanup(&mxc_md->media_dev);
-
-	return 0;
 }
 
 static const struct of_device_id mxc_md_of_match[] = {

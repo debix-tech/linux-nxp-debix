@@ -35,12 +35,9 @@
 
 /* lpi2c4 work as a lpi2c master bus */
 &lpi2c4 {
-	#address-cells = <1>;
-	#size-cells = <0>;
 	clock-frequency = <400000>;
-	pinctrl-names = "default", "sleep";
+	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpi2c4>;
-	pinctrl-1 = <&pinctrl_lpi2c4>;
 	status = "okay";
 
 };
@@ -51,12 +48,9 @@
  * at 7 bit address 0x64 on lpi2c6.
  */
 &lpi2c6 {
-	#address-cells = <1>;
-	#size-cells = <0>;
 	clock-frequency = <400000>;
-	pinctrl-names = "default", "sleep";
+	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpi2c6>;
-	pinctrl-1 = <&pinctrl_lpi2c6>;
 	status = "okay";
 
 	eeprom@64 {
@@ -68,11 +62,10 @@
 /* lpspi3 work as a master bus */
 &lpspi3 {
 	fsl,spi-num-chipselects = <1>;
-	pinctrl-names = "default", "sleep";
+	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpspi3>;
-	pinctrl-1 = <&pinctrl_lpspi3>;
 	cs-gpios = <&gpio2 8 GPIO_ACTIVE_LOW>;
-	pinctrl-assert-gpios = <&adp5585gpio 4 GPIO_ACTIVE_HIGH>;
+	pinctrl-assert-gpios = <&adp5585 4 GPIO_ACTIVE_HIGH>;
 	status = "okay";
 
 	spidev0: spi@0 {
@@ -86,9 +79,8 @@
 &lpspi5 {
 	#address-cells = <0>;
 	fsl,spi-num-chipselects = <1>;
-	pinctrl-names = "default", "sleep";
+	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpspi5>;
-	pinctrl-1 = <&pinctrl_lpspi5>;
 	status = "okay";
 
 	spi-slave;

@@ -36,6 +36,8 @@
 
  @Description   FM PCD ...
 *//***************************************************************************/
+#define __ERR_MODULE__ MODULE_FM_PCD
+
 #include <linux/math64.h>
 #include "std_ext.h"
 #include "error_ext.h"
@@ -119,11 +121,7 @@ t_Handle PrsConfig(t_FmPcd *p_FmPcd,t_FmPcdParams *p_FmPcdParams)
     return p_FmPcdPrs;
 }
 
-#if ((DPAA_VERSION == 10) && defined(FM_CAPWAP_SUPPORT))
-    static uint8_t             swPrsPatch[] = SW_PRS_UDP_LITE_PATCH;
-#else
-    static uint8_t             swPrsPatch[] = SW_PRS_OFFLOAD_PATCH;
-#endif /* FM_CAPWAP_SUPPORT */
+static uint8_t swPrsPatch[] = SW_PRS_OFFLOAD_PATCH;
 
 t_Error PrsInit(t_FmPcd *p_FmPcd)
 {

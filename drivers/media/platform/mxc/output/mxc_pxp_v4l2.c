@@ -310,7 +310,6 @@ static int pxp_set_fbinfo(struct pxps *pxp)
 static int _get_cur_fb_blank(struct pxps *pxp)
 {
 	struct fb_info *fbi;
-	mm_segment_t old_fs;
 	int err = 0;
 
 	err = _get_fbinfo(&fbi);
@@ -318,11 +317,8 @@ static int _get_cur_fb_blank(struct pxps *pxp)
 		return err;
 
 	if (fbi->fbops->fb_ioctl) {
-		old_fs = get_fs();
-		set_fs(KERNEL_DS);
 		err = fbi->fbops->fb_ioctl(fbi, MXCFB_GET_FB_BLANK,
 				(unsigned int)(&pxp->fb_blank));
-		set_fs(old_fs);
 	}
 
 	return err;
@@ -564,6 +560,9 @@ static int pxp_s_fmt_video_output(struct file *file, void *fh,
 	ret = pxp_try_fmt_video_output(file, fh, f);
 	if (ret == 0) {
 		pxp->s0_fmt = pxp_get_format(f);
+		if (!pxp->s0_fmt)
+			return -EINVAL;
+
 		pxp->pxp_conf.s0_param.pixel_fmt =
 			v4l2_fmt_to_pxp_fmt(pxp->s0_fmt->fourcc);
 		pxp->pxp_conf.s0_param.width = pf->width;
@@ -941,7 +940,7 @@ static int pxp_querycap(struct file *file, void *fh,
 	memset(cap, 0, sizeof(*cap));
 	strcpy(cap->driver, "pxp");
 	strcpy(cap->card, "pxp");
-	strlcpy(cap->bus_info, dev_name(&pxp->pdev->dev),
+	strscpy(cap->bus_info, dev_name(&pxp->pdev->dev),
 		sizeof(cap->bus_info));
 
 	cap->version = (PXP_DRIVER_MAJOR << 8) + PXP_DRIVER_MINOR;
@@ -1095,7 +1094,7 @@ static int pxp_s_ctrl(struct file *file, void *priv,
 	return -EINVAL;
 }
 
-void pxp_release(struct video_device *vfd)
+static void pxp_release(struct video_device *vfd)
 {
 	struct pxps *pxp = video_get_drvdata(vfd);
 
@@ -1302,7 +1301,7 @@ freeirq:
 	return err;
 }
 
-static int pxp_remove(struct platform_device *pdev)
+static void pxp_remove(struct platform_device *pdev)
 {
 	struct pxps *pxp = platform_get_drvdata(pdev);
 	struct v4l2_device *v4l2_dev = pxp->vdev->v4l2_dev;
@@ -1315,8 +1314,6 @@ static int pxp_remove(struct platform_device *pdev)
 	free_dma_buf(pxp, &pxp->outbuf);
 
 	kfree(pxp);
-
-	return 0;
 }
 
 static struct platform_driver pxp_driver = {

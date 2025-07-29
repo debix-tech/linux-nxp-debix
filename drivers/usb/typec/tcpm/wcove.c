@@ -535,7 +535,7 @@ static irqreturn_t wcove_typec_irq(int irq, void *data)
 				goto err;
 			}
 
-			tcpm_pd_receive(wcove->tcpm, &msg);
+			tcpm_pd_receive(wcove->tcpm, &msg, TCPC_TX_SOP);
 
 			ret = regmap_read(wcove->regmap, USBC_RXSTATUS,
 					  &status);
@@ -618,10 +618,6 @@ static int wcove_typec_probe(struct platform_device *pdev)
 	wcove->regmap = pmic->regmap;
 
 	irq = platform_get_irq(pdev, 0);
-	if (irq < 0)
-		return irq;
-
-	irq = regmap_irq_get_virq(pmic->irq_chip_data_chgr, irq);
 	if (irq < 0)
 		return irq;
 

@@ -269,7 +269,6 @@ struct memac_cfg {
 	bool reset_on_init;
 	bool pause_ignore;
 	bool promiscuous_mode_enable;
-	struct fixed_phy_status *fixed_link;
 	u16 max_frame_length;
 	u16 pause_quanta;
 	u32 tx_ipg_length;
@@ -593,18 +592,17 @@ static int memac_accept_rx_pause_frames(struct fman_mac *memac, bool en)
 	return 0;
 }
 
-static void memac_validate(struct phylink_config *config,
-			   unsigned long *supported,
-			   struct phylink_link_state *state)
+static unsigned long memac_get_caps(struct phylink_config *config,
+				    phy_interface_t interface)
 {
 	struct fman_mac *memac = fman_config_to_mac(config)->fman_mac;
 	unsigned long caps = config->mac_capabilities;
 
-	if (phy_interface_mode_is_rgmii(state->interface) &&
+	if (phy_interface_mode_is_rgmii(interface) &&
 	    memac->rgmii_no_half_duplex)
 		caps &= ~(MAC_10HD | MAC_100HD);
 
-	phylink_validate_mask_caps(supported, state, caps);
+	return caps;
 }
 
 /**
@@ -745,7 +743,7 @@ static void memac_link_down(struct phylink_config *config, unsigned int mode,
 }
 
 static const struct phylink_mac_ops memac_mac_ops = {
-	.validate = memac_validate,
+	.mac_get_caps = memac_get_caps,
 	.mac_select_pcs = memac_select_pcs,
 	.mac_config = memac_mac_config,
 	.mac_link_up = memac_link_up,
@@ -1068,14 +1066,12 @@ static int memac_get_default_pcs(struct mac_device *mac_dev,
 int memac_initialization(struct mac_device *mac_dev,
 			 struct fman_mac_params *params)
 {
+	struct fwnode_handle	*mac_fwnode = dev_fwnode(mac_dev->dev);
 	int			 err;
 	struct fman_mac		*memac;
 	unsigned long		 capabilities;
 	unsigned long		*supported;
 	struct phy		*serdes = NULL;
-	struct device		*dev = mac_dev->dev;
-	struct fwnode_handle	*mac_fwnode = dev->fwnode;
-	struct fwnode_handle	*fixed;
 
 	/* The internal connection to the serdes is XGMII, but this isn't
 	 * really correct for the phy mode (which is the external connection).
@@ -1209,18 +1205,15 @@ int memac_initialization(struct mac_device *mac_dev,
 		memac->rgmii_no_half_duplex = true;
 
 	/* Most boards should use MLO_AN_INBAND, but existing boards don't have
-	 * a managed property. Default to MLO_AN_INBAND if nothing else is
-	 * specified. We need to be careful and not enable this if we have a
-	 * fixed link or if we are using MII or RGMII, since those
-	 * configurations modes don't use in-band autonegotiation.
+	 * a managed property. Default to MLO_AN_INBAND rather than MLO_AN_PHY.
+	 * Phylink will allow this to be overriden by a fixed link. We need to
+	 * be careful and not enable this if we are using MII or RGMII, since
+	 * those configurations modes don't use in-band autonegotiation.
 	 */
-	fixed = fwnode_get_named_child_node(mac_fwnode, "fixed-link");
-	if (!fixed && !fwnode_property_read_bool(mac_fwnode, "fixed-link") &&
-	    !fwnode_property_read_bool(mac_fwnode, "managed") &&
+	if (!fwnode_property_read_bool(mac_fwnode, "managed") &&
 	    mac_dev->phy_if != PHY_INTERFACE_MODE_MII &&
 	    !phy_interface_mode_is_rgmii(mac_dev->phy_if))
-		mac_dev->phylink_config.ovr_an_inband = true;
-	fwnode_handle_put(fixed);
+		mac_dev->phylink_config.default_an_inband = true;
 
 	err = memac_init(mac_dev->fman_mac);
 	if (err < 0)

@@ -83,7 +83,7 @@
 #define FTS_DRIVER_VERSION					"FocalTech V4.1 20230424"
 #define _FT3518								0x35180481
 #define FTS_CHIP_TYPE	_FT3518
-#define FTS_DRIVER_NAME						"fts_ts"
+#define FTS_DRIVER_NAME						"fts_ft3518u"
 #define FTS_MAX_POINTS_SUPPORT				10 /* constant value, can't be changed */
 #define FTS_MAX_KEYS						4
 #define FTS_KEY_DIM							10

@@ -26,8 +26,8 @@
 #include <linux/mutex.h>
 #include <linux/of_device.h>
 
-#include "cdns-mhdp-hdcp.h"
 #include "cdns-hdcp-common.h"
+#include "cdns-mhdp-hdcp.h"
 
 #define CDNS_DP_HPD_POLL_DWN_LOOP	5
 #define CDNS_DP_HPD_POLL_DWN_DLY_US	200
@@ -256,7 +256,7 @@ static void cdns_dp_mode_set(struct cdns_mhdp_device *mhdp)
 	return;
 }
 
-void cdns_dp_handle_hpd_irq(struct cdns_mhdp_device *mhdp)
+static void cdns_dp_handle_hpd_irq(struct cdns_mhdp_device *mhdp)
 {
 	u8 status[6];
 
@@ -306,19 +306,14 @@ static int cdns_dp_connector_get_modes(struct drm_connector *connector)
 	struct cdns_mhdp_device *mhdp = container_of(connector,
 					struct cdns_mhdp_device, connector.base);
 	int num_modes = 0;
-	struct edid *edid;
+	const struct drm_edid *drm_edid;
 
-	edid = drm_do_get_edid(&mhdp->connector.base,
-				   cdns_mhdp_get_edid_block, mhdp);
-	if (edid) {
-		DRM_DEBUG_DRIVER("%x,%x,%x,%x,%x,%x,%x,%x\n",
-				 edid->header[0], edid->header[1],
-				 edid->header[2], edid->header[3],
-				 edid->header[4], edid->header[5],
-				 edid->header[6], edid->header[7]);
-		drm_connector_update_edid_property(connector, edid);
-		num_modes = drm_add_edid_modes(connector, edid);
-		kfree(edid);
+	drm_edid = drm_edid_read_custom(&mhdp->connector.base,
+					cdns_mhdp_get_edid_block, mhdp);
+	if (drm_edid) {
+		drm_edid_connector_update(connector, drm_edid);
+		num_modes = drm_edid_connector_add_modes(connector);
+		drm_edid_free(drm_edid);
 	}
 
 	if (num_modes == 0)

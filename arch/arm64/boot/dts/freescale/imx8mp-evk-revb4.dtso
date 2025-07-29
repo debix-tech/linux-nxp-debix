@@ -16,6 +16,8 @@
 
 	sound-wm8962 {
 		compatible = "fsl,imx-audio-wm8962";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_hpdet>;
 		model = "wm8962-audio";
 		audio-cpu = <&sai3>;
 		audio-codec = <&wm8962>;
@@ -32,7 +34,7 @@
 	};
 };
 
-&codec {
+&wm8960 {
 	status = "disabled";
 };
 

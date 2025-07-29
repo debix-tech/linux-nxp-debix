@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright 2021-2023 NXP
+ * Copyright 2021-2024 NXP
 
  * Portions of the code are derived from below files:
 	* drivers/net/ethernet/stmicro/stmmac/stmmac_main.c
@@ -8,6 +8,7 @@
  */
 
 #include <linux/kernel.h>
+#include <linux/of_device.h>
 #include <linux/of_platform.h>
 #include <linux/uio_driver.h>
 #include <linux/pm_runtime.h>
@@ -257,18 +258,31 @@ imx_dwmac_parse_dt(struct imx_priv_data *dwmac, struct device *dev)
 
 static void stmmac_fpe_link_state_handle(struct stmmac_priv *priv, bool is_up)
 {
-	struct stmmac_fpe_cfg *fpe_cfg = priv->plat->fpe_cfg;
-	enum stmmac_fpe_state *lo_state = &fpe_cfg->lo_fpe_state;
-	enum stmmac_fpe_state *lp_state = &fpe_cfg->lp_fpe_state;
-	bool *hs_enable = &fpe_cfg->hs_enable;
+	struct stmmac_fpe_cfg *fpe_cfg = &priv->fpe_cfg;
+	unsigned long flags;
 
-	if (is_up && *hs_enable) {
-		stmmac_fpe_send_mpacket(priv, priv->ioaddr, fpe_cfg,
-					MPACKET_VERIFY);
+	timer_shutdown_sync(&fpe_cfg->verify_timer);
+
+	spin_lock_irqsave(&fpe_cfg->lock, flags);
+
+	if (is_up && fpe_cfg->pmac_enabled) {
+		/* VERIFY process requires pmac enabled when NIC comes up */
+		stmmac_fpe_configure(priv, priv->ioaddr, fpe_cfg,
+				     priv->plat->tx_queues_to_use,
+				     priv->plat->rx_queues_to_use,
+				     false, true);
+
+		/* New link => maybe new partner => new verification process */
+		stmmac_fpe_apply(priv);
 	} else {
-		*lo_state = FPE_STATE_OFF;
-		*lp_state = FPE_STATE_OFF;
+		/* No link => turn off EFPE */
+		stmmac_fpe_configure(priv, priv->ioaddr, fpe_cfg,
+				     priv->plat->tx_queues_to_use,
+				     priv->plat->rx_queues_to_use,
+				     false, false);
 	}
+
+	spin_unlock_irqrestore(&fpe_cfg->lock, flags);
 }
 
 static void stmmac_mac_link_down(struct phylink_config *config,
@@ -405,7 +419,6 @@ static struct phylink_pcs *stmmac_mac_select_pcs(struct phylink_config *config,
 }
 
 static const struct phylink_mac_ops stmmac_phylink_mac_ops = {
-	.validate = phylink_generic_validate,
 	.mac_select_pcs = stmmac_mac_select_pcs,
 	.mac_link_down = stmmac_mac_link_down,
 	.mac_link_up = stmmac_mac_link_up,
@@ -422,8 +435,8 @@ static int stmmac_phy_setup(struct stmmac_priv *priv)
 	priv->phylink_config.dev = &priv->dev->dev;
 	priv->phylink_config.type = PHYLINK_NETDEV;
 	if (priv->plat->mdio_bus_data)
-		priv->phylink_config.ovr_an_inband =
-			mdio_bus_data->xpcs_an_inband;
+		priv->phylink_config.default_an_inband=
+			mdio_bus_data->default_an_inband;
 
 	/* Set the platform/firmware specified interface mode */
 	__set_bit(mode, priv->phylink_config.supported_interfaces);
@@ -711,7 +724,7 @@ static int enet_qos_probe(struct platform_device *pdev)
 	if (!dwmac)
 		return -ENOMEM;
 
-	plat_dat = stmmac_probe_config_dt(pdev, stmmac_res.mac);
+	plat_dat = devm_stmmac_probe_config_dt(pdev, stmmac_res.mac);
 	if (IS_ERR(plat_dat))
 		return PTR_ERR(plat_dat);
 
@@ -719,7 +732,7 @@ static int enet_qos_probe(struct platform_device *pdev)
 	if (!data) {
 		dev_err(&pdev->dev, "failed to get match data\n");
 		ret = -EINVAL;
-		goto err_match_data;
+		goto err_parse_dt;
 	}
 
 	dwmac->ops = data;
@@ -759,8 +772,6 @@ err_dwmac_init:
 	imx_dwmac_clks_config(dwmac, false);
 err_clks_config:
 err_parse_dt:
-err_match_data:
-	stmmac_remove_config_dt(pdev, plat_dat);
 	return ret;
 }
 
@@ -1479,7 +1490,7 @@ failed_kzalloc:
 	return ret;
 }
 
-static int
+static void 
 fec_enet_uio_remove(struct platform_device *pdev)
 {
 	struct net_device *ndev = platform_get_drvdata(pdev);
@@ -1509,15 +1520,19 @@ fec_enet_uio_remove(struct platform_device *pdev)
 	free_netdev(ndev);
 	dev_info(fec_dev->dev, "\"%s\" successfully removed \n",
 		 fec_dev->info.name);
-
-	return 0;
 }
 
 static int
 fec_enet_uio_probe(struct platform_device *pdev)
 {
-	const char *comp_str = of_get_property(pdev->dev.of_node, "compatible", NULL);
+	const char *comp_str;
 	int ret;
+
+	comp_str = of_get_property(pdev->dev.of_node, "compatible", NULL);
+	if (!comp_str) {
+		dev_err(&pdev->dev, "Ethernet compatible is missing.\n");
+		return -EINVAL;
+	}
 
 	/* This is for the ENET-QOS ethernet (i.MX8MP & i.MX93 supported)*/
 	if (!strcmp(comp_str, "fsl,imx-enet-qos")) {

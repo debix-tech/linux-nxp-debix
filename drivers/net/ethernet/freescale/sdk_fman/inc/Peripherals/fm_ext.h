@@ -161,11 +161,6 @@ typedef _Packed struct t_FmPrsResult {
 #define FM_FD_ERR_IPR                   (0x00200000 | FM_FD_IPR)    /**< IPR error */
 #define FM_FD_ERR_IPR_TO                (0x00300000 | FM_FD_IPR)    /**< IPR timeout */
 
-#ifdef FM_CAPWAP_SUPPORT
-#define FM_FD_ERR_CRE                   0x00200000
-#define FM_FD_ERR_CHE                   0x00100000
-#endif /* FM_CAPWAP_SUPPORT */
-
 #define FM_FD_ERR_PHYSICAL              0x00080000  /**< Rx FIFO overflow, FCS error, code error, running disparity
                                                          error (SGMII and TBI modes), FIFO parity error. PHY
                                                          Sequence error, PHY error control character detected. */
@@ -400,8 +395,7 @@ typedef struct t_FmBufferPrefixContent {
                                          if write optimization is used, must be >= 16. */
     uint8_t     manipExtraSpace;    /**< Maximum extra size needed (insertion-size minus removal-size);
                                          Note that this field impacts the size of the buffer-prefix
-                                         (i.e. it pushes the data offset);
-                                         This field is irrelevant if DPAA_VERSION==10 */
+                                         (i.e. it pushes the data offset); */
 } t_FmBufferPrefixContent;
 
 /**************************************************************************//**
@@ -454,10 +448,8 @@ typedef struct t_FmBufPoolDepletion {
     bool        poolsToConsiderForSingleMode[BM_MAX_NUM_OF_POOLS];
                                                     /**< For each pool, TRUE if it should be considered for
                                                          depletion (Note - this pool must be used by this port!) */
-#if (DPAA_VERSION >= 11)
     bool        pfcPrioritiesEn[FM_MAX_NUM_OF_PFC_PRIORITIES];
                                                     /**< This field is used by the MAC as the Priority Enable Vector in the PFC frame which is transmitted */
-#endif /* (DPAA_VERSION >= 11) */
 } t_FmBufPoolDepletion;
 
 /**************************************************************************//**
@@ -500,15 +492,12 @@ typedef struct t_FmParams {
                                                          Relevant when FM not runs in "guest-mode". */
     t_FmFirmwareParams      firmware;               /**< The firmware parameters structure;
                                                          Relevant when FM not runs in "guest-mode". */
-
-#if (DPAA_VERSION >= 11)
     uintptr_t               vspBaseAddr;            /**< A pointer to base of memory mapped FM VSP registers (virtual);
                                                          i.e. up to 24KB, depending on the specific chip. */
     uint8_t                 partVSPBase;            /**< The first Virtual-Storage-Profile-id dedicated to this partition.
                                                          NOTE: this parameter relevant only when working with multiple partitions. */
     uint8_t                 partNumOfVSPs;          /**< Number of VSPs dedicated to this partition.
                                                          NOTE: this parameter relevant only when working with multiple partitions. */
-#endif /* (DPAA_VERSION >= 11) */
 } t_FmParams;
 
 
@@ -580,16 +569,6 @@ typedef enum e_FmDmaDbgCntMode {
 } e_FmDmaDbgCntMode;
 
 /**************************************************************************//**
- @Description   Enum for selecting DMA Cache Override
-*//***************************************************************************/
-typedef enum e_FmDmaCacheOverride {
-    e_FM_DMA_NO_CACHE_OR = 0,               /**< No override of the Cache field */
-    e_FM_DMA_NO_STASH_DATA,                 /**< Data should not be stashed in system level cache */
-    e_FM_DMA_MAY_STASH_DATA,                /**< Data may be stashed in system level cache */
-    e_FM_DMA_STASH_DATA                     /**< Data should be stashed in system level cache */
-} e_FmDmaCacheOverride;
-
-/**************************************************************************//**
  @Description   Enum for selecting DMA External Bus Priority
 *//***************************************************************************/
 typedef enum e_FmDmaExtBusPri {
@@ -598,31 +577,6 @@ typedef enum e_FmDmaExtBusPri {
     e_FM_DMA_EXT_BUS_SOS,                   /**< AXI sos priority */
     e_FM_DMA_EXT_BUS_EBS_AND_SOS            /**< AXI ebs + sos priority */
 } e_FmDmaExtBusPri;
-
-/**************************************************************************//**
- @Description   Enum for choosing the field that will be output on AID
-*//***************************************************************************/
-typedef enum e_FmDmaAidMode {
-    e_FM_DMA_AID_OUT_PORT_ID = 0,           /**< 4 LSB of PORT_ID */
-    e_FM_DMA_AID_OUT_TNUM                   /**< 4 LSB of TNUM */
-} e_FmDmaAidMode;
-
-/**************************************************************************//**
- @Description   Enum for selecting FPM Catastrophic error behavior
-*//***************************************************************************/
-typedef enum e_FmCatastrophicErr {
-    e_FM_CATASTROPHIC_ERR_STALL_PORT = 0,   /**< Port_ID is stalled (only reset can release it) */
-    e_FM_CATASTROPHIC_ERR_STALL_TASK        /**< Only erroneous task is stalled */
-} e_FmCatastrophicErr;
-
-/**************************************************************************//**
- @Description   Enum for selecting FPM DMA Error behavior
-*//***************************************************************************/
-typedef enum e_FmDmaErr {
-    e_FM_DMA_ERR_CATASTROPHIC = 0,          /**< Dma error is treated as a catastrophic
-                                                 error (e_FmCatastrophicErr)*/
-    e_FM_DMA_ERR_REPORT                     /**< Dma error is just reported */
-} e_FmDmaErr;
 
 /**************************************************************************//**
  @Description   Enum for selecting DMA Emergency level by BMI emergency signal
@@ -756,7 +710,7 @@ t_Error FM_ConfigTotalFifoSize(t_Handle h_Fm, uint32_t totalFifoSize);
                 in the internal driver data base from its default configuration [DEFAULT_cacheOverride]
 
  @Param[in]     h_Fm            A handle to an FM Module.
- @Param[in]     cacheOverride   The selected new value.
+ @Param[in]     cache_override  The selected new value.
 
  @Return        E_OK on success; Error code otherwise.
 
@@ -764,7 +718,8 @@ t_Error FM_ConfigTotalFifoSize(t_Handle h_Fm, uint32_t totalFifoSize);
                 This routine should NOT be called from guest-partition
                 (i.e. guestId != NCSW_MASTER_ID)
 *//***************************************************************************/
-t_Error FM_ConfigDmaCacheOverride(t_Handle h_Fm, e_FmDmaCacheOverride cacheOverride);
+t_Error FM_ConfigDmaCacheOverride(t_Handle h_Fm,
+				  enum fman_dma_cache_override cache_override);
 
 /**************************************************************************//**
  @Function      FM_ConfigDmaAidOverride
@@ -792,7 +747,7 @@ t_Error FM_ConfigDmaAidOverride(t_Handle h_Fm, bool aidOverride);
                 driver data base from its default configuration [DEFAULT_aidMode]
 
  @Param[in]     h_Fm            A handle to an FM Module.
- @Param[in]     aidMode         The selected new value.
+ @Param[in]     aid_mode        The selected new value.
 
  @Return        E_OK on success; Error code otherwise.
 
@@ -800,149 +755,7 @@ t_Error FM_ConfigDmaAidOverride(t_Handle h_Fm, bool aidOverride);
                 This routine should NOT be called from guest-partition
                 (i.e. guestId != NCSW_MASTER_ID)
 *//***************************************************************************/
-t_Error FM_ConfigDmaAidMode(t_Handle h_Fm, e_FmDmaAidMode aidMode);
-
-/**************************************************************************//**
- @Function      FM_ConfigDmaAxiDbgNumOfBeats
-
- @Description   Define DMA AXI number of beats.
-                Calling this routine changes the AXI number of beats in the internal
-                driver data base from its default configuration [DEFAULT_axiDbgNumOfBeats]
-
- @Param[in]     h_Fm                A handle to an FM Module.
- @Param[in]     axiDbgNumOfBeats    The selected new value.
-
- @Return        E_OK on success; Error code otherwise.
-
- @Cautions      Allowed only following FM_Config() and before FM_Init().
-                This routine should NOT be called from guest-partition
-                (i.e. guestId != NCSW_MASTER_ID)
-*//***************************************************************************/
-t_Error FM_ConfigDmaAxiDbgNumOfBeats(t_Handle h_Fm, uint8_t axiDbgNumOfBeats);
-
-/**************************************************************************//**
- @Function      FM_ConfigDmaCamNumOfEntries
-
- @Description   Define number of CAM entries.
-                Calling this routine changes the number of CAM entries in the internal
-                driver data base from its default configuration [DEFAULT_dmaCamNumOfEntries].
-
- @Param[in]     h_Fm            A handle to an FM Module.
- @Param[in]     numOfEntries    The selected new value.
-
- @Return        E_OK on success; Error code otherwise.
-
- @Cautions      Allowed only following FM_Config() and before FM_Init().
-                This routine should NOT be called from guest-partition
-                (i.e. guestId != NCSW_MASTER_ID)
-*//***************************************************************************/
-t_Error FM_ConfigDmaCamNumOfEntries(t_Handle h_Fm, uint8_t numOfEntries);
-
-/**************************************************************************//**
- @Function      FM_ConfigEnableCounters
-
- @Description   Obsolete, always return E_OK.
-
- @Param[in]     h_Fm    A handle to an FM Module.
-
- @Return        E_OK on success; Error code otherwise.
-*//***************************************************************************/
-t_Error FM_ConfigEnableCounters(t_Handle h_Fm);
-
-/**************************************************************************//**
- @Function      FM_ConfigDmaDbgCounter
-
- @Description   Define DMA debug counter.
-                Calling this routine changes the number of the DMA debug counter in the internal
-                driver data base from its default configuration [DEFAULT_dmaDbgCntMode].
-
- @Param[in]     h_Fm                A handle to an FM Module.
- @Param[in]     fmDmaDbgCntMode     An enum selecting the debug counter mode.
-
- @Return        E_OK on success; Error code otherwise.
-
- @Cautions      Allowed only following FM_Config() and before FM_Init().
-                This routine should NOT be called from guest-partition
-                (i.e. guestId != NCSW_MASTER_ID)
-*//***************************************************************************/
-t_Error FM_ConfigDmaDbgCounter(t_Handle h_Fm, e_FmDmaDbgCntMode fmDmaDbgCntMode);
-
-/**************************************************************************//**
- @Function      FM_ConfigDmaStopOnBusErr
-
- @Description   Define bus error behavior.
-                Calling this routine changes the bus error behavior definition
-                in the internal driver data base from its default
-                configuration [DEFAULT_dmaStopOnBusError].
-
- @Param[in]     h_Fm    A handle to an FM Module.
- @Param[in]     stop    TRUE to stop on bus error, FALSE to continue.
-
- @Return        E_OK on success; Error code otherwise.
-
- @Cautions      Allowed only following FM_Config() and before FM_Init().
-                Only if bus error is enabled.
-                This routine should NOT be called from guest-partition
-                (i.e. guestId != NCSW_MASTER_ID)
-*//***************************************************************************/
-t_Error FM_ConfigDmaStopOnBusErr(t_Handle h_Fm, bool stop);
-
-/**************************************************************************//**
- @Function      FM_ConfigDmaEmergency
-
- @Description   Define DMA emergency.
-                Calling this routine changes the DMA emergency definition
-                in the internal driver data base from its default
-                configuration where's it's disabled.
-
- @Param[in]     h_Fm        A handle to an FM Module.
- @Param[in]     p_Emergency An OR mask of all required options.
-
- @Return        E_OK on success; Error code otherwise.
-
- @Cautions      Allowed only following FM_Config() and before FM_Init().
-                This routine should NOT be called from guest-partition
-                (i.e. guestId != NCSW_MASTER_ID)
-*//***************************************************************************/
-t_Error FM_ConfigDmaEmergency(t_Handle h_Fm, t_FmDmaEmergency *p_Emergency);
-
-/**************************************************************************//**
- @Function      FM_ConfigDmaErr
-
- @Description   DMA error treatment.
-                Calling this routine changes the DMA error treatment
-                in the internal driver data base from its default
-                configuration [DEFAULT_dmaErr].
-
- @Param[in]     h_Fm    A handle to an FM Module.
- @Param[in]     dmaErr  The selected new choice.
-
- @Return        E_OK on success; Error code otherwise.
-
- @Cautions      Allowed only following FM_Config() and before FM_Init().
-                This routine should NOT be called from guest-partition
-                (i.e. guestId != NCSW_MASTER_ID)
-*//***************************************************************************/
-t_Error FM_ConfigDmaErr(t_Handle h_Fm, e_FmDmaErr dmaErr);
-
-/**************************************************************************//**
- @Function      FM_ConfigCatastrophicErr
-
- @Description   Define FM behavior on catastrophic error.
-                Calling this routine changes the FM behavior on catastrophic
-                error in the internal driver data base from its default
-                [DEFAULT_catastrophicErr].
-
- @Param[in]     h_Fm                A handle to an FM Module.
- @Param[in]     catastrophicErr     The selected new choice.
-
- @Return        E_OK on success; Error code otherwise.
-
- @Cautions      Allowed only following FM_Config() and before FM_Init().
-                This routine should NOT be called from guest-partition
-                (i.e. guestId != NCSW_MASTER_ID)
-*//***************************************************************************/
-t_Error FM_ConfigCatastrophicErr(t_Handle h_Fm, e_FmCatastrophicErr catastrophicErr);
+t_Error FM_ConfigDmaAidMode(t_Handle h_Fm, enum fman_dma_aid_mode aid_mode);
 
 /**************************************************************************//**
  @Function      FM_ConfigEnableMuramTestMode
@@ -1082,26 +895,6 @@ t_Error FM_ConfigExternalEccRamsEnable(t_Handle h_Fm, bool enable);
                 allowed.
 *//***************************************************************************/
 t_Error FM_ConfigTnumAgingPeriod(t_Handle h_Fm, uint16_t tnumAgingPeriod);
-
-/**************************************************************************//*
- @Function      FM_ConfigDmaEmergencySmoother
-
- @Description   Define DMA emergency smoother.
-                Calling this routine changes the definition of the minimum
-                amount of DATA beats transferred on the AXI READ and WRITE
-                ports before lowering the emergency level.
-                By default smoother is disabled.
-
- @Param[in]     h_Fm            A handle to an FM Module.
- @Param[in]     emergencyCnt    emergency switching counter.
-
- @Return        E_OK on success; Error code otherwise.
-
- @Cautions      Allowed only following FM_Config() and before FM_Init().
-                This routine should NOT be called from guest-partition
-                (i.e. guestId != NCSW_MASTER_ID)
-*//***************************************************************************/
-t_Error FM_ConfigDmaEmergencySmoother(t_Handle h_Fm, uint32_t emergencyCnt);
 
 /**************************************************************************//*
  @Function      FM_ConfigThresholds
@@ -1291,22 +1084,6 @@ typedef enum e_FmDmaMuramPort {
 } e_FmDmaMuramPort;
 
 /**************************************************************************//**
- @Description   Enum for defining FM counters
-*//***************************************************************************/
-typedef enum e_FmCounters {
-    e_FM_COUNTERS_ENQ_TOTAL_FRAME = 0,              /**< QMI total enqueued frames counter */
-    e_FM_COUNTERS_DEQ_TOTAL_FRAME,                  /**< QMI total dequeued frames counter */
-    e_FM_COUNTERS_DEQ_0,                            /**< QMI 0 frames from QMan counter */
-    e_FM_COUNTERS_DEQ_1,                            /**< QMI 1 frames from QMan counter */
-    e_FM_COUNTERS_DEQ_2,                            /**< QMI 2 frames from QMan counter */
-    e_FM_COUNTERS_DEQ_3,                            /**< QMI 3 frames from QMan counter */
-    e_FM_COUNTERS_DEQ_FROM_DEFAULT,                 /**< QMI dequeue from default queue counter */
-    e_FM_COUNTERS_DEQ_FROM_CONTEXT,                 /**< QMI dequeue from FQ context counter */
-    e_FM_COUNTERS_DEQ_FROM_FD,                      /**< QMI dequeue from FD command field counter */
-    e_FM_COUNTERS_DEQ_CONFIRM                       /**< QMI dequeue confirm counter */
-} e_FmCounters;
-
-/**************************************************************************//**
  @Description   A Structure for returning FM revision information
 *//***************************************************************************/
 typedef struct t_FmRevisionInfo {
@@ -1460,7 +1237,7 @@ t_Error FM_GetFmanCtrlCodeRevision(t_Handle h_Fm, t_FmCtrlCodeRevisionInfo *p_Re
                 for enabled counters, and there will be no indication if a
                 disabled counter is accessed.
 *//***************************************************************************/
-uint32_t  FM_GetCounter(t_Handle h_Fm, e_FmCounters counter);
+uint32_t  FM_GetCounter(t_Handle h_Fm, enum fman_counters counter);
 
 /**************************************************************************//**
  @Function      FM_ModifyCounter
@@ -1477,7 +1254,7 @@ uint32_t  FM_GetCounter(t_Handle h_Fm, e_FmCounters counter);
                 This routine should NOT be called from guest-partition
                 (i.e. guestId != NCSW_MASTER_ID)
 *//***************************************************************************/
-t_Error  FM_ModifyCounter(t_Handle h_Fm, e_FmCounters counter, uint32_t val);
+t_Error  FM_ModifyCounter(t_Handle h_Fm, enum fman_counters counter, uint32_t val);
 
 /**************************************************************************//**
  @Function      FM_Resume
@@ -1704,28 +1481,5 @@ t_Handle FM_GetMuramHandle(t_Handle h_Fm);
 /** @} */ /* end of FM_runtime_control_grp group */
 /** @} */ /* end of FM_lib_grp group */
 /** @} */ /* end of FM_grp group */
-
-
-#ifdef NCSW_BACKWARD_COMPATIBLE_API
-typedef t_FmFirmwareParams          t_FmPcdFirmwareParams;
-typedef t_FmBufferPrefixContent     t_FmPortBufferPrefixContent;
-typedef t_FmExtPoolParams           t_FmPortExtPoolParams;
-typedef t_FmExtPools                t_FmPortExtPools;
-typedef t_FmBackupBmPools           t_FmPortBackupBmPools;
-typedef t_FmBufPoolDepletion        t_FmPortBufPoolDepletion;
-typedef e_FmDmaSwapOption           e_FmPortDmaSwapOption;
-typedef e_FmDmaCacheOption          e_FmPortDmaCacheOption;
-
-#define FM_CONTEXTA_GET_OVVERIDE    FM_CONTEXTA_GET_OVERRIDE
-#define FM_CONTEXTA_SET_OVVERIDE    FM_CONTEXTA_SET_OVERRIDE
-
-#define e_FM_EX_BMI_PIPELINE_ECC    e_FM_EX_BMI_STORAGE_PROFILE_ECC
-#define e_FM_PORT_DMA_NO_SWP        e_FM_DMA_NO_SWP
-#define e_FM_PORT_DMA_SWP_PPC_LE    e_FM_DMA_SWP_PPC_LE
-#define e_FM_PORT_DMA_SWP_BE        e_FM_DMA_SWP_BE
-#define e_FM_PORT_DMA_NO_STASH      e_FM_DMA_NO_STASH
-#define e_FM_PORT_DMA_STASH         e_FM_DMA_STASH
-#endif /* NCSW_BACKWARD_COMPATIBLE_API */
-
 
 #endif /* __FM_EXT */

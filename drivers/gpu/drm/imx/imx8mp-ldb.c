@@ -9,6 +9,7 @@
 #include <linux/module.h>
 #include <linux/of_device.h>
 #include <linux/phy/phy.h>
+#include <linux/platform_device.h>
 
 #include <drm/bridge/fsl_imx_ldb.h>
 #include <drm/drm_atomic_helper.h>
@@ -36,7 +37,6 @@ struct imx8mp_ldb_channel {
 	struct ldb_channel base;
 	struct imx8mp_ldb *imx8mp_ldb;
 
-	struct drm_connector connector;
 	struct drm_encoder encoder;
 
 	struct phy *phy;
@@ -44,12 +44,6 @@ struct imx8mp_ldb_channel {
 
 	u32 bus_flags;
 };
-
-static inline struct imx8mp_ldb_channel *
-con_to_imx8mp_ldb_ch(struct drm_connector *c)
-{
-	return container_of(c, struct imx8mp_ldb_channel, connector);
-}
 
 static inline struct imx8mp_ldb_channel *
 enc_to_imx8mp_ldb_ch(struct drm_encoder *e)
@@ -62,15 +56,6 @@ struct imx8mp_ldb {
 	struct imx8mp_ldb_channel channel[LDB_CH_NUM];
 	struct clk *clk_root;
 };
-
-static struct drm_encoder *imx8mp_ldb_connector_best_encoder(
-		struct drm_connector *connector)
-{
-	struct imx8mp_ldb_channel *imx8mp_ldb_ch =
-						con_to_imx8mp_ldb_ch(connector);
-
-	return &imx8mp_ldb_ch->encoder;
-}
 
 static void imx8mp_ldb_encoder_enable(struct drm_encoder *encoder)
 {
@@ -160,9 +145,9 @@ imx8mp_ldb_encoder_atomic_check(struct drm_encoder *encoder,
 	struct imx8mp_ldb_channel *imx8mp_ldb_ch =
 						enc_to_imx8mp_ldb_ch(encoder);
 	struct ldb_channel *ldb_ch = &imx8mp_ldb_ch->base;
-	//struct imx8mp_ldb *imx8mp_ldb = imx8mp_ldb_ch->imx8mp_ldb;
-	//struct ldb *ldb = &imx8mp_ldb->base;
-	//struct drm_display_mode *mode = &crtc_state->adjusted_mode;
+	struct imx8mp_ldb *imx8mp_ldb = imx8mp_ldb_ch->imx8mp_ldb;
+	struct ldb *ldb = &imx8mp_ldb->base;
+	struct drm_display_mode *mode = &crtc_state->adjusted_mode;
 	struct drm_bridge_state *bridge_state = NULL;
 	struct drm_bridge *bridge;
 
@@ -190,13 +175,10 @@ imx8mp_ldb_encoder_atomic_check(struct drm_encoder *encoder,
 	 * Due to limited video PLL frequency points on i.MX8mp,
 	 * we do mode fixup here in case any mode is unsupported.
 	 */
-	/* John_gao some lcd clock less than 74.25MHz
 	if (ldb->dual)
 		mode->clock = mode->clock > 100000 ? 148500 : 74250;
 	else
 		mode->clock = 74250;
-
-		*/
 
 	return 0;
 }
@@ -208,8 +190,8 @@ imx8mp_ldb_encoder_mode_valid(struct drm_encoder *encoder,
 	struct imx8mp_ldb_channel *imx8mp_ldb_ch =
 						enc_to_imx8mp_ldb_ch(encoder);
 	struct ldb_channel *ldb_ch = &imx8mp_ldb_ch->base;
-	//struct imx8mp_ldb *imx8mp_ldb = imx8mp_ldb_ch->imx8mp_ldb;
-	//struct ldb *ldb = &imx8mp_ldb->base;
+	struct imx8mp_ldb *imx8mp_ldb = imx8mp_ldb_ch->imx8mp_ldb;
+	struct ldb *ldb = &imx8mp_ldb->base;
 
 	/* it should be okay with a panel */
 	if (ldb_ch->panel)
@@ -219,28 +201,14 @@ imx8mp_ldb_encoder_mode_valid(struct drm_encoder *encoder,
 	 * Due to limited video PLL frequency points on i.MX8mp,
 	 * we do mode valid check here.
 	 */
-	/* John_gao some lcd clock less than 74.25MHz
 	if (ldb->dual && mode->clock != 74250 && mode->clock != 148500)
 		return MODE_NOCLOCK;
 
 	if (!ldb->dual && mode->clock != 74250)
 		return MODE_NOCLOCK;
-*/
+
 	return MODE_OK;
 }
-
-static const struct drm_connector_funcs imx8mp_ldb_connector_funcs = {
-	.fill_modes = drm_helper_probe_single_connector_modes,
-	.destroy = imx_drm_connector_destroy,
-	.reset = drm_atomic_helper_connector_reset,
-	.atomic_duplicate_state = drm_atomic_helper_connector_duplicate_state,
-	.atomic_destroy_state = drm_atomic_helper_connector_destroy_state,
-};
-
-static const struct drm_connector_helper_funcs
-imx8mp_ldb_connector_helper_funcs = {
-	.best_encoder = imx8mp_ldb_connector_best_encoder,
-};
 
 static const struct drm_encoder_helper_funcs imx8mp_ldb_encoder_helper_funcs = {
 	.atomic_mode_set = imx8mp_ldb_encoder_atomic_mode_set,
@@ -404,10 +372,9 @@ static int imx8mp_ldb_probe(struct platform_device *pdev)
 	return component_add(dev, &imx8mp_ldb_ops);
 }
 
-static int imx8mp_ldb_remove(struct platform_device *pdev)
+static void imx8mp_ldb_remove(struct platform_device *pdev)
 {
 	component_del(&pdev->dev, &imx8mp_ldb_ops);
-	return 0;
 }
 
 #ifdef CONFIG_PM_SLEEP

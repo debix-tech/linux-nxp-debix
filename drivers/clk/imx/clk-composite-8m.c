@@ -240,16 +240,16 @@ struct clk_hw *__imx8m_clk_hw_composite(const char *name,
 {
 	struct clk_hw *hw = ERR_PTR(-ENOMEM), *mux_hw;
 	struct clk_hw *div_hw, *gate_hw = NULL;
-	struct clk_divider *div = NULL;
+	struct clk_divider *div;
 	struct clk_gate *gate = NULL;
-	struct clk_mux *mux = NULL;
+	struct clk_mux *mux;
 	const struct clk_ops *divider_ops;
 	const struct clk_ops *mux_ops;
 	const struct clk_ops *gate_ops;
 
 	mux = kzalloc(sizeof(*mux), GFP_KERNEL);
 	if (!mux)
-		goto fail;
+		return ERR_CAST(hw);
 
 	mux_hw = &mux->hw;
 	mux->reg = reg;
@@ -259,7 +259,7 @@ struct clk_hw *__imx8m_clk_hw_composite(const char *name,
 
 	div = kzalloc(sizeof(*div), GFP_KERNEL);
 	if (!div)
-		goto fail;
+		goto free_mux;
 
 	div_hw = &div->hw;
 	div->reg = reg;
@@ -288,7 +288,7 @@ struct clk_hw *__imx8m_clk_hw_composite(const char *name,
 	/* skip registering the gate ops if M4 is enabled */
 	gate = kzalloc(sizeof(*gate), GFP_KERNEL);
 	if (!gate)
-		goto fail;
+		goto free_div;
 
 	gate_hw = &gate->hw;
 	gate->reg = reg;
@@ -303,13 +303,15 @@ struct clk_hw *__imx8m_clk_hw_composite(const char *name,
 			mux_hw, mux_ops, div_hw,
 			divider_ops, gate_hw, gate_ops, flags);
 	if (IS_ERR(hw))
-		goto fail;
+		goto free_gate;
 
 	return hw;
 
-fail:
+free_gate:
 	kfree(gate);
+free_div:
 	kfree(div);
+free_mux:
 	kfree(mux);
 	return ERR_CAST(hw);
 }

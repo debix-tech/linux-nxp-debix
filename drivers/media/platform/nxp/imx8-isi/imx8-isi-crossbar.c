@@ -3,7 +3,6 @@
  * i.MX8 ISI - Input crossbar switch
  *
  * Copyright (c) 2022 Laurent Pinchart <laurent.pinchart@ideasonboard.com>
- * Copyright 2023 NXP
  */
 
 #include <linux/device.h>
@@ -60,7 +59,7 @@ static int mxc_isi_crossbar_gasket_enable(struct mxc_isi_crossbar *xbar,
 	 * since gasket enable callback be called only once.
 	 */
 	stream = fd.num_entries > 0 ? fd.entry[0].stream : 0;
-	fmt = v4l2_subdev_state_get_stream_format(state, port, stream);
+	fmt = v4l2_subdev_state_get_format(state, port, stream);
 	if (!fmt)
 		return -EINVAL;
 
@@ -162,6 +161,13 @@ mxc_isi_crossbar_xlate_streams(struct mxc_isi_crossbar *xbar,
 	}
 
 	pad = media_pad_remote_pad_first(&xbar->pads[sink_pad]);
+	if (!pad) {
+		dev_err(xbar->isi->dev,
+			"no remote pad found for sink pad %u\n",
+			sink_pad);
+		return ERR_PTR(-EPIPE);
+	}
+
 	sd = media_entity_to_v4l2_subdev(pad->entity);
 	if (!sd) {
 		dev_dbg(xbar->isi->dev,
@@ -222,8 +228,8 @@ static int mxc_isi_create_default_routing(struct mxc_isi_crossbar *xbar,
 	return 0;
 }
 
-static int mxc_isi_crossbar_init_cfg(struct v4l2_subdev *sd,
-				     struct v4l2_subdev_state *state)
+static int mxc_isi_crossbar_init_state(struct v4l2_subdev *sd,
+				       struct v4l2_subdev_state *state)
 {
 	struct mxc_isi_crossbar *xbar = to_isi_crossbar(sd);
 	struct v4l2_subdev_krouting routing = { };
@@ -326,8 +332,7 @@ static int mxc_isi_crossbar_set_fmt(struct v4l2_subdev *sd,
 	 * Set the format on the sink stream and propagate it to the source
 	 * streams.
 	 */
-	sink_fmt = v4l2_subdev_state_get_stream_format(state, fmt->pad,
-						       fmt->stream);
+	sink_fmt = v4l2_subdev_state_get_format(state, fmt->pad, fmt->stream);
 	if (!sink_fmt)
 		return -EINVAL;
 
@@ -341,8 +346,9 @@ static int mxc_isi_crossbar_set_fmt(struct v4l2_subdev *sd,
 		    route->sink_stream != fmt->stream)
 			continue;
 
-		source_fmt = v4l2_subdev_state_get_stream_format(state, route->source_pad,
-								 route->source_stream);
+		source_fmt = v4l2_subdev_state_get_format(state,
+							  route->source_pad,
+							  route->source_stream);
 		if (!source_fmt)
 			return -EINVAL;
 
@@ -373,7 +379,7 @@ static int mxc_isi_get_frame_desc(struct v4l2_subdev *sd, unsigned int pad,
 	for_each_active_route(&state->routing, route) {
 		struct v4l2_mbus_frame_desc_entry *source_entry = NULL;
 		struct v4l2_mbus_frame_desc source_fd;
-		struct v4l2_subdev *remote_sd;
+		struct v4l2_subdev *remote_sd = NULL;
 		struct media_pad *remote_pad;
 		unsigned int i;
 
@@ -381,7 +387,8 @@ static int mxc_isi_get_frame_desc(struct v4l2_subdev *sd, unsigned int pad,
 			continue;
 
 		remote_pad = media_pad_remote_pad_first(&xbar->pads[route->sink_pad]);
-		remote_sd = media_entity_to_v4l2_subdev(remote_pad->entity);
+		if (remote_pad)
+			remote_sd = media_entity_to_v4l2_subdev(remote_pad->entity);
 		if (!remote_sd) {
 			dev_err(dev, "no entity connected to crossbar input %u\n",
 				route->sink_pad);
@@ -540,7 +547,6 @@ static int mxc_isi_crossbar_disable_streams(struct v4l2_subdev *sd,
 }
 
 static const struct v4l2_subdev_pad_ops mxc_isi_crossbar_subdev_pad_ops = {
-	.init_cfg = mxc_isi_crossbar_init_cfg,
 	.enum_mbus_code = mxc_isi_crossbar_enum_mbus_code,
 	.get_fmt = v4l2_subdev_get_fmt,
 	.set_fmt = mxc_isi_crossbar_set_fmt,
@@ -552,6 +558,10 @@ static const struct v4l2_subdev_pad_ops mxc_isi_crossbar_subdev_pad_ops = {
 
 static const struct v4l2_subdev_ops mxc_isi_crossbar_subdev_ops = {
 	.pad = &mxc_isi_crossbar_subdev_pad_ops,
+};
+
+static const struct v4l2_subdev_internal_ops mxc_isi_crossbar_internal_ops = {
+	.init_state = mxc_isi_crossbar_init_state,
 };
 
 static const struct media_entity_operations mxc_isi_cross_entity_ops = {
@@ -606,6 +616,7 @@ int mxc_isi_crossbar_init(struct mxc_isi_dev *isi)
 	xbar->isi = isi;
 
 	v4l2_subdev_init(sd, &mxc_isi_crossbar_subdev_ops);
+	sd->internal_ops = &mxc_isi_crossbar_internal_ops;
 	sd->flags |= V4L2_SUBDEV_FL_HAS_DEVNODE | V4L2_SUBDEV_FL_STREAMS;
 	strscpy(sd->name, "crossbar", sizeof(sd->name));
 	sd->dev = isi->dev;

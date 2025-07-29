@@ -169,6 +169,7 @@ static void imx_pll14xx_calc_settings(struct clk_pll14xx *pll, unsigned long rat
 	 * d) -32768 <= k <= 32767
 	 *
 	 * fvco = (m * 65536 + k) * prate / (p * 65536)
+	 * fout = (m * 65536 + k) * prate / (p * 65536) / (1 << sdiv)
 	 *
 	 * e) 1600MHz <= fvco <= 3200MHz
 	 */

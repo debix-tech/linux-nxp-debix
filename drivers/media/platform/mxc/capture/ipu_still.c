@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /*
  * Copyright 2004-2014 Freescale Semiconductor, Inc. All Rights Reserved.
- * Copyright 2019 NXP
+ * Copyright 2019,2024 NXP
  */
 
 /*!
@@ -240,7 +240,7 @@ EXPORT_SYMBOL(prp_still_deselect);
  *
  * @return  Error code indicating success or failure
  */
-__init int prp_still_init(void)
+static __init int prp_still_init(void)
 {
 	return 0;
 }
@@ -249,7 +249,7 @@ __init int prp_still_init(void)
  * Deinit the Encorder channels
  *
  */
-void __exit prp_still_exit(void)
+static void __exit prp_still_exit(void)
 {
 }
 

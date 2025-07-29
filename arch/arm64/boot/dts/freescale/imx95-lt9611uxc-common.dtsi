@@ -3,9 +3,10 @@
  * Copyright 2024 NXP
  */
 
-#include <dt-bindings/clock/fsl,imx95-clock.h>
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/interrupt-controller/irq.h>
+
+#include "imx95-clock.h"
 
 &{/} {
 	hdmi-connector-dsi {

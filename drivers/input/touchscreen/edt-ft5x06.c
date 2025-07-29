@@ -32,8 +32,7 @@
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 
-#include <asm/unaligned.h>
-#include <linux/of.h>
+#include <linux/unaligned.h>
 
 #define WORK_REGISTER_THRESHOLD		0x00
 #define WORK_REGISTER_REPORT_RATE	0x08
@@ -77,8 +76,6 @@
 
 #define EDT_DEFAULT_NUM_X		1024
 #define EDT_DEFAULT_NUM_Y		1024
-//John_gao add for 7inch-touchscreen-panel
-#define POLL_INTERVAL_MS		17	/* 17ms = 60fps */
 
 #define M06_REG_CMD(factory) ((factory) ? 0xf3 : 0xfc)
 #define M06_REG_ADDR(factory, addr) ((factory) ? (addr) & 0x7f : (addr) & 0x3f)
@@ -150,12 +147,6 @@ struct edt_ft5x06_ts_data {
 	enum edt_ver version;
 	unsigned int crc_errors;
 	unsigned int header_errors;
-
-	//John_gao add for 7inch-touchscreen-panel
-	struct timer_list timer;
-	struct work_struct work_i2c_poll;
-	int max_x;
-	int max_y;
 };
 
 struct edt_i2c_chip_data {
@@ -341,22 +332,12 @@ static irqreturn_t edt_ft5x06_ts_isr(int irq, void *dev_id)
 			swap(x, y);
 
 		id = (buf[2] >> 4) & 0x0f;
+
 		input_mt_slot(tsdata->input, id);
 		if (input_mt_report_slot_state(tsdata->input, MT_TOOL_FINGER,
-					       type != TOUCH_EVENT_UP)){
-						  // printk("GLS x=%d y=%d \n",x , y);
-			//John_gao add for 7inch-touchscreen-panel
-			if(tsdata->max_x && tsdata->max_x){
-				x = tsdata->max_x - x;
-				y = tsdata->max_y - y;
-			}else{
-				x = 800 - x;
-				y = 480 - y;
-			}
-
+					       type != TOUCH_EVENT_UP))
 			touchscreen_report_pos(tsdata->input, &tsdata->prop,
 					       x, y, true);
-		}
 	}
 
 	input_mt_report_pointer_emulation(tsdata->input, true);
@@ -365,22 +346,7 @@ static irqreturn_t edt_ft5x06_ts_isr(int irq, void *dev_id)
 out:
 	return IRQ_HANDLED;
 }
-	//John_gao add for 7inch-touchscreen-panel
-static void edt_ft5x06_ts_irq_poll_timer(struct timer_list *t)
-{
-	struct edt_ft5x06_ts_data *tsdata = from_timer(tsdata, t, timer);
 
-	schedule_work(&tsdata->work_i2c_poll);
-	mod_timer(&tsdata->timer, jiffies + msecs_to_jiffies(POLL_INTERVAL_MS));
-}
-
-static void edt_ft5x06_ts_work_i2c_poll(struct work_struct *work)
-{
-	struct edt_ft5x06_ts_data *tsdata = container_of(work,
-			struct edt_ft5x06_ts_data, work_i2c_poll);
-
-	edt_ft5x06_ts_isr(0, tsdata);
-}
 struct edt_ft5x06_attribute {
 	struct device_attribute dattr;
 	size_t field_offset;
@@ -465,7 +431,7 @@ static ssize_t edt_ft5x06_setting_show(struct device *dev,
 		*field = val;
 	}
 
-	count = scnprintf(buf, PAGE_SIZE, "%d\n", val);
+	count = sysfs_emit(buf, "%d\n", val);
 out:
 	mutex_unlock(&tsdata->mutex);
 	return error ?: count;
@@ -614,10 +580,7 @@ static struct attribute *edt_ft5x06_attrs[] = {
 	&dev_attr_crc_errors.attr,
 	NULL
 };
-
-static const struct attribute_group edt_ft5x06_attr_group = {
-	.attrs = edt_ft5x06_attrs,
-};
+ATTRIBUTE_GROUPS(edt_ft5x06);
 
 static void edt_ft5x06_restore_reg_parameters(struct edt_ft5x06_ts_data *tsdata)
 {
@@ -1158,6 +1121,14 @@ static void edt_ft5x06_ts_set_regs(struct edt_ft5x06_ts_data *tsdata)
 	}
 }
 
+static void edt_ft5x06_exit_regmap(void *arg)
+{
+	struct edt_ft5x06_ts_data *data = arg;
+
+	if (!IS_ERR_OR_NULL(data->regmap))
+		regmap_exit(data->regmap);
+}
+
 static void edt_ft5x06_disable_regulators(void *arg)
 {
 	struct edt_ft5x06_ts_data *data = arg;
@@ -1173,8 +1144,6 @@ static int edt_ft5x06_ts_probe(struct i2c_client *client)
 	struct edt_ft5x06_ts_data *tsdata;
 	unsigned int val;
 	struct input_dev *input;
-	struct device *dev = &client->dev;
-	struct device_node *np = dev->of_node;
 	unsigned long irq_flags;
 	int error;
 	u32 report_rate;
@@ -1192,6 +1161,16 @@ static int edt_ft5x06_ts_probe(struct i2c_client *client)
 		dev_err(&client->dev, "regmap allocation failed\n");
 		return PTR_ERR(tsdata->regmap);
 	}
+
+	/*
+	 * We are not using devm_regmap_init_i2c() and instead install a
+	 * custom action because we may replace regmap with M06-specific one
+	 * and we need to make sure that it will not be released too early.
+	 */
+	error = devm_add_action_or_reset(&client->dev, edt_ft5x06_exit_regmap,
+					 tsdata);
+	if (error)
+		return error;
 
 	chip_data = device_get_match_data(&client->dev);
 	if (!chip_data)
@@ -1353,39 +1332,18 @@ static int edt_ft5x06_ts_probe(struct i2c_client *client)
 		return error;
 	}
 
-	if (client->irq) {
-		irq_flags = irq_get_trigger_type(client->irq);
-		if (irq_flags == IRQF_TRIGGER_NONE)
-			irq_flags = IRQF_TRIGGER_FALLING;
-		irq_flags |= IRQF_ONESHOT;
+	irq_flags = irq_get_trigger_type(client->irq);
+	if (irq_flags == IRQF_TRIGGER_NONE)
+		irq_flags = IRQF_TRIGGER_FALLING;
+	irq_flags |= IRQF_ONESHOT;
 
-		error = devm_request_threaded_irq(&client->dev, client->irq,
-						NULL, edt_ft5x06_ts_isr, irq_flags,
-						client->name, tsdata);
-		if (error) {
-			dev_err(&client->dev, "Unable to request touchscreen IRQ.\n");
-			return error;
-		}
-	} else {
-	//John_gao add for 7inch-touchscreen-panel
-		error = of_property_read_u32(np, "touchscreen-size-x", &tsdata->max_x);
-		if(error) tsdata->max_x = 0;
-		error = of_property_read_u32(np, "touchscreen-size-y", &tsdata->max_y);
-		if(error) tsdata->max_y = 0;
-		
-		//printk("GLS tp x,y(%d,%d) \n", tsdata->max_x, tsdata->max_y);
-		
-		INIT_WORK(&tsdata->work_i2c_poll,
-			  edt_ft5x06_ts_work_i2c_poll);
-		timer_setup(&tsdata->timer, edt_ft5x06_ts_irq_poll_timer, 0);
-		tsdata->timer.expires = jiffies +
-					msecs_to_jiffies(POLL_INTERVAL_MS);
-		add_timer(&tsdata->timer);
-	}
-
-	error = devm_device_add_group(&client->dev, &edt_ft5x06_attr_group);
-	if (error)
+	error = devm_request_threaded_irq(&client->dev, client->irq,
+					  NULL, edt_ft5x06_ts_isr, irq_flags,
+					  client->name, tsdata);
+	if (error) {
+		dev_err(&client->dev, "Unable to request touchscreen IRQ.\n");
 		return error;
+	}
 
 	error = input_register_device(input);
 	if (error)
@@ -1405,10 +1363,8 @@ static int edt_ft5x06_ts_probe(struct i2c_client *client)
 static void edt_ft5x06_ts_remove(struct i2c_client *client)
 {
 	struct edt_ft5x06_ts_data *tsdata = i2c_get_clientdata(client);
-	//John_gao add for 7inch-touchscreen-panel
-	del_timer(&tsdata->timer);
+
 	edt_ft5x06_ts_teardown_debugfs(tsdata);
-	regmap_exit(tsdata->regmap);
 }
 
 static int edt_ft5x06_ts_suspend(struct device *dev)
@@ -1523,6 +1479,10 @@ static const struct edt_i2c_chip_data edt_ft5x06_data = {
 	.max_support_points = 5,
 };
 
+static const struct edt_i2c_chip_data edt_ft5452_data = {
+	.max_support_points = 5,
+};
+
 static const struct edt_i2c_chip_data edt_ft5506_data = {
 	.max_support_points = 10,
 };
@@ -1531,12 +1491,23 @@ static const struct edt_i2c_chip_data edt_ft6236_data = {
 	.max_support_points = 2,
 };
 
+static const struct edt_i2c_chip_data edt_ft8201_data = {
+	.max_support_points = 10,
+};
+
+static const struct edt_i2c_chip_data edt_ft8719_data = {
+	.max_support_points = 10,
+};
+
 static const struct i2c_device_id edt_ft5x06_ts_id[] = {
 	{ .name = "edt-ft5x06", .driver_data = (long)&edt_ft5x06_data },
 	{ .name = "edt-ft5506", .driver_data = (long)&edt_ft5506_data },
 	{ .name = "ev-ft5726", .driver_data = (long)&edt_ft5506_data },
+	{ .name = "ft5452", .driver_data = (long)&edt_ft5452_data },
 	/* Note no edt- prefix for compatibility with the ft6236.c driver */
 	{ .name = "ft6236", .driver_data = (long)&edt_ft6236_data },
+	{ .name = "ft8201", .driver_data = (long)&edt_ft8201_data },
+	{ .name = "ft8719", .driver_data = (long)&edt_ft8719_data },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(i2c, edt_ft5x06_ts_id);
@@ -1547,8 +1518,12 @@ static const struct of_device_id edt_ft5x06_of_match[] = {
 	{ .compatible = "edt,edt-ft5406", .data = &edt_ft5x06_data },
 	{ .compatible = "edt,edt-ft5506", .data = &edt_ft5506_data },
 	{ .compatible = "evervision,ev-ft5726", .data = &edt_ft5506_data },
+	{ .compatible = "focaltech,ft5426", .data = &edt_ft5506_data },
+	{ .compatible = "focaltech,ft5452", .data = &edt_ft5452_data },
 	/* Note focaltech vendor prefix for compatibility with ft6236.c */
 	{ .compatible = "focaltech,ft6236", .data = &edt_ft6236_data },
+	{ .compatible = "focaltech,ft8201", .data = &edt_ft8201_data },
+	{ .compatible = "focaltech,ft8719", .data = &edt_ft8719_data },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, edt_ft5x06_of_match);
@@ -1556,6 +1531,7 @@ MODULE_DEVICE_TABLE(of, edt_ft5x06_of_match);
 static struct i2c_driver edt_ft5x06_ts_driver = {
 	.driver = {
 		.name = "edt_ft5x06",
+		.dev_groups = edt_ft5x06_groups,
 		.of_match_table = edt_ft5x06_of_match,
 		.pm = pm_sleep_ptr(&edt_ft5x06_ts_pm_ops),
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,

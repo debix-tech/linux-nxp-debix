@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /*
  * Copyright 2009-2015 Freescale Semiconductor, Inc. All Rights Reserved.
- * Copyright 2019 NXP
+ * Copyright 2019,2024 NXP
  */
 
 /*!
@@ -405,7 +405,7 @@ EXPORT_SYMBOL(csi_enc_deselect);
  *
  * @return  Error code indicating success or failure
  */
-__init int csi_enc_init(void)
+static __init int csi_enc_init(void)
 {
 	return 0;
 }
@@ -414,7 +414,7 @@ __init int csi_enc_init(void)
  * Deinit the Encorder channels
  *
  */
-void __exit csi_enc_exit(void)
+static void __exit csi_enc_exit(void)
 {
 }
 

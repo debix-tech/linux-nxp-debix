@@ -47,9 +47,6 @@
 #include "fsl_fman_prs.h"
 #include "fsl_fman_kg.h"
 
-#define __ERR_MODULE__  MODULE_FM_PCD
-
-
 /****************************/
 /* Defaults                 */
 /****************************/
@@ -126,38 +123,37 @@ switch (exception){                                                 \
 #pragma pack(push,1)
 #endif /* defined(__MWERKS__) && ... */
 
-
 typedef struct {
-/* General Configuration and Status Registers */
-    volatile uint32_t fmpl_gcr;         /* 0x000 FMPL_GCR  - FM Policer General Configuration */
-    volatile uint32_t fmpl_gsr;         /* 0x004 FMPL_GSR  - FM Policer Global Status Register */
-    volatile uint32_t fmpl_evr;         /* 0x008 FMPL_EVR  - FM Policer Event Register */
-    volatile uint32_t fmpl_ier;         /* 0x00C FMPL_IER  - FM Policer Interrupt Enable Register */
-    volatile uint32_t fmpl_ifr;         /* 0x010 FMPL_IFR  - FM Policer Interrupt Force Register */
-    volatile uint32_t fmpl_eevr;        /* 0x014 FMPL_EEVR - FM Policer Error Event Register */
-    volatile uint32_t fmpl_eier;        /* 0x018 FMPL_EIER - FM Policer Error Interrupt Enable Register */
-    volatile uint32_t fmpl_eifr;        /* 0x01C FMPL_EIFR - FM Policer Error Interrupt Force Register */
-/* Global Statistic Counters */
-    volatile uint32_t fmpl_rpcnt;       /* 0x020 FMPL_RPC  - FM Policer RED Packets Counter */
-    volatile uint32_t fmpl_ypcnt;       /* 0x024 FMPL_YPC  - FM Policer YELLOW Packets Counter */
-    volatile uint32_t fmpl_rrpcnt;      /* 0x028 FMPL_RRPC - FM Policer Recolored RED Packet Counter */
-    volatile uint32_t fmpl_rypcnt;      /* 0x02C FMPL_RYPC - FM Policer Recolored YELLOW Packet Counter */
-    volatile uint32_t fmpl_tpcnt;       /* 0x030 FMPL_TPC  - FM Policer Total Packet Counter */
-    volatile uint32_t fmpl_flmcnt;      /* 0x034 FMPL_FLMC - FM Policer Frame Length Mismatch Counter */
-    volatile uint32_t fmpl_res0[21];    /* 0x038 - 0x08B Reserved */
-/* Profile RAM Access Registers */
-    volatile uint32_t fmpl_par;         /* 0x08C FMPL_PAR    - FM Policer Profile Action Register*/
-    t_FmPcdPlcrProfileRegs profileRegs;
-/* Error Capture Registers */
-    volatile uint32_t fmpl_serc;        /* 0x100 FMPL_SERC - FM Policer Soft Error Capture */
-    volatile uint32_t fmpl_upcr;        /* 0x104 FMPL_UPCR - FM Policer Uninitialized Profile Capture Register */
-    volatile uint32_t fmpl_res2;        /* 0x108 Reserved */
-/* Debug Registers */
-    volatile uint32_t fmpl_res3[61];    /* 0x10C-0x200 Reserved Debug*/
-/* Profile Selection Mapping Registers Per Port-ID (n=1-11, 16) */
-    volatile uint32_t fmpl_dpmr;        /* 0x200 FMPL_DPMR - FM Policer Default Mapping Register */
-    volatile uint32_t fmpl_pmr[63];     /*+default 0x204-0x2FF FMPL_PMR1 - FMPL_PMR63, - FM Policer Profile Mapping Registers.
-                                           (for port-ID 1-11, only for supported Port-ID registers) */
+	/* General Configuration and Status Registers */
+	uint32_t fmpl_gcr;         /* 0x000 FMPL_GCR  - FM Policer General Configuration */
+	uint32_t fmpl_gsr;         /* 0x004 FMPL_GSR  - FM Policer Global Status Register */
+	uint32_t fmpl_evr;         /* 0x008 FMPL_EVR  - FM Policer Event Register */
+	uint32_t fmpl_ier;         /* 0x00C FMPL_IER  - FM Policer Interrupt Enable Register */
+	uint32_t fmpl_ifr;         /* 0x010 FMPL_IFR  - FM Policer Interrupt Force Register */
+	uint32_t fmpl_eevr;        /* 0x014 FMPL_EEVR - FM Policer Error Event Register */
+	uint32_t fmpl_eier;        /* 0x018 FMPL_EIER - FM Policer Error Interrupt Enable Register */
+	uint32_t fmpl_eifr;        /* 0x01C FMPL_EIFR - FM Policer Error Interrupt Force Register */
+	/* Global Statistic Counters */
+	uint32_t fmpl_rpcnt;       /* 0x020 FMPL_RPC  - FM Policer RED Packets Counter */
+	uint32_t fmpl_ypcnt;       /* 0x024 FMPL_YPC  - FM Policer YELLOW Packets Counter */
+	uint32_t fmpl_rrpcnt;      /* 0x028 FMPL_RRPC - FM Policer Recolored RED Packet Counter */
+	uint32_t fmpl_rypcnt;      /* 0x02C FMPL_RYPC - FM Policer Recolored YELLOW Packet Counter */
+	uint32_t fmpl_tpcnt;       /* 0x030 FMPL_TPC  - FM Policer Total Packet Counter */
+	uint32_t fmpl_flmcnt;      /* 0x034 FMPL_FLMC - FM Policer Frame Length Mismatch Counter */
+	uint32_t fmpl_res0[21];    /* 0x038 - 0x08B Reserved */
+	/* Profile RAM Access Registers */
+	uint32_t fmpl_par;         /* 0x08C FMPL_PAR    - FM Policer Profile Action Register*/
+	t_FmPcdPlcrProfileRegs profileRegs;
+	/* Error Capture Registers */
+	uint32_t fmpl_serc;        /* 0x100 FMPL_SERC - FM Policer Soft Error Capture */
+	uint32_t fmpl_upcr;        /* 0x104 FMPL_UPCR - FM Policer Uninitialized Profile Capture Register */
+	uint32_t fmpl_res2;        /* 0x108 Reserved */
+	/* Debug Registers */
+	uint32_t fmpl_res3[61];    /* 0x10C-0x200 Reserved Debug*/
+	/* Profile Selection Mapping Registers Per Port-ID (n=1-11, 16) */
+	uint32_t fmpl_dpmr;        /* 0x200 FMPL_DPMR - FM Policer Default Mapping Register */
+	uint32_t fmpl_pmr[63];     /* +default 0x204-0x2FF FMPL_PMR1 - FMPL_PMR63, - FM Policer Profile Mapping Registers.
+				    * (for port-ID 1-11, only for supported Port-ID registers) */
 } t_FmPcdPlcrRegs;
 
 #if defined(__MWERKS__) && !defined(__GNUC__)
@@ -233,9 +229,7 @@ typedef struct {
     bool                extractedOrs;
     uint8_t             bitOffsetInPlcrProfile;
     bool                directPlcr;
-#if (DPAA_VERSION >= 11)
     bool                vspe;
-#endif
 } t_FmPcdKgScheme;
 
 typedef union {
@@ -377,11 +371,9 @@ typedef struct {
     t_FmPcdDriverParam          *p_FmPcdDriverParam;
 } t_FmPcd;
 
-#if (DPAA_VERSION >= 11)
 typedef uint8_t t_FmPcdFrmReplicUpdateType;
 #define FRM_REPLIC_UPDATE_COUNTER             0x01
 #define FRM_REPLIC_UPDATE_INFO                0x02
-#endif /* (DPAA_VERSION >= 11) */
 /***********************************************************************/
 /*  PCD internal routines                                              */
 /***********************************************************************/
@@ -433,13 +425,6 @@ t_Error     PlcrSetPortProfiles(t_FmPcd    *p_FmPcd,
                                 uint16_t   base);
 t_Error     PlcrClearPortProfiles(t_FmPcd *p_FmPcd, uint8_t hardwarePortId);
 
-t_Handle    PrsConfig(t_FmPcd *p_FmPcd,t_FmPcdParams *p_FmPcdParams);
-t_Error     PrsInit(t_FmPcd *p_FmPcd);
-void        PrsEnable(t_FmPcd *p_FmPcd);
-void        PrsDisable(t_FmPcd *p_FmPcd);
-void        PrsFree(t_FmPcd *p_FmPcd );
-t_Error     PrsIncludePortInStatistics(t_FmPcd *p_FmPcd, uint8_t hardwarePortId, bool include);
-
 t_Error     FmPcdCcGetGrpParams(t_Handle treeId, uint8_t grpId, uint32_t *p_GrpBits, uint8_t *p_GrpBase);
 uint8_t     FmPcdCcGetOffset(t_Handle h_CcNode);
 uint8_t     FmPcdCcGetParseCode(t_Handle h_CcNode);
@@ -455,11 +440,6 @@ void        FmPcdManipUpdateAdResultForCc(t_Handle                     h_Manip,
 void        FmPcdManipUpdateAdContLookupForCc(t_Handle h_Manip, t_Handle p_Ad, t_Handle *p_AdNew, uint32_t adTableOffset);
 void        FmPcdManipUpdateOwner(t_Handle h_Manip, bool add);
 t_Error     FmPcdManipCheckParamsWithCcNodeParams(t_Handle h_Manip, t_Handle h_FmPcdCcNode);
-#ifdef FM_CAPWAP_SUPPORT
-t_Handle    FmPcdManipApplSpecificBuild(void);
-bool        FmPcdManipIsCapwapApplSpecific(t_Handle h_Manip);
-#endif /* FM_CAPWAP_SUPPORT */
-#if (DPAA_VERSION >= 11)
 void *      FrmReplicGroupGetSourceTableDescriptor(t_Handle h_ReplicGroup);
 void        FrmReplicGroupUpdateOwner(t_Handle h_ReplicGroup, bool add);
 void        FrmReplicGroupUpdateAd(t_Handle h_ReplicGroup, void *p_Ad, t_Handle *h_AdNew);
@@ -468,7 +448,6 @@ void        FmPcdCcGetAdTablesThatPointOnReplicGroup(t_Handle   h_Node,
                                                      t_Handle   h_ReplicGroup,
                                                      t_List     *p_AdTables,
                                                      uint32_t   *p_NumOfAdTables);
-#endif /* (DPAA_VERSION >= 11) */
 
 void EnqueueNodeInfoToRelevantLst(t_List *p_List, t_CcNodeInformation *p_CcInfo, t_Handle h_Spinlock);
 void DequeueNodeInfoFromRelevantLst(t_List *p_List, t_Handle h_Info, t_Handle h_Spinlock);
@@ -480,9 +459,7 @@ typedef struct
 {
     t_Handle    h_StatsAd;
     t_Handle    h_StatsCounters;
-#if (DPAA_VERSION >= 11)
     t_Handle    h_StatsFLRs;
-#endif /* (DPAA_VERSION >= 11) */
 } t_FmPcdCcStatsParams;
 
 void NextStepAd(t_Handle                     h_Ad,
@@ -539,5 +516,6 @@ static __inline__ void FmPcdLockUnlock(t_FmPcdLock *p_Lock)
     p_Lock->flag = FALSE;
 }
 
+t_Handle FM_PCD_GetHcPort(t_Handle h_FmPcd);
 
 #endif /* __FM_PCD_H */

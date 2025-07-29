@@ -279,7 +279,7 @@ static int mipi_dsi_pkt_read(struct mipi_dsi_info *mipi_dsi,
 	return 0;
 }
 
-int mipi_dsi_dcs_cmd(struct mipi_dsi_info *mipi_dsi,
+static int mipi_dsi_dcs_cmd(struct mipi_dsi_info *mipi_dsi,
 				u8 cmd, const u32 *param, int num)
 {
 	int err = 0;
@@ -832,7 +832,7 @@ static void mipi_dsi_shutdown(struct platform_device *pdev)
 	mipi_dsi_power_off(mipi_dsi->disp_mipi);
 }
 
-static int mipi_dsi_remove(struct platform_device *pdev)
+static void mipi_dsi_remove(struct platform_device *pdev)
 {
 	struct mipi_dsi_info *mipi_dsi = dev_get_drvdata(&pdev->dev);
 
@@ -844,8 +844,6 @@ static int mipi_dsi_remove(struct platform_device *pdev)
 
 	kfree(mipi_dsi->lcd_panel);
 	dev_set_drvdata(&pdev->dev, NULL);
-
-	return 0;
 }
 
 static int mipi_dsi_runtime_suspend(struct device *dev)

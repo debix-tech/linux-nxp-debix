@@ -126,26 +126,7 @@ static int ox03c10_get_fmt(struct v4l2_subdev *sd,
 	return 0;
 }
 
-static int ox03c10_init_cfg(struct v4l2_subdev *sd,
-			    struct v4l2_subdev_state *state)
-{
-	struct ox03c10_priv *priv = to_ox03c10_priv(sd);
-	struct v4l2_mbus_framefmt *fmt = &priv->formats;
-
-	fmt->code = MEDIA_BUS_FMT_SBGGR16_1X16;
-	fmt->width = OX03C10_PIXEL_ARRAY_WIDTH;
-	fmt->height = OX03C10_PIXEL_ARRAY_HEIGHT;
-	fmt->colorspace = V4L2_COLORSPACE_RAW;
-	fmt->ycbcr_enc = V4L2_YCBCR_ENC_601;
-	fmt->quantization = V4L2_QUANTIZATION_FULL_RANGE;
-	fmt->xfer_func = V4L2_MAP_XFER_FUNC_DEFAULT(V4L2_COLORSPACE_RAW);
-	fmt->field = V4L2_FIELD_NONE;
-
-	return 0;
-}
-
 static const struct v4l2_subdev_pad_ops ox03c10_subdev_pad_ops = {
-	.init_cfg = ox03c10_init_cfg,
 	.enum_mbus_code = ox03c10_enum_mbus_code,
 	.enum_frame_size = ox03c10_enum_frame_size,
 	.get_frame_desc = ox03c10_get_frame_desc,
@@ -168,6 +149,28 @@ static const struct v4l2_subdev_video_ops ox03c10_subdev_video_ops = {
 static const struct v4l2_subdev_ops ox03c10_subdev_ops = {
 	.pad = &ox03c10_subdev_pad_ops,
 	.video = &ox03c10_subdev_video_ops,
+};
+
+static int ox03c10_init_state(struct v4l2_subdev *sd,
+			      struct v4l2_subdev_state *state)
+{
+	struct ox03c10_priv *priv = to_ox03c10_priv(sd);
+	struct v4l2_mbus_framefmt *fmt = &priv->formats;
+
+	fmt->code = MEDIA_BUS_FMT_SBGGR16_1X16;
+	fmt->width = OX03C10_PIXEL_ARRAY_WIDTH;
+	fmt->height = OX03C10_PIXEL_ARRAY_HEIGHT;
+	fmt->colorspace = V4L2_COLORSPACE_RAW;
+	fmt->ycbcr_enc = V4L2_YCBCR_ENC_601;
+	fmt->quantization = V4L2_QUANTIZATION_FULL_RANGE;
+	fmt->xfer_func = V4L2_MAP_XFER_FUNC_DEFAULT(V4L2_COLORSPACE_RAW);
+	fmt->field = V4L2_FIELD_NONE;
+
+	return 0;
+}
+
+static const struct v4l2_subdev_internal_ops ox03c10_subdev_internal_ops = {
+	.init_state = ox03c10_init_state,
 };
 
 static const struct media_entity_operations ox03c10_media_ops = {
@@ -199,6 +202,7 @@ static int ox03c10_v4l2_init(struct ox03c10_priv *priv)
 		return ret;
 
 	sd->flags |= V4L2_SUBDEV_FL_HAS_DEVNODE | V4L2_SUBDEV_FL_HAS_EVENTS;
+	sd->internal_ops = &ox03c10_subdev_internal_ops;
 	sd->ctrl_handler = ox03c10_ctrl_handler_get(priv->sensor);
 	sd->entity.function = MEDIA_ENT_F_CAM_SENSOR;
 	sd->entity.ops = &ox03c10_media_ops;
@@ -211,7 +215,7 @@ static int ox03c10_v4l2_init(struct ox03c10_priv *priv)
 		return ret;
 	}
 
-	return ox03c10_init_cfg(sd, NULL);
+	return ox03c10_init_state(sd, NULL);
 }
 
 static int ox03c10_probe(struct i2c_client *client)

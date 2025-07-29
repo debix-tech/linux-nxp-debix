@@ -522,7 +522,7 @@ static int mipi_dsi_power_on(struct mxc_dispdrv_handle *disp)
 	return 0;
 }
 
-void mipi_dsi_power_off(struct mxc_dispdrv_handle *disp)
+static void mipi_dsi_power_off(struct mxc_dispdrv_handle *disp)
 {
 	int err;
 	struct mipi_dsi_info *mipi_dsi = mxc_dispdrv_getdata(disp);
@@ -942,7 +942,7 @@ static void mipi_dsi_shutdown(struct platform_device *pdev)
 	mipi_dsi_power_off(mipi_dsi->disp_mipi);
 }
 
-static int mipi_dsi_remove(struct platform_device *pdev)
+static void mipi_dsi_remove(struct platform_device *pdev)
 {
 	struct mipi_dsi_info *mipi_dsi = dev_get_drvdata(&pdev->dev);
 
@@ -954,8 +954,6 @@ static int mipi_dsi_remove(struct platform_device *pdev)
 
 	kfree(mipi_dsi->lcd_panel);
 	dev_set_drvdata(&pdev->dev, NULL);
-
-	return 0;
 }
 
 static struct platform_driver mipi_dsi_driver = {

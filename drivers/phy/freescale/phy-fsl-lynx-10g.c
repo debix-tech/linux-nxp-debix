@@ -2349,7 +2349,7 @@ static void lynx_10g_lane_read_configuration(struct lynx_10g_lane *lane)
 }
 
 static struct phy *lynx_10g_xlate(struct device *dev,
-				  struct of_phandle_args *args)
+				  const struct of_phandle_args *args)
 {
 	struct lynx_10g_priv *priv = dev_get_drvdata(dev);
 	int idx = args->args[0];

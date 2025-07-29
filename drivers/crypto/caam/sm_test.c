@@ -23,6 +23,8 @@
  * eventually disappear once the API is integrated into "real" software.
  */
 
+#include <linux/platform_device.h>
+
 #include "compat.h"
 #include "regs.h"
 #include "intern.h"
@@ -502,7 +504,7 @@ freemem:
 }
 EXPORT_SYMBOL(caam_sm_example_init);
 
-void caam_sm_example_shutdown(void)
+static void __exit caam_sm_example_shutdown(void)
 {
 	/* unused in present version */
 	struct device_node *dev_node;

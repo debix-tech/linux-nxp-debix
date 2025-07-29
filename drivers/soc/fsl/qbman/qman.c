@@ -1728,14 +1728,8 @@ const cpumask_t *qman_affine_cpus(void)
 }
 EXPORT_SYMBOL(qman_affine_cpus);
 
-u16 qman_affine_channel(int cpu)
+u16 qman_affine_channel(unsigned int cpu)
 {
-	if (cpu < 0) {
-		struct qman_portal *portal = get_affine_portal();
-
-		cpu = portal->config->cpu;
-		put_affine_portal();
-	}
 	WARN_ON(!cpumask_test_cpu(cpu, &affine_mask));
 	return affine_channels[cpu];
 }
@@ -2545,11 +2539,6 @@ release_lock:
 	return ret;
 }
 EXPORT_SYMBOL(qman_delete_cgr);
-
-struct cgr_comp {
-	struct qman_cgr *cgr;
-	struct completion completion;
-};
 
 static void qman_delete_cgr_smp_call(void *p)
 {

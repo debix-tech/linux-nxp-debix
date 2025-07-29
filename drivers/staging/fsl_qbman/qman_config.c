@@ -33,6 +33,7 @@
 #include "qman_private.h"
 #include <linux/highmem.h>
 #include <linux/of_reserved_mem.h>
+#include <linux/platform_device.h>
 
 /* Last updated for v00.800 of the BG */
 
@@ -270,8 +271,7 @@ static const struct qman_error_info_mdata error_mdata[] = {
 /* Add this in Kconfig */
 #define QMAN_ERRS_TO_UNENABLE (QM_EIRQ_PLWI | QM_EIRQ_PEBI)
 
-/**
- * qm_err_isr_<reg>_<verb> - Manipulate global interrupt registers
+/* qm_err_isr_<reg>_<verb> - Manipulate global interrupt registers
  * @v: for accessors that write values, this is the 32-bit value
  *
  * Manipulates QMAN_ERR_ISR, QMAN_ERR_IER, QMAN_ERR_ISDR, QMAN_ERR_IIR. All
@@ -1175,10 +1175,9 @@ static const struct attribute_group qman_dev_ecr_grp = {
 	.attrs = qman_dev_ecr_attributes
 };
 
-static int of_fsl_qman_remove(struct platform_device *ofdev)
+static void of_fsl_qman_remove(struct platform_device *ofdev)
 {
 	sysfs_remove_group(&ofdev->dev.kobj, &qman_dev_attr_grp);
-	return 0;
 };
 
 static int of_fsl_qman_probe(struct platform_device *ofdev)

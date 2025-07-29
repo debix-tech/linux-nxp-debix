@@ -46,8 +46,6 @@
 
 #include "fsl_fman.h"
 
-#define __ERR_MODULE__  MODULE_FM
-
 #define FM_MAX_NUM_OF_HW_PORT_IDS           64
 #define FM_MAX_NUM_OF_GUESTS                100
 
@@ -78,7 +76,7 @@
 #define DMA_THRESH_READ_INT_BUF_MASK        0x007F0000
 #define DMA_THRESH_WRITE_INT_BUF_MASK       0x0000007F
 
-#define GET_EXCEPTION_FLAG(bitMask, exception)              \
+#define FM_GET_EXCEPTION_FLAG(bitMask, exception)           \
 switch (exception){                                         \
     case e_FM_EX_DMA_BUS_ERROR:                             \
         bitMask = FM_EX_DMA_BUS_ERROR; break;               \
@@ -143,12 +141,6 @@ switch (exception){                                         \
             if (_id >= FM_MAX_NUM_OF_1G_MACS) _event = e_FM_EV_DUMMY_LAST;                          \
             else _event = (_intrType == e_FM_INTR_TYPE_ERR) ? (e_FM_EV_ERR_1G_MAC0 + _id) : (e_FM_EV_1G_MAC0 + _id); \
             break;                                                                                  \
-        case e_FM_MOD_MACSEC:                                                                       \
-            switch (_id){                                                                           \
-                 case (0): _event = (_intrType == e_FM_INTR_TYPE_ERR) ? e_FM_EV_ERR_MACSEC_MAC0:e_FM_EV_MACSEC_MAC0; \
-                 break;                                                                             \
-                 }                                                                                  \
-            break;                                                                                  \
         case e_FM_MOD_FMAN_CTRL:                                                                    \
             if (_intrType == e_FM_INTR_TYPE_ERR) _event = e_FM_EV_DUMMY_LAST;                       \
             else _event = (e_FM_EV_FMAN_CTRL_0 + _id);                                              \
@@ -157,112 +149,10 @@ switch (exception){                                         \
         break;                                                                                      \
     }
 
-#define FMAN_CACHE_OVERRIDE_TRANS(fsl_cache_override, _cache_override) \
-    switch (_cache_override){ \
-        case  e_FM_DMA_NO_CACHE_OR:                    \
-            fsl_cache_override =  E_FMAN_DMA_NO_CACHE_OR; break;    \
-        case  e_FM_DMA_NO_STASH_DATA:                    \
-            fsl_cache_override =  E_FMAN_DMA_NO_STASH_DATA; break;        \
-        case  e_FM_DMA_MAY_STASH_DATA:                    \
-            fsl_cache_override =  E_FMAN_DMA_MAY_STASH_DATA; break;    \
-        case  e_FM_DMA_STASH_DATA:                        \
-            fsl_cache_override =  E_FMAN_DMA_STASH_DATA; break;        \
-        default: \
-            fsl_cache_override =  E_FMAN_DMA_NO_CACHE_OR; break;    \
-    }
-
-#define FMAN_AID_MODE_TRANS(fsl_aid_mode, _aid_mode) \
-    switch (_aid_mode){ \
-        case  e_FM_DMA_AID_OUT_PORT_ID:                    \
-            fsl_aid_mode =  E_FMAN_DMA_AID_OUT_PORT_ID; break;    \
-        case  e_FM_DMA_AID_OUT_TNUM:                    \
-            fsl_aid_mode =  E_FMAN_DMA_AID_OUT_TNUM; break;        \
-        default: \
-            fsl_aid_mode =  E_FMAN_DMA_AID_OUT_PORT_ID; break;    \
-    }
-
-#define FMAN_DMA_DBG_CNT_TRANS(fsl_dma_dbg_cnt, _dma_dbg_cnt) \
-    switch (_dma_dbg_cnt){ \
-        case  e_FM_DMA_DBG_NO_CNT:                    \
-            fsl_dma_dbg_cnt =  E_FMAN_DMA_DBG_NO_CNT; break;    \
-        case  e_FM_DMA_DBG_CNT_DONE:                    \
-            fsl_dma_dbg_cnt =  E_FMAN_DMA_DBG_CNT_DONE; break;        \
-        case  e_FM_DMA_DBG_CNT_COMM_Q_EM:                    \
-            fsl_dma_dbg_cnt =  E_FMAN_DMA_DBG_CNT_COMM_Q_EM; break;    \
-        case  e_FM_DMA_DBG_CNT_INT_READ_EM:                        \
-            fsl_dma_dbg_cnt =  E_FMAN_DMA_DBG_CNT_INT_READ_EM; break;        \
-        case  e_FM_DMA_DBG_CNT_INT_WRITE_EM:                        \
-            fsl_dma_dbg_cnt = E_FMAN_DMA_DBG_CNT_INT_WRITE_EM ; break;        \
-        case  e_FM_DMA_DBG_CNT_FPM_WAIT:                        \
-            fsl_dma_dbg_cnt = E_FMAN_DMA_DBG_CNT_FPM_WAIT ; break;        \
-        case  e_FM_DMA_DBG_CNT_SIGLE_BIT_ECC:                        \
-            fsl_dma_dbg_cnt = E_FMAN_DMA_DBG_CNT_SIGLE_BIT_ECC ; break;        \
-        case  e_FM_DMA_DBG_CNT_RAW_WAR_PROT:                        \
-            fsl_dma_dbg_cnt = E_FMAN_DMA_DBG_CNT_RAW_WAR_PROT ; break;        \
-        default: \
-            fsl_dma_dbg_cnt =  E_FMAN_DMA_DBG_NO_CNT; break;    \
-    }
-
-#define FMAN_DMA_EMER_TRANS(fsl_dma_emer, _dma_emer) \
-    switch (_dma_emer){ \
-        case  e_FM_DMA_EM_EBS:                    \
-            fsl_dma_emer =  E_FMAN_DMA_EM_EBS; break;    \
-        case  e_FM_DMA_EM_SOS:                    \
-            fsl_dma_emer =  E_FMAN_DMA_EM_SOS; break;        \
-        default: \
-            fsl_dma_emer =  E_FMAN_DMA_EM_EBS; break;    \
-    }
-
-#define FMAN_DMA_ERR_TRANS(fsl_dma_err, _dma_err) \
-    switch (_dma_err){ \
-        case  e_FM_DMA_ERR_CATASTROPHIC:                    \
-            fsl_dma_err =  E_FMAN_DMA_ERR_CATASTROPHIC; break;    \
-        case  e_FM_DMA_ERR_REPORT:                    \
-            fsl_dma_err =  E_FMAN_DMA_ERR_REPORT; break;        \
-        default: \
-            fsl_dma_err =  E_FMAN_DMA_ERR_CATASTROPHIC; break;    \
-    }
-
-#define FMAN_CATASTROPHIC_ERR_TRANS(fsl_catastrophic_err, _catastrophic_err) \
-    switch (_catastrophic_err){ \
-        case  e_FM_CATASTROPHIC_ERR_STALL_PORT:                    \
-            fsl_catastrophic_err =  E_FMAN_CATAST_ERR_STALL_PORT; break;    \
-        case  e_FM_CATASTROPHIC_ERR_STALL_TASK:                    \
-            fsl_catastrophic_err =  E_FMAN_CATAST_ERR_STALL_TASK; break;        \
-        default: \
-            fsl_catastrophic_err =  E_FMAN_CATAST_ERR_STALL_PORT; break;    \
-    }
-
-#define FMAN_COUNTERS_TRANS(fsl_counters, _counters) \
-    switch (_counters){ \
-        case  e_FM_COUNTERS_ENQ_TOTAL_FRAME:                    \
-            fsl_counters =  E_FMAN_COUNTERS_ENQ_TOTAL_FRAME; break;    \
-        case  e_FM_COUNTERS_DEQ_TOTAL_FRAME:                    \
-            fsl_counters =  E_FMAN_COUNTERS_DEQ_TOTAL_FRAME; break;        \
-        case  e_FM_COUNTERS_DEQ_0:                    \
-            fsl_counters =  E_FMAN_COUNTERS_DEQ_0; break;    \
-        case  e_FM_COUNTERS_DEQ_1:                    \
-            fsl_counters =  E_FMAN_COUNTERS_DEQ_1; break;        \
-        case  e_FM_COUNTERS_DEQ_2:                    \
-            fsl_counters =  E_FMAN_COUNTERS_DEQ_2; break;    \
-        case  e_FM_COUNTERS_DEQ_3:                    \
-            fsl_counters =  E_FMAN_COUNTERS_DEQ_3; break;        \
-        case  e_FM_COUNTERS_DEQ_FROM_DEFAULT:                    \
-            fsl_counters =  E_FMAN_COUNTERS_DEQ_FROM_DEFAULT; break;    \
-        case  e_FM_COUNTERS_DEQ_FROM_CONTEXT:                    \
-            fsl_counters =  E_FMAN_COUNTERS_DEQ_FROM_CONTEXT; break;        \
-        case  e_FM_COUNTERS_DEQ_FROM_FD:                    \
-            fsl_counters =  E_FMAN_COUNTERS_DEQ_FROM_FD; break;    \
-        case  e_FM_COUNTERS_DEQ_CONFIRM:                    \
-            fsl_counters =  E_FMAN_COUNTERS_DEQ_CONFIRM; break;        \
-        default: \
-            fsl_counters =  E_FMAN_COUNTERS_ENQ_TOTAL_FRAME; break;    \
-    }
-
 /**************************************************************************//**
  @Description       defaults
 *//***************************************************************************/
-#define DEFAULT_exceptions                 (FM_EX_DMA_BUS_ERROR            |\
+#define FM_EXCEPTIONS                      (FM_EX_DMA_BUS_ERROR            |\
                                             FM_EX_DMA_READ_ECC              |\
                                             FM_EX_DMA_SYSTEM_WRITE_ECC      |\
                                             FM_EX_DMA_FM_WRITE_ECC          |\
@@ -279,59 +169,26 @@ switch (exception){                                         \
                                             FM_EX_QMI_DOUBLE_ECC            |\
                                             FM_EX_QMI_SINGLE_ECC)
 
-#define DEFAULT_eccEnable                   FALSE
+#define FM_ECC_ENABLE                       FALSE
 #ifdef FM_PEDANTIC_DMA
-#define DEFAULT_aidOverride                 TRUE
+#define FM_AID_OVERRIDE                     TRUE
 #else
-#define DEFAULT_aidOverride                 FALSE
+#define FM_AID_OVERRIDE                     FALSE
 #endif /* FM_PEDANTIC_DMA */
-#define DEFAULT_aidMode                     e_FM_DMA_AID_OUT_TNUM
-#define DEFAULT_dmaStopOnBusError           FALSE
-#define DEFAULT_stopAtBusError              FALSE
-#define DEFAULT_axiDbgNumOfBeats            1
-#define DEFAULT_dmaReadIntBufLow            ((DMA_THRESH_MAX_BUF+1)/2)
-#define DEFAULT_dmaReadIntBufHigh           ((DMA_THRESH_MAX_BUF+1)*3/4)
-#define DEFAULT_dmaWriteIntBufLow           ((DMA_THRESH_MAX_BUF+1)/2)
-#define DEFAULT_dmaWriteIntBufHigh          ((DMA_THRESH_MAX_BUF+1)*3/4)
-#define DEFAULT_catastrophicErr             e_FM_CATASTROPHIC_ERR_STALL_PORT
-#define DEFAULT_dmaErr                      e_FM_DMA_ERR_CATASTROPHIC
-#define DEFAULT_resetOnInit                 FALSE
-#define DEFAULT_resetOnInitOverrideCallback NULL
-#define DEFAULT_haltOnExternalActivation    FALSE   /* do not change! if changed, must be disabled for rev1 ! */
-#define DEFAULT_haltOnUnrecoverableEccError FALSE   /* do not change! if changed, must be disabled for rev1 ! */
-#define DEFAULT_externalEccRamsEnable       FALSE
-#define DEFAULT_VerifyUcode                 FALSE
+#define FM_DMA_STOP_ON_BUS_ERROR            FALSE
+#define FM_STOP_ON_BUS_ERROR                FALSE
+#define FM_AXI_DBG_NUM_OF_BEATS             1
+#define FM_DMA_READ_INT_BUF_LOW             ((DMA_THRESH_MAX_BUF+1)/2)
+#define FM_DMA_READ_INT_BUF_HIGH            ((DMA_THRESH_MAX_BUF+1)*3/4)
+#define FM_DMA_WRITE_INT_BUF_LOW            ((DMA_THRESH_MAX_BUF+1)/2)
+#define FM_DMA_WRITE_INT_BUF_HIGH           ((DMA_THRESH_MAX_BUF+1)*3/4)
+#define FM_RESET_ON_INIT                    FALSE
+#define FM_RESET_ON_INIT_OVERRIDE_CALLBACK  NULL
+#define FM_HALT_ON_EXTERNAL_ACTIVATION      FALSE   /* do not change! if changed, must be disabled for rev1 ! */
+#define FM_HALT_ON_UNRECOVERABLE_ECC_ERROR  FALSE   /* do not change! if changed, must be disabled for rev1 ! */
+#define FM_EXTERNAL_ECC_RAMS_ENABLE         FALSE
+#define FM_VERIFY_UCODE                     FALSE
 
-#if (DPAA_VERSION < 11)
-#define DEFAULT_totalFifoSize(major, minor)     \
-    (((major == 2) || (major == 5)) ?           \
-     (100*KILOBYTE) : ((major == 4) ?           \
-     (49*KILOBYTE) : (122*KILOBYTE)))
-#define DEFAULT_totalNumOfTasks(major, minor)   \
-            BMI_MAX_NUM_OF_TASKS
-
-#define DEFAULT_dmaCommQLow                 ((DMA_THRESH_MAX_COMMQ+1)/2)
-#define DEFAULT_dmaCommQHigh                ((DMA_THRESH_MAX_COMMQ+1)*3/4)
-#define DEFAULT_cacheOverride               e_FM_DMA_NO_CACHE_OR
-#define DEFAULT_dmaCamNumOfEntries          32
-#define DEFAULT_dmaDbgCntMode               e_FM_DMA_DBG_NO_CNT
-#define DEFAULT_dmaEnEmergency              FALSE
-#define DEFAULT_dmaSosEmergency             0
-#define DEFAULT_dmaWatchdog                 0 /* disabled */
-#define DEFAULT_dmaEnEmergencySmoother      FALSE
-#define DEFAULT_dmaEmergencySwitchCounter   0
-
-#define DEFAULT_dispLimit                   0
-#define DEFAULT_prsDispTh                   16
-#define DEFAULT_plcrDispTh                  16
-#define DEFAULT_kgDispTh                    16
-#define DEFAULT_bmiDispTh                   16
-#define DEFAULT_qmiEnqDispTh                16
-#define DEFAULT_qmiDeqDispTh                16
-#define DEFAULT_fmCtl1DispTh                16
-#define DEFAULT_fmCtl2DispTh                16
-
-#else  /* (DPAA_VERSION < 11) */
 /* Defaults are registers' reset values */
 #define DEFAULT_totalFifoSize(major, minor)			\
 	(((major == 6) && ((minor == 1) || (minor == 4))) ?	\
@@ -361,7 +218,6 @@ switch (exception){                                         \
 #define DEFAULT_qmiDeqDispTh                16
 #define DEFAULT_fmCtl1DispTh                16
 #define DEFAULT_fmCtl2DispTh                16
-#endif /* (DPAA_VERSION < 11) */
 
 #define FM_TIMESTAMP_1_USEC_BIT             8
 
@@ -561,7 +417,6 @@ typedef struct
     uint16_t                    macMaxFrameLengths1G[FM_MAX_NUM_OF_1G_MACS];
 } t_FmStateStruct;
 
-#if (DPAA_VERSION >= 11)
 typedef struct t_FmMapParam {
     uint16_t        profilesBase;
     uint16_t        numOfProfiles;
@@ -584,7 +439,6 @@ typedef struct t_FmSp {
     t_FmPcdSpEntry  profiles[FM_VSP_MAX_NUM_OF_ENTRIES];
     t_FmMapParam    portsMapping[FM_MAX_NUM_OF_PORTS];
 } t_FmSp;
-#endif /* (DPAA_VERSION >= 11) */
 
 typedef struct t_Fm
 {
@@ -617,12 +471,10 @@ typedef struct t_Fm
     bool                        recoveryMode;
     t_FmStateStruct             *p_FmStateStruct;
     uint16_t                    tnumAgingPeriod;
-#if (DPAA_VERSION >= 11)
     t_FmSp                      *p_FmSp;
     uint8_t                     partNumOfVSPs;
     uint8_t                     partVSPBase;
     uintptr_t                   vspBaseAddr;
-#endif /* (DPAA_VERSION >= 11) */
     bool                        portsPreFetchConfigured[FM_MAX_NUM_OF_HW_PORT_IDS]; /* Prefetch configration per Tx-port */
     bool                        portsPreFetchValue[FM_MAX_NUM_OF_HW_PORT_IDS];      /* Prefetch configration per Tx-port */
 

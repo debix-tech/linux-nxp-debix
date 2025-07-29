@@ -59,6 +59,7 @@
 	};
 
 	sound-wm8960 {
+		/delete-property/ audio-codec;
 		status = "disabled";
 	};
 
@@ -82,7 +83,7 @@
 			 <&clk IMX8MP_AUDIO_PLL1_OUT>,
 			 <&clk IMX8MP_AUDIO_PLL2_OUT>;
 		clock-names = "ipg", "mclk", "dma", "pll8k", "pll11k";
-		audio-codec = <&codec>;
+		audio-codec = <&wm8960>;
 		memory-region = <&audio_reserved>;
 		power-domains = <&audiomix_pd>;
 		audio-routing =
@@ -101,7 +102,7 @@
 		assigned-clock-parents = <&clk IMX8MP_AUDIO_PLL1_OUT>;
 		assigned-clock-rates = <196608000>;
 		clocks = <&audio_blk_ctrl IMX8MP_CLK_AUDIOMIX_PDM_IPG>,
-			 <&audio_blk_ctrl IMX8MP_CLK_AUDIOMIX_PDM_ROOT>,
+			 <&audio_blk_ctrl IMX8MP_CLK_AUDIOMIX_PDM_SEL>,
 			 <&audio_blk_ctrl IMX8MP_CLK_AUDIOMIX_SDMA3_ROOT>,
 			 <&clk IMX8MP_AUDIO_PLL1_OUT>,
 			 <&clk IMX8MP_AUDIO_PLL2_OUT>;
@@ -186,7 +187,7 @@
 		};
 	};
 
-	codec: wm8960@1a {
+	wm8960: codec@1a {
 		compatible = "wlf,wm8960,lpa";
 		reg = <0x1a>;
 		wlf,shared-lrclk;

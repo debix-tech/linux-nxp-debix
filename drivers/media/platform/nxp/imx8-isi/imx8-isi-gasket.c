@@ -60,6 +60,7 @@ const struct mxc_gasket_ops mxc_imx8_gasket_ops = {
 #define DISP_MIX_CAMERA_MUX                     0x30
 #define DISP_MIX_CAMERA_MUX_DATA_TYPE(x)        (((x) & 0x3f) << 3)
 #define DISP_MIX_CAMERA_MUX_GASKET_ENABLE       BIT(16)
+#define DISP_MIX_CAMERA_MUX_GASKET_SRC          BIT(17)
 
 static void mxc_imx93_gasket_enable(struct mxc_isi_dev *isi,
 				    const struct v4l2_mbus_frame_desc *fd,
@@ -70,6 +71,11 @@ static void mxc_imx93_gasket_enable(struct mxc_isi_dev *isi,
 
 	val = DISP_MIX_CAMERA_MUX_DATA_TYPE(fd->entry[0].bus.csi2.dt);
 	val |= DISP_MIX_CAMERA_MUX_GASKET_ENABLE;
+
+	/* if the data source is from parallel csi, bit[17]:1 */
+	if (fd->type == V4L2_MBUS_FRAME_DESC_TYPE_PARALLEL)
+		val |= DISP_MIX_CAMERA_MUX_GASKET_SRC;
+
 	regmap_write(isi->gasket, DISP_MIX_CAMERA_MUX, val);
 }
 
@@ -82,44 +88,4 @@ static void mxc_imx93_gasket_disable(struct mxc_isi_dev *isi,
 const struct mxc_gasket_ops mxc_imx93_gasket_ops = {
 	.enable = mxc_imx93_gasket_enable,
 	.disable = mxc_imx93_gasket_disable,
-};
-
-/* -----------------------------------------------------------------------------
- * i.MX95 gasket
- */
-#define ISI_QOS						0x10
-#define ISI_PANIC_QOS					0x14
-
-static void mxc_imx95_set_qos(struct mxc_isi_dev *isi, unsigned int qos)
-{
-	/* Config QoS */
-	regmap_write(isi->gasket, ISI_QOS, qos);
-
-	/* Config Panic QoS */
-	regmap_write(isi->gasket, ISI_PANIC_QOS, qos);
-}
-
-static void mxc_imx95_clear_qos(struct mxc_isi_dev *isi)
-{
-	regmap_write(isi->gasket, ISI_QOS, 0x0);
-	regmap_write(isi->gasket, ISI_PANIC_QOS, 0x0);
-}
-
-static void mxc_imx95_gasket_enable(struct mxc_isi_dev *isi,
-				    const struct v4l2_mbus_frame_desc *fd,
-				    const struct v4l2_mbus_framefmt *fmt,
-				    const unsigned int port)
-{
-	mxc_imx95_set_qos(isi, 0x3);
-}
-
-static void mxc_imx95_gasket_disable(struct mxc_isi_dev *isi,
-				     unsigned int port)
-{
-	mxc_imx95_clear_qos(isi);
-}
-
-const struct mxc_gasket_ops mxc_imx95_gasket_ops = {
-	.enable = mxc_imx95_gasket_enable,
-	.disable = mxc_imx95_gasket_disable,
 };

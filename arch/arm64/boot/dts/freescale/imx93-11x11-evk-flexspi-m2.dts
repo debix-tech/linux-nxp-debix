@@ -5,6 +5,10 @@
 
 #include "imx93-11x11-evk.dts"
 
+&reg_m2_pwr {
+	status = "disabled";
+};
+
 &reg_usdhc3_vmmc {
 	status = "disabled";
 };
@@ -18,9 +22,8 @@
 };
 
 &flexspi1 {
-	pinctrl-names = "default", "sleep";
+	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexspi1>;
-	pinctrl-1 = <&pinctrl_flexspi1>;
 	/*
 	 * For this spi-nor on M.2 card, need first enable the VPCIe_3.3v.
 	 * Note, VPCIe_3.3v need about 1.74ms to change from 0v to 3.3v.

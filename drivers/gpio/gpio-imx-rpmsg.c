@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright 2017 NXP
  *
@@ -387,8 +388,8 @@ static void imx_rpmsg_irq_bus_sync_unlock(struct irq_data *d)
 	 */
 
 	if (port->gpio_pins[gpio_idx].irq_mask && !port->gpio_pins[gpio_idx].irq_unmask) {
-		mutex_unlock(&gpio_rpmsg.lock);
 		port->gpio_pins[gpio_idx].irq_mask = 0;
+		mutex_unlock(&gpio_rpmsg.lock);
 		return;
 	}
 
@@ -535,4 +536,4 @@ device_initcall(gpio_imx_rpmsg_init);
 
 MODULE_AUTHOR("NXP Semiconductor");
 MODULE_DESCRIPTION("NXP i.MX7ULP rpmsg gpio driver");
-MODULE_LICENSE("GPL v2");
+MODULE_LICENSE("GPL");

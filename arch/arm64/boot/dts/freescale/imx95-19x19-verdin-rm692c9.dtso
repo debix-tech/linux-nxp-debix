@@ -6,8 +6,8 @@
 /dts-v1/;
 /plugin/;
 
-#include <dt-bindings/clock/fsl,imx95-clock.h>
 #include <dt-bindings/gpio/gpio.h>
+#include "imx95-clock.h"
 
 &display_pixel_link {
 	status = "okay";
@@ -61,7 +61,7 @@
 	clock-frequency = <400000>;
 
 	focaltech_touch: touchscreen@38 {
-		compatible = "focaltech,fts";
+		compatible = "focaltech,ft3518u";
 		reg = <0x38>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_mipi_dsi_csi>;

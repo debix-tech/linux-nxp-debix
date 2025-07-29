@@ -22,14 +22,6 @@
 		reg = <0x00000000 0x40000000 0 0xc0000000>;
 	};
 
-	modem_reset: modem-reset {
-		compatible = "gpio-reset";
-		reset-gpios = <&gpio3 5 GPIO_ACTIVE_LOW>;
-		reset-delay-us = <2000>;
-		reset-post-delay-ms = <40>;
-		#reset-cells = <0>;
-	};
-
 	ir_recv: ir-receiver {
 		compatible = "gpio-ir-receiver";
 		gpios = <&gpio1 12 GPIO_ACTIVE_LOW>;
@@ -187,19 +179,33 @@
 				<192000>;
 	};
 
+	spdif_out: spdif-out {
+		compatible = "linux,spdif-dit";
+		#sound-dai-cells = <0>;
+	};
+
+	spdif_in: spdif-in {
+		compatible = "linux,spdif-dir";
+		#sound-dai-cells = <0>;
+	};
+
 	sound-spdif {
 		compatible = "fsl,imx-audio-spdif";
 		model = "imx-spdif";
-		spdif-controller = <&spdif1>;
-		spdif-out;
-		spdif-in;
+		audio-cpu = <&spdif1>;
+		audio-codec = <&spdif_out>, <&spdif_in>;
+	};
+
+	hdmi_arc_in: hdmi-arc-in {
+		compatible = "linux,spdif-dir";
+		#sound-dai-cells = <0>;
 	};
 
 	sound-hdmi-arc {
 		compatible = "fsl,imx-audio-spdif";
 		model = "imx-hdmi-arc";
-		spdif-controller = <&spdif2>;
-		spdif-in;
+		audio-cpu = <&spdif2>;
+		audio-codec = <&hdmi_arc_in>;
 	};
 
 	sound-ak4458 {
@@ -265,30 +271,6 @@
 	cpu-supply = <&buck2_reg>;
 };
 
-&csi1_bridge {
-	fsl,mipi-mode;
-	fsl,two-8bit-sensor-mode;
-	status = "okay";
-
-	port {
-		csi1_ep: endpoint {
-			remote-endpoint = <&csi1_mipi_ep>;
-		};
-	};
-};
-
-&csi2_bridge {
-	fsl,mipi-mode;
-	fsl,two-8bit-sensor-mode;
-	status = "okay";
-
-	port {
-		csi2_ep: endpoint {
-			remote-endpoint = <&csi2_mipi_ep>;
-		};
-	};
-};
-
 &fec1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_fec1>;
@@ -318,43 +300,33 @@
 	};
 };
 
-&mipi_csi_1 {
-	status = "okay";
-	port {
-		#address-cells = <1>;
-		#size-cells = <0>;
+&gpio3 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_bt_reset>;
 
-		mipi1_sensor_ep: endpoint@0 {
-			reg = <0>;
-			remote-endpoint = <&ov5640_mipi1_ep>;
-			data-lanes = <1 2>;
-			bus-type = <4>;
-		};
-
-		csi1_mipi_ep: endpoint@1 {
-			reg = <1>;
-			remote-endpoint = <&csi1_ep>;
-		};
+	/* enable the on-board BT */
+	bt-reg-on-hog {
+		gpio-hog;
+		gpios = <5 GPIO_ACTIVE_HIGH>;
+		output-high;
 	};
-};
 
-&mipi_csi_2 {
-	status = "okay";
-	port {
-		#address-cells = <1>;
-		#size-cells = <0>;
+	ak4458-reset-hog {
+		gpio-hog;
+		gpios = <18 GPIO_ACTIVE_LOW>;
+		output-low;
+	};
 
-		mipi2_sensor_ep: endpoint@0 {
-			reg = <0>;
-			remote-endpoint = <&ov5640_mipi2_ep>;
-			data-lanes = <1 2>;
-			bus-type = <4>;
-		};
+	ak5558-reset-hog {
+		gpio-hog;
+		gpios = <17 GPIO_ACTIVE_LOW>;
+		output-low;
+	};
 
-		csi2_mipi_ep: endpoint@1 {
-			reg = <1>;
-			remote-endpoint = <&csi2_ep>;
-		};
+	ak4497-reset-hog {
+		gpio-hog;
+		gpios = <16 GPIO_ACTIVE_LOW>;
+		output-low;
 	};
 };
 
@@ -376,23 +348,23 @@
 	status = "okay";
 
 	ov5640_mipi2: ov5640_mipi2@3c {
-		compatible = "ovti,ov5640_mipi";
+		compatible = "ovti,ov5640";
 		reg = <0x3c>;
 		status = "okay";
 		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_csi2_pwn>, <&pinctrl_csi_rst>;
+		pinctrl-0 = <&pinctrl_camera2_pwdn>, <&pinctrl_camera_rst>;
 		clocks = <&clk IMX8MQ_CLK_CLKO2>;
-		clock-names = "csi_mclk";
+		clock-names = "xclk";
 		assigned-clocks = <&clk IMX8MQ_CLK_CLKO2>;
 		assigned-clock-parents = <&clk IMX8MQ_SYS2_PLL_200M>;
 		assigned-clock-rates = <20000000>;
 		csi_id = <1>;
-		pwn-gpios = <&gpio1 5 GPIO_ACTIVE_HIGH>;
-		mclk = <20000000>;
-		mclk_source = <0>;
+		powerdown-gpios = <&gpio1 5 GPIO_ACTIVE_HIGH>;
 		port {
-			ov5640_mipi2_ep: endpoint {
-				remote-endpoint = <&mipi2_sensor_ep>;
+			ov5640_to_mipi_csi2: endpoint {
+				remote-endpoint = <&imx8mq_mipi2_csi_in>;
+				clock-lanes = <0>;
+				data-lanes = <1 2>;
 			};
 		};
 	};
@@ -558,14 +530,12 @@
 		#sound-dai-cells = <0>;
 		compatible = "asahi-kasei,ak5558";
 		reg = <0x13>;
-		reset-gpios = <&gpio3 17 GPIO_ACTIVE_LOW>;
 	};
 
 	ak4497: ak4497@11 {
 		#sound-dai-cells = <0>;
 		compatible = "asahi-kasei,ak4497";
 		reg = <0x11>;
-		reset-gpios = <&gpio3 16 GPIO_ACTIVE_LOW>;
 		dsd-path = <1>;
 	};
 
@@ -589,26 +559,64 @@
 	status = "okay";
 
 	ov5640_mipi: ov5640_mipi@3c {
-		compatible = "ovti,ov5640_mipi";
+		compatible = "ovti,ov5640";
 		reg = <0x3c>;
 		status = "okay";
 		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_csi1_pwn>;
+		pinctrl-0 = <&pinctrl_camera1_pwdn>;
 		clocks = <&clk IMX8MQ_CLK_CLKO2>;
-		clock-names = "csi_mclk";
+		clock-names = "xclk";
 		assigned-clocks = <&clk IMX8MQ_CLK_CLKO2>;
 		assigned-clock-parents = <&clk IMX8MQ_SYS2_PLL_200M>;
 		assigned-clock-rates = <20000000>;
 		csi_id = <0>;
-		pwn-gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;
-		mclk = <20000000>;
-		mclk_source = <0>;
+		powerdown-gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;
 		port {
-			ov5640_mipi1_ep: endpoint {
-				remote-endpoint = <&mipi1_sensor_ep>;
+			ov5640_to_mipi_csi1: endpoint {
+				remote-endpoint = <&imx8mq_mipi1_csi_in>;
+				clock-lanes = <0>;
+				data-lanes = <1 2>;
 			};
 		};
 	};
+};
+
+&mipi_csi1 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "okay";
+	ports {
+		port@0 {
+			imx8mq_mipi1_csi_in: endpoint {
+				remote-endpoint = <&ov5640_to_mipi_csi1>;
+				data-lanes = <1 2>;
+				bus-type = <4>;
+			};
+		};
+	};
+};
+
+&mipi_csi2 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "okay";
+	ports {
+		port@0 {
+			imx8mq_mipi2_csi_in: endpoint {
+				remote-endpoint = <&ov5640_to_mipi_csi2>;
+				data-lanes = <1 2>;
+				bus-type = <4>;
+			};
+		};
+	};
+};
+
+&csi1 {
+	status = "okay";
+};
+
+&csi2 {
+	status = "okay";
 };
 
 &pcie0 {
@@ -773,7 +781,6 @@
 	assigned-clocks = <&clk IMX8MQ_CLK_UART3>;
 	assigned-clock-parents = <&clk IMX8MQ_SYS1_PLL_80M>;
 	fsl,uart-has-rtscts;
-	resets = <&modem_reset>;
 	status = "okay";
 
 	bluetooth {
@@ -872,21 +879,21 @@
 		>;
 	};
 
-	pinctrl_csi1_pwn: csi1_pwn_grp {
+	pinctrl_camera1_pwdn: camera1_pwdn_grp {
 		fsl,pins = <
-			MX8MQ_IOMUXC_GPIO1_IO03_GPIO1_IO3		0x19
+			MX8MQ_IOMUXC_GPIO1_IO03_GPIO1_IO3               0x19
 		>;
 	};
-	pinctrl_csi2_pwn: csi2_pwn_grp {
+	pinctrl_camera2_pwdn: camera2_pwdn_grp {
 		fsl,pins = <
 			MX8MQ_IOMUXC_GPIO1_IO05_GPIO1_IO5		0x19
 		>;
 	};
 
-	pinctrl_csi_rst: csi_rst_grp {
+	pinctrl_camera_rst: camera_rst_grp {
 		fsl,pins = <
-			MX8MQ_IOMUXC_GPIO1_IO06_GPIO1_IO6		0x19
-			MX8MQ_IOMUXC_GPIO1_IO15_CCMSRCGPCMIX_CLKO2	0x59
+			MX8MQ_IOMUXC_GPIO1_IO06_GPIO1_IO6               0x19
+			MX8MQ_IOMUXC_GPIO1_IO15_CCMSRCGPCMIX_CLKO2      0x59
 		>;
 	};
 
@@ -1100,7 +1107,6 @@
 			MX8MQ_IOMUXC_UART3_RXD_UART3_DCE_RX		0x49
 			MX8MQ_IOMUXC_ECSPI1_MISO_UART3_DCE_CTS_B	0x49
 			MX8MQ_IOMUXC_ECSPI1_SS0_UART3_DCE_RTS_B		0x49
-			MX8MQ_IOMUXC_NAND_CLE_GPIO3_IO5			0x19
 		>;
 	};
 
@@ -1200,6 +1206,12 @@
 	pinctrl_wdog: wdog1grp {
 		fsl,pins = <
 			MX8MQ_IOMUXC_GPIO1_IO02_WDOG1_WDOG_B		0xc6
+		>;
+	};
+
+	pinctrl_bt_reset: btresetgrp {
+		fsl,pins = <
+			MX8MQ_IOMUXC_NAND_CLE_GPIO3_IO5			0x16
 		>;
 	};
 

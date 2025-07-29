@@ -85,7 +85,7 @@ static int enetc_msg_vsi_send(struct enetc_si *si, struct enetc_msg_swbd *msg)
 			break;
 		case ENETC_MSG_CLASS_ID_VLAN_FILTER:
 			if (pf_msg.class_code == ENETC_PF_RC_VLAN_FILTER_NO_RESOURCE)
-				return -ENOSPC;
+				err = -ENOSPC;
 
 			err = -EINVAL;
 			break;
@@ -127,8 +127,8 @@ static int enetc_msg_vf_register_link_status_notify(struct enetc_si *si, bool no
 	return err;
 }
 
-static int enetc_msg_vf_set_primary_mac_addr(struct enetc_ndev_priv *priv,
-					     struct sockaddr *saddr)
+static int enetc_msg_vsi_set_primary_mac_addr(struct enetc_ndev_priv *priv,
+					      struct sockaddr *saddr)
 {
 	struct enetc_msg_mac_exact_filter *msg;
 	struct enetc_msg_swbd msg_swbd;
@@ -169,11 +169,13 @@ static int enetc_vf_set_mac_addr(struct net_device *ndev, void *addr)
 	if (!is_valid_ether_addr(saddr->sa_data))
 		return -EADDRNOTAVAIL;
 
-	err = enetc_msg_vf_set_primary_mac_addr(priv, saddr);
-	if (!err)
-		eth_hw_addr_set(ndev, saddr->sa_data);
+	err = enetc_msg_vsi_set_primary_mac_addr(priv, saddr);
+	if (err)
+		return err;
 
-	return err;
+	eth_hw_addr_set(ndev, saddr->sa_data);
+
+	return 0;
 }
 
 static void enetc_msg_vf_set_mac_promisc(struct enetc_ndev_priv *priv,

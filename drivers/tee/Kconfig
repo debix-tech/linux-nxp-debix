@@ -15,6 +15,7 @@ if TEE
 
 source "drivers/tee/optee/Kconfig"
 source "drivers/tee/amdtee/Kconfig"
+source "drivers/tee/tstee/Kconfig"
 source "drivers/tee/crypto/Kconfig"
 
 endif

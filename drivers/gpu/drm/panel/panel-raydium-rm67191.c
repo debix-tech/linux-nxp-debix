@@ -11,7 +11,7 @@
 #include <linux/media-bus-format.h>
 #include <linux/module.h>
 #include <linux/of.h>
-#include <linux/of_platform.h>
+#include <linux/of_device.h>
 #include <linux/regulator/consumer.h>
 
 #include <video/mipi_display.h>
@@ -134,7 +134,6 @@ struct rad_panel {
 	unsigned int num_supplies;
 
 	bool prepared;
-	bool enabled;
 
 	const struct rad_platform_data *pdata;
 };
@@ -203,9 +202,6 @@ static int rad_panel_prepare(struct drm_panel *panel)
 	struct rad_panel *rad = to_rad_panel(panel);
 	int ret;
 
-	if (rad->prepared)
-		return 0;
-
 	ret = regulator_bulk_enable(rad->num_supplies, rad->supplies);
 	if (ret)
 		return ret;
@@ -231,9 +227,6 @@ static int rad_panel_unprepare(struct drm_panel *panel)
 {
 	struct rad_panel *rad = to_rad_panel(panel);
 	int ret;
-
-	if (!rad->prepared)
-		return 0;
 
 	/*
 	 * Right after asserting the reset, we need to release it, so that the
@@ -262,9 +255,6 @@ static int rm67191_enable(struct rad_panel *panel)
 	u8 dsi_mode;
 	int color_format = color_format_from_dsi_format(dsi->format);
 	int ret;
-
-	if (panel->enabled)
-		return 0;
 
 	dsi->mode_flags |= MIPI_DSI_MODE_LPM;
 
@@ -333,8 +323,6 @@ static int rm67191_enable(struct rad_panel *panel)
 
 	backlight_enable(panel->backlight);
 
-	panel->enabled = true;
-
 	return 0;
 
 fail:
@@ -350,9 +338,6 @@ static int rm67199_enable(struct rad_panel *panel)
 	u8 dsi_mode;
 	int color_format = color_format_from_dsi_format(dsi->format);
 	int ret;
-
-	if (panel->enabled)
-		return 0;
 
 	dsi->mode_flags |= MIPI_DSI_MODE_LPM;
 
@@ -424,8 +409,6 @@ static int rm67199_enable(struct rad_panel *panel)
 
 	backlight_enable(panel->backlight);
 
-	panel->enabled = true;
-
 	return 0;
 
 fail:
@@ -448,9 +431,6 @@ static int rad_panel_disable(struct drm_panel *panel)
 	struct device *dev = &dsi->dev;
 	int ret;
 
-	if (!rad->enabled)
-		return 0;
-
 	dsi->mode_flags |= MIPI_DSI_MODE_LPM;
 
 	backlight_disable(rad->backlight);
@@ -470,8 +450,6 @@ static int rad_panel_disable(struct drm_panel *panel)
 		dev_err(dev, "Failed to enter sleep mode (%d)\n", ret);
 		return ret;
 	}
-
-	rad->enabled = false;
 
 	return 0;
 }
@@ -683,14 +661,6 @@ static void rad_panel_remove(struct mipi_dsi_device *dsi)
 	drm_panel_remove(&rad->panel);
 }
 
-static void rad_panel_shutdown(struct mipi_dsi_device *dsi)
-{
-	struct rad_panel *rad = mipi_dsi_get_drvdata(dsi);
-
-	rad_panel_disable(&rad->panel);
-	rad_panel_unprepare(&rad->panel);
-}
-
 static struct mipi_dsi_driver rad_panel_driver = {
 	.driver = {
 		.name = "panel-raydium-rm67191",
@@ -698,7 +668,6 @@ static struct mipi_dsi_driver rad_panel_driver = {
 	},
 	.probe = rad_panel_probe,
 	.remove = rad_panel_remove,
-	.shutdown = rad_panel_shutdown,
 };
 module_mipi_dsi_driver(rad_panel_driver);
 

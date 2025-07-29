@@ -78,7 +78,6 @@
 struct hym8563 {
 	struct i2c_client	*client;
 	struct rtc_device	*rtc;
-	bool                    valid;
 #ifdef CONFIG_COMMON_CLK
 	struct clk_hw		clkout_hw;
 #endif
@@ -93,13 +92,12 @@ static int hym8563_rtc_read_time(struct device *dev, struct rtc_time *tm)
 	struct i2c_client *client = to_i2c_client(dev);
 	u8 buf[7];
 	int ret;
-	struct hym8563 *hym8563 = i2c_get_clientdata(client);
 
 	ret = i2c_smbus_read_i2c_block_data(client, HYM8563_SEC, 7, buf);
 	if (ret < 0)
 		return ret;
 
-	if (!hym8563->valid) {
+	if (buf[0] & HYM8563_SEC_VL) {
 		dev_warn(&client->dev,
 			 "no valid clock/calendar values available\n");
 		return -EINVAL;
@@ -119,7 +117,6 @@ static int hym8563_rtc_read_time(struct device *dev, struct rtc_time *tm)
 static int hym8563_rtc_set_time(struct device *dev, struct rtc_time *tm)
 {
 	struct i2c_client *client = to_i2c_client(dev);
-	struct hym8563 *hym8563 = i2c_get_clientdata(client);
 	u8 buf[7];
 	int ret;
 
@@ -442,14 +439,9 @@ out:
 static int hym8563_init_device(struct i2c_client *client)
 {
 	int ret;
-	int i = 0;
 
 	/* Clear stop flag if present */
-	for( i = 0 ; i < 100 ; i++){
-		ret = i2c_smbus_write_byte_data(client, HYM8563_CTL1, 0);
-		if(ret >= 0) break;
-	}
-	if(i > 1 ) printk("GSL %s i=%d \n", __func__, i);
+	ret = i2c_smbus_write_byte_data(client, HYM8563_CTL1, 0);
 	if (ret < 0)
 		return ret;
 
@@ -502,85 +494,7 @@ static int hym8563_resume(struct device *dev)
 #endif
 
 static SIMPLE_DEV_PM_OPS(hym8563_pm_ops, hym8563_suspend, hym8563_resume);
-#define TIME_LEN 10
-static int parse_init_date(const char *date, struct rtc_time *rtm)
-{
-       unsigned int init_date;
-       char local_str[TIME_LEN + 1];
-       char *year_s, *month_s, *day_s, *str;
-       unsigned int year_d, month_d, day_d;
-       int ret;
 
-       if (strlen(date) != 10)
-               return -1;
-       memset(local_str, 0, TIME_LEN + 1);
-       strncpy(local_str, date, TIME_LEN);
-       str = local_str;
-       year_s = strsep(&str, "/");
-       if (!year_s)
-               return -1;
-       month_s = strsep(&str, "/");
-       if (!month_s)
-               return -1;
-       day_s = str;
-       pr_debug("year: %s\nmonth: %s\nday: %s\n", year_s, month_s, day_s);
-       ret = kstrtou32(year_s, 10, &year_d);
-       if (ret < 0 || year_d > 2100 || year_d < 1900)
-               return -1;
-       ret = kstrtou32(month_s, 10, &month_d);
-       if (ret < 0 || month_d > 12)
-               return -1;
-       ret = kstrtou32(day_s, 10, &day_d);
-       if (ret < 0 || day_d > 31)
-               return -1;
-       init_date = mktime64(year_d, month_d, day_d, 0, 0, 0);
-
-       rtc_time64_to_tm(init_date, rtm);
-
-       return rtc_valid_tm(rtm);
-}
-
-static int hym8563_rtc_init_time(struct i2c_client *client, struct rtc_time *tm)
-{
-       u8 buf[7];
-       int ret;
-
-       /* Years >= 2100 are to far in the future, 19XX is to early */
-       if (tm->tm_year < 100 || tm->tm_year >= 200)
-               return -EINVAL;
-
-       buf[0] = bin2bcd(tm->tm_sec);
-       buf[1] = bin2bcd(tm->tm_min);
-       buf[2] = bin2bcd(tm->tm_hour);
-       buf[3] = bin2bcd(tm->tm_mday);
-       buf[4] = bin2bcd(tm->tm_wday);
-       buf[5] = bin2bcd(tm->tm_mon + 1);
-
-       /*
-        * While the HYM8563 has a century flag in the month register,
-        * it does not seem to carry it over a subsequent write/read.
-        * So we'll limit ourself to 100 years, starting at 2000 for now.
-        */
-       buf[6] = bin2bcd(tm->tm_year - 100);
-
-       /*
-        * CTL1 only contains TEST-mode bits apart from stop,
-        * so no need to read the value first
-        */
-       ret = i2c_smbus_write_byte_data(client, HYM8563_CTL1,
-                                               HYM8563_CTL1_STOP);
-       if (ret < 0)
-               return ret;
-
-       ret = i2c_smbus_write_i2c_block_data(client, HYM8563_SEC, 7, buf);
-       if (ret < 0)
-               return ret;
-       ret = i2c_smbus_write_byte_data(client, HYM8563_CTL1, 0);
-       if (ret < 0)
-               return ret;
-
-       return 0;
-}
 static int hym8563_probe(struct i2c_client *client)
 {
 	struct hym8563 *hym8563;
@@ -604,9 +518,14 @@ static int hym8563_probe(struct i2c_client *client)
 	}
 
 	if (client->irq > 0) {
+		unsigned long irqflags = IRQF_TRIGGER_LOW;
+
+		if (dev_fwnode(&client->dev))
+			irqflags = 0;
+
 		ret = devm_request_threaded_irq(&client->dev, client->irq,
 						NULL, hym8563_irq,
-						IRQF_TRIGGER_LOW | IRQF_ONESHOT,
+						irqflags | IRQF_ONESHOT,
 						client->name, hym8563);
 		if (ret < 0) {
 			dev_err(&client->dev, "irq %d request failed, %d\n",
@@ -624,30 +543,9 @@ static int hym8563_probe(struct i2c_client *client)
 	ret = i2c_smbus_read_byte_data(client, HYM8563_SEC);
 	if (ret < 0)
 		return ret;
-	hym8563->valid = !(ret & HYM8563_SEC_VL);
-	dev_dbg(&client->dev, "rtc information is %s\n",
-		hym8563->valid ? "invalid" : "valid");
-	if(!hym8563->valid){
-			struct device_node *node = client->dev.of_node;
-			const char *str = NULL;
-			int init_date_valid = -1;
-			struct rtc_time tm;
-			/* optional override of the init_date */
-			ret = of_property_read_string(node, "init_date", &str);
-			if (!ret) {
-					dev_dbg(&client->dev, "init_date: %s\n", str);
-					init_date_valid = parse_init_date(str, &tm);
-			}
 
-			if(init_date_valid == 0){
-					dev_info(&client->dev, "setting hym8563 clock to %s\n", str);
-					ret = hym8563_rtc_init_time(client, &tm);
-					if (!ret) {
-							dev_dbg(&client->dev, "hym8563_rtc_init_time: %s\n", str);
-							hym8563->valid = true;
-					}
-			}
-	}
+	dev_dbg(&client->dev, "rtc information is %s\n",
+		(ret & HYM8563_SEC_VL) ? "invalid" : "valid");
 
 	hym8563->rtc->ops = &hym8563_rtc_ops;
 	set_bit(RTC_FEATURE_ALARM_RES_MINUTE, hym8563->rtc->features);
@@ -661,8 +559,8 @@ static int hym8563_probe(struct i2c_client *client)
 }
 
 static const struct i2c_device_id hym8563_id[] = {
-	{ "hym8563", 0 },
-	{},
+	{ "hym8563" },
+	{}
 };
 MODULE_DEVICE_TABLE(i2c, hym8563_id);
 

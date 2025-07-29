@@ -80,6 +80,18 @@ static irqreturn_t bbnsm_pwrkey_interrupt(int irq, void *dev_id)
 
 	pm_wakeup_event(bbnsm->input->dev.parent, 0);
 
+	/*
+	 * Directly report key event after resume to make sure key press
+	 * event is never missed.
+	 */
+	if (bbnsm->suspended) {
+		bbnsm->keystate = 1;
+		input_event(input, EV_KEY, bbnsm->keycode, 1);
+		input_sync(input);
+		/* Fire at most once per suspend/resume cycle */
+		bbnsm->suspended = false;
+	}
+
 	mod_timer(&bbnsm->check_timer,
 		   jiffies + msecs_to_jiffies(DEBOUNCE_TIME));
 

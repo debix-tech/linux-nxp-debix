@@ -75,13 +75,6 @@
 		#reset-cells = <0>;
 	};
 
-	modem_reset: modem-reset {
-		compatible = "gpio-reset";
-		reset-gpios = <&rpmsg_gpio0 15 GPIO_ACTIVE_LOW>;
-		reset-delay-us = <1000>;
-		#reset-cells = <0>;
-	};
-
 	pf1550-rpmsg {
 		compatible = "fsl,pf1550-rpmsg";
 		sw1_reg: SW1 {
@@ -346,7 +339,6 @@
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&pinctrl_lpuart6>;
 	pinctrl-1 = <&pinctrl_lpuart6>;
-	resets = <&modem_reset>;
 	status = "okay";
 };
 
@@ -443,6 +435,7 @@
 	pinctrl-2 = <&pinctrl_usdhc0>;
 	pinctrl-3 = <&pinctrl_usdhc0>;
 	fsl,delay-line = <15>;
+	fsl,tuning-step = <1>;
 	cd-gpios = <&gpio_ptc 10 GPIO_ACTIVE_LOW>;
 	vmmc-supply = <&reg_vsd_3v3>;
 	vqmmc-supply = <&vldo2_reg>;

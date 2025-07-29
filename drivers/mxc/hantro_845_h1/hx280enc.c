@@ -725,8 +725,9 @@ static int __init hx280enc_init(void)
 			ReleaseIO();
 			goto err;
 		}
-	} else
-	PDEBUG(KERN_INFO "hx280enc: IRQ not in use!\n");
+	} else {
+		PDEBUG(KERN_INFO "hx280enc: IRQ not in use!\n");
+	}
 	irq_set_status_flags(irq, IRQ_DISABLE_UNLAZY);
 
 	pr_info("hx280enc: module inserted. Major <%d>\n", hx280enc_major);
@@ -979,7 +980,7 @@ out:
 	return err;
 }
 
-static int hantro_h1_dev_remove(struct platform_device *pdev)
+static void hantro_h1_dev_remove(struct platform_device *pdev)
 {
 	hantro_h1_clk_enable(&pdev->dev);
 	pm_runtime_get_sync(&pdev->dev);
@@ -997,8 +998,6 @@ static int hantro_h1_dev_remove(struct platform_device *pdev)
 		clk_put(hantro_clk_h1);
 	if (!IS_ERR(hantro_clk_h1_bus))
 		clk_put(hantro_clk_h1_bus);
-
-	return 0;
 }
 
 static int hx280enc_suspend(struct device *dev)

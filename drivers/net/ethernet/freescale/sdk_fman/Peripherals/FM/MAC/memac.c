@@ -36,6 +36,7 @@
 
  @Description   FM mEMAC driver
 *//***************************************************************************/
+#define __ERR_MODULE__  MODULE_FM_MAC
 
 #include "std_ext.h"
 #include "string_ext.h"
@@ -47,6 +48,7 @@
 #include "fm_common.h"
 #include "memac.h"
 
+#define MEMAC_HASH_TABLE_SIZE			64
 
 /*****************************************************************************/
 /*                      Internal routines                                    */
@@ -423,7 +425,7 @@ static t_Error MemacConfigException(t_Handle h_Memac, e_FmMacExceptions exceptio
     SANITY_CHECK_RETURN_ERROR(p_Memac, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(p_Memac->p_MemacDriverParam, E_INVALID_STATE);
 
-    GET_EXCEPTION_FLAG(bitMask, exception);
+    MEMAC_GET_EXCEPTION_FLAG(bitMask, exception);
     if (bitMask)
     {
         if (enable)
@@ -846,7 +848,7 @@ static t_Error MemacSetException(t_Handle h_Memac, e_FmMacExceptions exception, 
     SANITY_CHECK_RETURN_ERROR(p_Memac, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(!p_Memac->p_MemacDriverParam, E_INVALID_STATE);
 
-    GET_EXCEPTION_FLAG(bitMask, exception);
+    MEMAC_GET_EXCEPTION_FLAG(bitMask, exception);
     if (bitMask)
     {
         if (enable)
@@ -989,14 +991,14 @@ static t_Error MemacInit(t_Handle h_Memac)
     if (err)
         RETURN_ERROR(MAJOR, err, ("settings Mac max frame length is FAILED"));
 
-    p_Memac->p_MulticastAddrHash = AllocHashTable(HASH_TABLE_SIZE);
+    p_Memac->p_MulticastAddrHash = AllocHashTable(MEMAC_HASH_TABLE_SIZE);
     if (!p_Memac->p_MulticastAddrHash)
     {
         FreeInitResources(p_Memac);
         RETURN_ERROR(MAJOR, E_NO_MEMORY, ("allocation hash table is FAILED"));
     }
 
-    p_Memac->p_UnicastAddrHash = AllocHashTable(HASH_TABLE_SIZE);
+    p_Memac->p_UnicastAddrHash = AllocHashTable(MEMAC_HASH_TABLE_SIZE);
     if (!p_Memac->p_UnicastAddrHash)
     {
         FreeInitResources(p_Memac);
@@ -1150,7 +1152,7 @@ t_Handle MEMAC_Config(t_FmMacParams *p_FmMacParam)
 
     p_Memac->enetMode       = p_FmMacParam->enetMode;
     p_Memac->macId          = p_FmMacParam->macId;
-    p_Memac->exceptions     = MEMAC_default_exceptions;
+    p_Memac->exceptions     = MEMAC_EXCEPTIONS;
     p_Memac->f_Exception    = p_FmMacParam->f_Exception;
     p_Memac->f_Event        = p_FmMacParam->f_Event;
     p_Memac->h_App          = p_FmMacParam->h_App;

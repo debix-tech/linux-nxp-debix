@@ -5,6 +5,7 @@
 #include "en.h"
 #include "ipsec.h"
 #include "lib/crypto.h"
+#include "lib/ipsec_fs_roce.h"
 #include "fs_core.h"
 #include "eswitch.h"
 
@@ -50,9 +51,10 @@ u32 mlx5_ipsec_device_caps(struct mlx5_core_dev *mdev)
 		    MLX5_CAP_FLOWTABLE_NIC_RX(mdev, decap))
 			caps |= MLX5_IPSEC_CAP_PACKET_OFFLOAD;
 
-		if ((MLX5_CAP_FLOWTABLE_NIC_TX(mdev, ignore_flow_level) &&
-		     MLX5_CAP_FLOWTABLE_NIC_RX(mdev, ignore_flow_level)) ||
-		    MLX5_CAP_ESW_FLOWTABLE_FDB(mdev, ignore_flow_level))
+		if (IS_ENABLED(CONFIG_MLX5_CLS_ACT) &&
+		    ((MLX5_CAP_FLOWTABLE_NIC_TX(mdev, ignore_flow_level) &&
+		      MLX5_CAP_FLOWTABLE_NIC_RX(mdev, ignore_flow_level)) ||
+		     MLX5_CAP_ESW_FLOWTABLE_FDB(mdev, ignore_flow_level)))
 			caps |= MLX5_IPSEC_CAP_PRIO;
 
 		if (MLX5_CAP_FLOWTABLE_NIC_TX(mdev,
@@ -68,7 +70,7 @@ u32 mlx5_ipsec_device_caps(struct mlx5_core_dev *mdev)
 			caps |= MLX5_IPSEC_CAP_ESPINUDP;
 	}
 
-	if (mlx5_get_roce_state(mdev) &&
+	if (mlx5_get_roce_state(mdev) && mlx5_ipsec_fs_is_mpv_roce_supported(mdev) &&
 	    MLX5_CAP_GEN_2(mdev, flow_table_type_2_type) & MLX5_FT_NIC_RX_2_NIC_RX_RDMA &&
 	    MLX5_CAP_GEN_2(mdev, flow_table_type_2_type) & MLX5_FT_NIC_TX_RDMA_2_NIC_TX)
 		caps |= MLX5_IPSEC_CAP_ROCE;
@@ -125,6 +127,7 @@ static void mlx5e_ipsec_packet_setup(void *obj, u32 pdn,
 		MLX5_SET(ipsec_aso, aso_ctx, remove_flow_pkt_cnt,
 			 attrs->lft.hard_packet_limit);
 		MLX5_SET(ipsec_aso, aso_ctx, hard_lft_arm, 1);
+		MLX5_SET(ipsec_aso, aso_ctx, remove_flow_enable, 1);
 	}
 
 	if (attrs->lft.soft_packet_limit != XFRM_INF) {

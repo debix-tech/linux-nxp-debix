@@ -258,7 +258,6 @@ static void dpu95_crtc_atomic_begin(struct drm_crtc *crtc,
 	struct drm_crtc_state *old_crtc_state;
 	struct drm_atomic_state *old_state;
 	struct dpu95_crtc *dpu_crtc = to_dpu95_crtc(crtc);
-	struct drm_plane *plane;
 	struct drm_plane_state *old_plane_state;
 	struct dpu95_plane_state *old_dpstate;
 	struct dpu95_fetchunit *fu;
@@ -281,7 +280,7 @@ static void dpu95_crtc_atomic_begin(struct drm_crtc *crtc,
 	 * Whether any of them would be disabled or kept running depends
 	 * on new plane states in the new global atomic state.
 	 */
-	for_each_old_plane_in_state(old_state, plane, old_plane_state, i) {
+	for_each_old_plane_state_in_state(old_state, old_plane_state, i) {
 		old_dpstate = to_dpu95_plane_state(old_plane_state);
 
 		if (!old_plane_state->fb)
@@ -324,7 +323,6 @@ static void dpu95_crtc_atomic_flush(struct drm_crtc *crtc,
 	struct dpu95_plane_state *old_dpstate;
 	struct drm_atomic_state *old_state;
 	struct dpu95_fetchunit *fu;
-	struct drm_plane *plane;
 	int i;
 
 	old_crtc_state = drm_atomic_get_old_crtc_state(state, crtc);
@@ -338,7 +336,7 @@ static void dpu95_crtc_atomic_flush(struct drm_crtc *crtc,
 	}
 
 	/* Set no stream id for disabled fetchunits of relevant planes. */
-	for_each_old_plane_in_state(old_state, plane, old_plane_state, i) {
+	for_each_old_plane_state_in_state(old_state, old_plane_state, i) {
 		old_dpstate = to_dpu95_plane_state(old_plane_state);
 
 		if (!old_plane_state->fb)

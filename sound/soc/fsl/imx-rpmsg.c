@@ -5,9 +5,7 @@
 #include <linux/of_platform.h>
 #include <linux/of_reserved_mem.h>
 #include <linux/i2c.h>
-#include <linux/of_gpio.h>
 #include <linux/slab.h>
-#include <linux/gpio.h>
 #include <linux/clk.h>
 #include <sound/soc.h>
 #include <sound/jack.h>
@@ -22,8 +20,8 @@ struct imx_rpmsg {
 	struct snd_soc_dai_link dai;
 	struct snd_soc_card card;
 	unsigned long sysclk;
-	struct asoc_simple_jack hp_jack;
 	bool lpa;
+	struct simple_util_jack hp_jack;
 	int sysclk_id;
 };
 
@@ -41,7 +39,7 @@ static int imx_rpmsg_late_probe(struct snd_soc_card *card)
 	struct imx_rpmsg *data = snd_soc_card_get_drvdata(card);
 	struct snd_soc_pcm_runtime *rtd = list_first_entry(&card->rtd_list,
 							   struct snd_soc_pcm_runtime, list);
-	struct snd_soc_dai *codec_dai = asoc_rtd_to_codec(rtd, 0);
+	struct snd_soc_dai *codec_dai = snd_soc_rtd_to_codec(rtd, 0);
 	struct device *dev = card->dev;
 	int ret;
 
@@ -70,14 +68,16 @@ static int imx_rpmsg_late_probe(struct snd_soc_card *card)
 			if (codec_comp) {
 				int i, num_widgets;
 				const char *widgets;
+				struct snd_soc_dapm_context *dapm;
 
 				num_widgets = of_property_count_strings(data->card.dev->of_node,
-									"fsl,lpa-widgets");
+									"ignore-suspend-widgets");
 				for (i = 0; i < num_widgets; i++) {
 					of_property_read_string_index(data->card.dev->of_node,
-								      "fsl,lpa-widgets", i, &widgets);
-					snd_soc_dapm_ignore_suspend(snd_soc_component_get_dapm(codec_comp),
-								    widgets);
+								      "ignore-suspend-widgets",
+								      i, &widgets);
+					dapm = snd_soc_component_get_dapm(codec_comp);
+					snd_soc_dapm_ignore_suspend(dapm, widgets);
 				}
 			}
 			codec_drv = codec_dev->driver;
@@ -174,11 +174,11 @@ static int imx_rpmsg_probe(struct platform_device *pdev)
 			data->dai.codecs->dai_name = "rpmsg-wm8960-hifi";
 			data->dai.codecs->name = RPMSG_CODEC_DRV_NAME_WM8960;
 		} else if (of_device_is_compatible(np, "fsl,imx8mm-rpmsg-audio") &&
-				!strcmp("ak4497-audio", model_string)) {
+			   !strcmp("ak4497-audio", model_string)) {
 			data->dai.codecs->dai_name = "rpmsg-ak4497-aif";
 			data->dai.codecs->name = RPMSG_CODEC_DRV_NAME_AK4497;
 		} else {
-			*data->dai.codecs = asoc_dummy_dlc;
+			*data->dai.codecs = snd_soc_dummy_dlc;
 		}
 	} else {
 		struct clk *clk;

@@ -97,7 +97,6 @@ properties:
 required:
   - compatible
   - reg
-  - interrupts
   - regulators
 
 additionalProperties: false

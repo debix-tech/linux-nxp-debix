@@ -54,9 +54,9 @@ static int vsi_dec_querycap(
 	hwinfo = vsiv4l2_get_hwinfo();
 	if (hwinfo->decformat == 0)
 		return -ENODEV;
-	strlcpy(cap->driver, "vsi_v4l2", sizeof("vsi_v4l2"));
-	strlcpy(cap->card, "vsi_v4l2dec", sizeof("vsi_v4l2dec"));
-	strlcpy(cap->bus_info, "platform:vsi_v4l2dec", sizeof("platform:vsi_v4l2dec"));
+	strscpy(cap->driver, "vsi_v4l2", sizeof("vsi_v4l2"));
+	strscpy(cap->card, "vsi_v4l2dec", sizeof("vsi_v4l2dec"));
+	strscpy(cap->bus_info, "platform:vsi_v4l2dec", sizeof("platform:vsi_v4l2dec"));
 
 	cap->device_caps = V4L2_CAP_VIDEO_M2M | V4L2_CAP_STREAMING;
 	cap->capabilities = cap->device_caps | V4L2_CAP_DEVICE_CAPS;
@@ -84,7 +84,7 @@ static int vsi_dec_reqbufs(
 		q = &ctx->output_que;
 	ret = vb2_reqbufs(q, p);
 	v4l2_klog(LOGLVL_CONFIG, "%llx:%s:%d ask for %d buffer, got %d:%d",
-		ctx->ctxid, __func__, p->type, p->count, q->num_buffers, ret);
+		ctx->ctxid, __func__, p->type, p->count, vb2_get_num_buffers(q), ret);
 	if (ret == 0) {
 		print_queinfo(q);
 		if (p->count == 0 && binputqueue(p->type)) {
@@ -225,7 +225,7 @@ int vsi_dec_output_on(struct vsi_v4l2_ctx *ctx)
 
 	if (!ctx->need_output_on)
 		return 0;
-	if (ctx->input_que.queued_count < ctx->input_que.min_buffers_needed)
+	if (ctx->input_que.queued_count < ctx->input_que.min_queued_buffers)
 		return 0;
 
 	v4l2_klog(LOGLVL_FLOW, "%llx:%s start streaming", ctx->ctxid, __func__);
@@ -272,7 +272,7 @@ int vsi_dec_capture_on(struct vsi_v4l2_ctx *ctx)
 	return ret;
 }
 
-int vsi_dec_capture_off(struct vsi_v4l2_ctx *ctx)
+static int vsi_dec_capture_off(struct vsi_v4l2_ctx *ctx)
 {
 	int ret;
 	struct vb2_queue *q = &ctx->output_que;
@@ -598,7 +598,7 @@ static int vsi_dec_enum_fmt(struct file *file, void *prv, struct v4l2_fmtdesc *f
 		return -EINVAL;
 
 	if (pfmt->name && strlen(pfmt->name))
-		strlcpy(f->description, pfmt->name, strlen(pfmt->name) + 1);
+		strscpy(f->description, pfmt->name, strlen(pfmt->name) + 1);
 	f->pixelformat = pfmt->fourcc;
 	f->flags = pfmt->flag;
 	v4l2_klog(LOGLVL_CONFIG, "%s:%d:%d:%x", __func__, f->index, f->type, pfmt->fourcc);
@@ -727,7 +727,7 @@ static int vsi_dec_try_decoder_cmd(struct file *file, void *fh, struct v4l2_deco
 	return 0;
 }
 
-int vsi_dec_decoder_cmd(struct file *file, void *fh, struct v4l2_decoder_cmd *cmd)
+static int vsi_dec_decoder_cmd(struct file *file, void *fh, struct v4l2_decoder_cmd *cmd)
 {
 	struct vsi_v4l2_ctx *ctx = fh_to_ctx(file->private_data);
 	int ret = 0;
@@ -925,7 +925,7 @@ static int vsi_v4l2_dec_s_ctrl(struct v4l2_ctrl *ctrl)
 	case V4L2_CID_MPEG_VIDEO_HEVC_PROFILE:
 		ret = vsi_set_profile(ctx, ctrl->id, ctrl->val);
 		return ret;
-	case V4L2_CID_DIS_REORDER:
+	case V4L2_CID_MPEG_VIDEO_DEC_DISPLAY_DELAY_ENABLE:
 		ctx->mediacfg.decparams.io_buffer.no_reordering_decoding = ctrl->val;
 		break;
 	case V4L2_CID_SECUREMODE:
@@ -1011,16 +1011,6 @@ static const struct v4l2_ctrl_ops vsi_dec_ctrl_ops = {
 static struct v4l2_ctrl_config vsi_v4l2_dec_ctrl_defs[] = {
 	{
 		.ops = &vsi_dec_ctrl_ops,
-		.id = V4L2_CID_DIS_REORDER,
-		.name = "frame disable reorder ctrl",
-		.type = V4L2_CTRL_TYPE_BOOLEAN,
-		.min = 0,
-		.max = 1,
-		.step = 1,
-		.def = 0,
-	},
-	{
-		.ops = &vsi_dec_ctrl_ops,
 		.type_ops = &vsi_dec_type_ops,
 		.id = V4L2_CID_HDR10META,
 		.name = "vsi get 10bit meta",
@@ -1078,6 +1068,22 @@ static struct v4l2_ctrl_config vsi_v4l2_dec_ctrl_defs[] = {
 		.max = MAX_MIN_BUFFERS_FOR_OUTPUT,
 		.step = 1,
 		.def = 1,
+	},
+	{
+		.id = V4L2_CID_MPEG_VIDEO_DEC_DISPLAY_DELAY_ENABLE,
+		.type = V4L2_CTRL_TYPE_BOOLEAN,
+		.min = 0,
+		.max = 1,
+		.step = 1,
+		.def = 0,
+	},
+	{
+		.id = V4L2_CID_MPEG_VIDEO_DEC_DISPLAY_DELAY,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.min = 0,
+		.max = 0,
+		.step = 1,
+		.def = 0,
 	},
 	{
 		.ops = &vsi_dec_ctrl_ops,
@@ -1175,7 +1181,7 @@ static int v4l2_dec_open(struct file *filp)
 	q = &ctx->input_que;
 	q->type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
 	q->io_modes = VB2_MMAP | VB2_USERPTR | VB2_DMABUF;
-	q->min_buffers_needed = 1;
+	q->min_queued_buffers = 1;
 	q->drv_priv = &ctx->fh;
 	q->lock = &ctx->ctxlock;
 	q->buf_struct_size = sizeof(struct vsi_vpu_buf);		//used to alloc mem control structures in reqbuf
@@ -1199,7 +1205,7 @@ static int v4l2_dec_open(struct file *filp)
 	q->mem_ops = &vb2_dma_contig_memops;
 	q->memory = VB2_MEMORY_UNKNOWN;
 	q->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_COPY;
-	q->min_buffers_needed = 1;
+	q->min_queued_buffers = 1;
 	INIT_LIST_HEAD(&ctx->output_list);
 	ret = vb2_queue_init(q);
 	if (ret) {

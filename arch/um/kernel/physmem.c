@@ -12,6 +12,7 @@
 #include <as-layout.h>
 #include <init.h>
 #include <kern.h>
+#include <kern_util.h>
 #include <mem_user.h>
 #include <os.h>
 
@@ -80,10 +81,10 @@ void __init setup_physmem(unsigned long start, unsigned long reserve_end,
 			  unsigned long len, unsigned long long highmem)
 {
 	unsigned long reserve = reserve_end - start;
-	long map_size = len - reserve;
+	unsigned long map_size = len - reserve;
 	int err;
 
-	if(map_size <= 0) {
+	if (len <= reserve) {
 		os_warn("Too few physical memory! Needed=%lu, given=%lu\n",
 			reserve, len);
 		exit(1);
@@ -94,7 +95,7 @@ void __init setup_physmem(unsigned long start, unsigned long reserve_end,
 	err = os_map_memory((void *) reserve_end, physmem_fd, reserve,
 			    map_size, 1, 1, 1);
 	if (err < 0) {
-		os_warn("setup_physmem - mapping %ld bytes of memory at 0x%p "
+		os_warn("setup_physmem - mapping %lu bytes of memory at 0x%p "
 			"failed - errno = %d\n", map_size,
 			(void *) reserve_end, err);
 		exit(1);
@@ -160,8 +161,6 @@ __uml_setup("mem=", uml_mem_setup,
 "    be more, and the excess, if it's ever used, will just be swapped out.\n"
 "	Example: mem=64M\n\n"
 );
-
-extern int __init parse_iomem(char *str, int *add);
 
 __uml_setup("iomem=", parse_iomem,
 "iomem=<name>,<file>\n"

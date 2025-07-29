@@ -17,10 +17,7 @@ obj-$(CONFIG_VIDEO_IMX_MEDIA) += imx6-media.o
 obj-$(CONFIG_VIDEO_IMX_MEDIA) += imx6-media-csi.o
 obj-$(CONFIG_VIDEO_IMX_MEDIA) += imx6-mipi-csi2.o
 
-obj-$(CONFIG_IMX8_MIPI_CSI2) 	  += imx8-mipi-csi2.o
 obj-$(CONFIG_IMX8_MIPI_CSI2_SAM)  += imx8-mipi-csi2-sam.o
-obj-$(CONFIG_DWC_MIPI_CSI2_HOST) += dwc-mipi-csi2.o
-
 obj-y += hdmirx/
 
 obj-$(CONFIG_IMX8_CAPTURE_DRIVER) += imx8-capture.o
@@ -30,4 +27,3 @@ obj-$(CONFIG_IMX8_ISI_M2M)	+= imx8-isi-mem2mem.o
 obj-$(CONFIG_IMX8_ISI_HW) 	  += imx8-isi-hw.o
 obj-$(CONFIG_GMSL_MAX9286)	  += gmsl-max9286.o
 obj-$(CONFIG_IMX8_MEDIA_DEVICE)   += imx8-media-dev.o
-obj-$(CONFIG_IMX8_PARALLEL_CSI)	  += imx8-parallel-csi.o

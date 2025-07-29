@@ -15,26 +15,12 @@
 #include "thermal_hwmon.h"
 
 #define IMX_SC_MISC_FUNC_GET_TEMP	13
-#define IMX_SC_TEMP_PASSIVE_COOL_DELTA	10000
 
 static struct imx_sc_ipc *thermal_ipc_handle;
 
 struct imx_sc_sensor {
 	struct thermal_zone_device *tzd;
 	u32 resource_id;
-	int temp_passive;
-	int temp_critical;
-};
-
-struct imx_sc_thermal_data {
-	struct imx_sc_sensor *sensor;
-};
-
-/* The driver support 1 passive trip point and 1 critical trip point */
-enum imx_thermal_trip {
-	IMX_TRIP_PASSIVE,
-	IMX_TRIP_CRITICAL,
-	IMX_TRIP_NUM,
 };
 
 struct req_get_temp {
@@ -71,70 +57,23 @@ static int imx_sc_thermal_get_temp(struct thermal_zone_device *tz, int *temp)
 	hdr->size = 2;
 
 	ret = imx_scu_call_rpc(thermal_ipc_handle, &msg, true);
-	if (ret) {
-		/*
-		 * if the SS power domain is down, read temp will fail, so
-		 * we can print error once and return 0 directly.
-		 */
-		pr_err_once("read temp sensor %d failed, could be SS powered off, ret %d\n",
-			     sensor->resource_id, ret);
-		*temp = 0;
-		return 0;
-	}
+	if (ret)
+		return ret;
 
 	*temp = msg.data.resp.celsius * 1000 + msg.data.resp.tenths * 100;
 
 	return 0;
 }
 
-static int imx_sc_thermal_get_trend(struct thermal_zone_device *tz,
-				    const struct thermal_trip *trip,
-				    enum thermal_trend *trend)
-{
-	int trip_temp;
-	struct imx_sc_sensor *sensor = tz->devdata;
-
-	if (!sensor->tzd)
-		return 0;
-
-	trip_temp = (trip->type == THERMAL_TRIP_PASSIVE) ? sensor->temp_passive :
-					     sensor->temp_critical;
-
-	if (sensor->tzd->temperature >=
-		(trip_temp - IMX_SC_TEMP_PASSIVE_COOL_DELTA))
-		*trend = THERMAL_TREND_RAISING;
-	else
-		*trend = THERMAL_TREND_DROPPING;
-
-	return 0;
-}
-
-static int imx_sc_thermal_set_trip_temp(struct thermal_zone_device *tz, int trip,
-					int temp)
-{
-	struct imx_sc_sensor *sensor = tz->devdata;
-
-	if (trip == IMX_TRIP_CRITICAL)
-		sensor->temp_critical = temp;
-
-	if (trip == IMX_TRIP_PASSIVE)
-		sensor->temp_passive = temp;
-
-	return 0;
-}
-
 static const struct thermal_zone_device_ops imx_sc_thermal_ops = {
 	.get_temp = imx_sc_thermal_get_temp,
-	.get_trend = imx_sc_thermal_get_trend,
-	.set_trip_temp = imx_sc_thermal_set_trip_temp,
 };
 
 static int imx_sc_thermal_probe(struct platform_device *pdev)
 {
 	struct imx_sc_sensor *sensor;
-	struct thermal_trip trip;
 	const int *resource_id;
-	int i, j, ret;
+	int i, ret;
 
 	ret = imx_scu_get_handle(&thermal_ipc_handle);
 	if (ret)
@@ -172,24 +111,10 @@ static int imx_sc_thermal_probe(struct platform_device *pdev)
 			if (ret == -ENODEV)
 				continue;
 
-			dev_err(&pdev->dev, "failed to register thermal zone\n");
-			return ret;
+			return dev_err_probe(&pdev->dev, ret, "failed to register thermal zone\n");
 		}
 
 		devm_thermal_add_hwmon_sysfs(&pdev->dev, sensor->tzd);
-
-		for (j = 0; j < thermal_zone_get_num_trips(sensor->tzd); j++) {
-			ret = thermal_zone_get_trip(sensor->tzd, j, &trip);
-			if (ret)
-				continue;
-
-			if (trip.type == THERMAL_TRIP_CRITICAL) {
-				sensor->temp_critical = trip.temperature;
-			} else if(trip.type == THERMAL_TRIP_PASSIVE) {
-				sensor->temp_passive = trip.temperature;
-			}
-		}
-
 	}
 
 	return 0;

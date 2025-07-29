@@ -198,12 +198,11 @@
 #define MXS_PHY_TX_D_CAL_MAX			119
 
 /*
- * At some versions, the PHY2's clock is controlled by hardware directly,
+ * At imx6q/6sl/6sx, the PHY2's clock is controlled by hardware directly,
  * eg, according to PHY's suspend status. In these PHYs, we only need to
  * open the clock at the initialization and close it at its shutdown routine.
- * It will be benefit for remote wakeup case which needs to send resume
- * signal as soon as possible, and in this case, the resume signal can be sent
- * out without software interfere.
+ * These PHYs can send resume signal without software interfere if not
+ * gate clock.
  */
 #define MXS_PHY_HARDWARE_CONTROL_PHY2_CLK	BIT(4)
 
@@ -277,7 +276,6 @@ struct mxs_phy {
 	u32 tx_reg_set;
 	u32 tx_reg_mask;
 	struct regulator *phy_3p0;
-	bool hardware_control_phy2_clk;
 	unsigned long clk_rate;
 };
 
@@ -635,14 +633,16 @@ static int mxs_phy_suspend(struct usb_phy *x, int suspend)
 		writel(BM_USBPHY_CTRL_CLKGATE,
 		       x->io_priv + HW_USBPHY_CTRL_SET);
 		if (!(mxs_phy->port_id == 1 &&
-				mxs_phy->hardware_control_phy2_clk))
+			(mxs_phy->data->flags &
+				MXS_PHY_HARDWARE_CONTROL_PHY2_CLK)))
 			clk_disable_unprepare(mxs_phy->clk);
 		pm_runtime_put(x->dev);
 	} else {
 		pm_runtime_get_sync(x->dev);
 		mxs_phy_clock_switch_delay();
 		if (!(mxs_phy->port_id == 1 &&
-				mxs_phy->hardware_control_phy2_clk)) {
+			(mxs_phy->data->flags &
+				MXS_PHY_HARDWARE_CONTROL_PHY2_CLK))) {
 			ret = clk_prepare_enable(mxs_phy->clk);
 			if (ret)
 				return ret;
@@ -1120,13 +1120,10 @@ static int mxs_phy_probe(struct platform_device *pdev)
 		mxs_phy->phy_3p0 = NULL;
 	else if (IS_ERR(mxs_phy->phy_3p0))
 		return dev_err_probe(&pdev->dev, PTR_ERR(mxs_phy->phy_3p0),
-				     "Getting regulator error\n");
+				"Getting regulator error\n");
 
 	if (mxs_phy->phy_3p0)
 		regulator_set_voltage(mxs_phy->phy_3p0, 3200000, 3200000);
-
-	if (mxs_phy->data->flags & MXS_PHY_HARDWARE_CONTROL_PHY2_CLK)
-		mxs_phy->hardware_control_phy2_clk = true;
 
 	platform_set_drvdata(pdev, mxs_phy);
 

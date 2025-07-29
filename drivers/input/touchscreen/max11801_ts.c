@@ -104,6 +104,7 @@ struct max11801_data {
 static struct i2c_client *max11801_client;
 static unsigned int max11801_workmode;
 static u8 aux_buf[AUX_BUFSIZE];
+u32 max11801_read_adc(void);
 
 static int max11801_dcm_write_command(struct i2c_client *client, int command)
 {
@@ -344,7 +345,7 @@ static int max11801_ts_probe(struct i2c_client *client)
 }
 
 static const struct i2c_device_id max11801_ts_id[] = {
-	{"max11801", 0},
+	{ "max11801" },
 	{ }
 };
 MODULE_DEVICE_TABLE(i2c, max11801_ts_id);

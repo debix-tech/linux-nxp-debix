@@ -9,22 +9,18 @@
  * kind, whether express or implied.
  */
 
-
 #include <linux/miscdevice.h>
 #include <linux/fs.h>
 #include <linux/cdev.h>
 #include <linux/mm.h>
 #include <linux/of.h>
 #include <linux/memblock.h>
+#include <linux/platform_device.h>
 #include <linux/slab.h>
 #include <linux/mman.h>
 #include <linux/of_reserved_mem.h>
 #include <linux/eventfd.h>
 #include <linux/fdtable.h>
-
-#if !(defined(CONFIG_ARM) || defined(CONFIG_ARM64))
-#include <mm/mmu_decl.h>
-#endif
 
 #include "dpa_sys.h"
 #include <linux/fsl_usdpaa.h>
@@ -77,9 +73,7 @@ static unsigned long pfn_size;
 static DEFINE_SPINLOCK(mem_lock);
 
 /* The range of TLB1 indices */
-static unsigned int first_tlb;
 static unsigned int num_tlb = 1;
-static unsigned int current_tlb; /* loops around for fault handling */
 
 /* Memory reservation is represented as a list of 'mem_fragment's, some of which
  * may be mapped. Unmapped fragments are always merged where possible. */
@@ -359,30 +353,6 @@ static void compress_frags(void)
 		/* Re evaluate the list, things may merge now */
 		frag = list_entry(mem_list.next, struct mem_fragment, list);
 	}
-}
-
-/* Hook from arch/powerpc/mm/mem.c */
-int usdpaa_test_fault(unsigned long pfn, u64 *phys_addr, u64 *size)
-{
-	struct mem_fragment *frag;
-	int idx = -1;
-	if ((pfn < pfn_start) || (pfn >= (pfn_start + pfn_size)))
-		return -1;
-	/* It's in-range, we need to find the fragment */
-	spin_lock(&mem_lock);
-	list_for_each_entry(frag, &mem_list, list) {
-		if ((pfn >= frag->pfn_base) && (pfn < (frag->pfn_base +
-						       frag->pfn_len))) {
-			*phys_addr = frag->base;
-			*size = frag->len;
-			idx = current_tlb++;
-			if (current_tlb >= (first_tlb + num_tlb))
-				current_tlb = first_tlb;
-			break;
-		}
-	}
-	spin_unlock(&mem_lock);
-	return idx;
 }
 
 static int usdpaa_open(struct inode *inode, struct file *filp)
@@ -1241,7 +1211,6 @@ static long ioctl_dma_unmap(struct ctx *ctx, void __user *arg)
 	struct mem_fragment *current_frag;
 	size_t sz;
 	unsigned long base;
-	unsigned long vaddr;
 
 	down_write(&current->mm->mmap_lock);
 	vma = find_vma(current->mm, (unsigned long)arg);
@@ -1275,20 +1244,9 @@ map_match:
 	}
 
 	current_frag = map->root_frag;
-	vaddr = (unsigned long) map->virt_addr;
 	for (i = 0; i < map->frag_count; i++) {
 		DPA_ASSERT(current_frag->refs > 0);
 		--current_frag->refs;
-#if !(defined(CONFIG_ARM) || defined(CONFIG_ARM64))
-		/*
-		 * Make sure we invalidate the TLB entry for
-		 * this fragment, otherwise a remap of a different
-		 * page to this vaddr would give acces to an
-		 * incorrect piece of memory
-		 */
-		cleartlbcam(vaddr, mfspr(SPRN_PID));
-#endif
-		vaddr += current_frag->len;
 		current_frag = list_entry(current_frag->list.prev,
 					  struct mem_fragment, list);
 	}
@@ -1545,84 +1503,10 @@ found:
 static void portal_config_pamu(struct qm_portal_config *pcfg, uint8_t sdest,
 			       uint32_t cpu, uint32_t cache, uint32_t window)
 {
-#ifdef CONFIG_FSL_PAMU
-	int ret;
-	int window_count = 1;
-	struct iommu_domain_geometry geom_attr;
-	struct pamu_stash_attribute stash_attr;
-
-	pcfg->iommu_domain = iommu_domain_alloc(&platform_bus_type);
-	if (!pcfg->iommu_domain) {
-		pr_err(KBUILD_MODNAME ":%s(): iommu_domain_alloc() failed",
-			   __func__);
-		goto _no_iommu;
-	}
-	geom_attr.aperture_start = 0;
-	geom_attr.aperture_end =
-		((dma_addr_t)1 << min(8 * sizeof(dma_addr_t), (size_t)36)) - 1;
-	geom_attr.force_aperture = true;
-	ret = iommu_domain_set_attr(pcfg->iommu_domain, DOMAIN_ATTR_GEOMETRY,
-				    &geom_attr);
-	if (ret < 0) {
-		pr_err(KBUILD_MODNAME ":%s(): iommu_domain_set_attr() = %d",
-			   __func__, ret);
-		goto _iommu_domain_free;
-	}
-	ret = iommu_domain_set_attr(pcfg->iommu_domain, DOMAIN_ATTR_WINDOWS,
-				    &window_count);
-	if (ret < 0) {
-		pr_err(KBUILD_MODNAME ":%s(): iommu_domain_set_attr() = %d",
-			   __func__, ret);
-		goto _iommu_domain_free;
-	}
-	stash_attr.cpu = cpu;
-	stash_attr.cache = cache;
-
-	ret = iommu_domain_set_attr(pcfg->iommu_domain,
-				    DOMAIN_ATTR_FSL_PAMU_STASH,
-				    &stash_attr);
-	if (ret < 0) {
-		pr_err(KBUILD_MODNAME ":%s(): iommu_domain_set_attr() = %d",
-			   __func__, ret);
-		goto _iommu_domain_free;
-	}
-	ret = iommu_domain_window_enable(pcfg->iommu_domain, 0, 0, 1ULL << 36,
-					 IOMMU_READ | IOMMU_WRITE);
-	if (ret < 0) {
-		pr_err(KBUILD_MODNAME ":%s(): iommu_domain_window_enable() = %d",
-			   __func__, ret);
-		goto _iommu_domain_free;
-	}
-	ret = iommu_attach_device(pcfg->iommu_domain, &pcfg->dev);
-	if (ret < 0) {
-		pr_err(KBUILD_MODNAME ":%s(): iommu_device_attach() = %d",
-			   __func__, ret);
-		goto _iommu_domain_free;
-	}
-	ret = iommu_domain_set_attr(pcfg->iommu_domain,
-				    DOMAIN_ATTR_FSL_PAMU_ENABLE,
-				    &window_count);
-	if (ret < 0) {
-		pr_err(KBUILD_MODNAME ":%s(): iommu_domain_set_attr() = %d",
-			   __func__, ret);
-		goto _iommu_detach_device;
-	}
-_no_iommu:
-#endif
-
 #ifdef CONFIG_FSL_QMAN_CONFIG
 	if (qman_set_sdest(pcfg->public_cfg.channel, sdest))
 #endif
 		pr_warn("Failed to set QMan portal's stash request queue\n");
-
-	return;
-
-#ifdef CONFIG_FSL_PAMU
-_iommu_detach_device:
-	iommu_detach_device(pcfg->iommu_domain, NULL);
-_iommu_domain_free:
-	iommu_domain_free(pcfg->iommu_domain);
-#endif
 }
 
 static long ioctl_allocate_raw_portal(struct file *fp, struct ctx *ctx,
@@ -1914,7 +1798,7 @@ static void phy_link_updates(struct net_device *net_dev)
 	list_for_each(position, &eventfd_head) {
 		ev_mem = list_entry(position, struct eventfd_list, d_list);
 		if (ev_mem->ndev == net_dev) {
-			eventfd_signal(ev_mem->efd_ctx, 1);
+			eventfd_signal(ev_mem->efd_ctx);
 			pr_debug("%s: Link '%s': Speed '%d-Mbps': Autoneg '%d': Duplex '%d'\n",
 				net_dev->name,
 				netif_carrier_ok(net_dev) ? "UP" : "DOWN",
@@ -1937,7 +1821,7 @@ static int setup_eventfd(struct task_struct *userspace_task,
 	struct eventfd_list *ev_mem;
 
 	rcu_read_lock();
-	efd_file = files_lookup_fd_rcu(userspace_task->files, args->efd);
+	efd_file = lookup_fdget_rcu(args->efd);
 	rcu_read_unlock();
 
 	/* check if device is already registered */
@@ -2071,6 +1955,15 @@ static int ioctl_en_if_link_status(struct usdpaa_ioctl_link_status *args, struct
 		}
 		strncpy(net_dev->name, args->if_name, IF_NAME_MAX_LEN);
 		dev->platform_data = net_dev;
+
+		/* FIXME: This is duplicated from memac_init_phy().
+		 * The internal connection to the serdes is XGMII, but this isn't
+		 * really correct for the phy mode (which is the external connection).
+		 * However, this is how all older device trees say that they want
+		 * 10GBASE-R (aka XFI), so just convert it for them.
+		 */
+		if (mac_dev->phy_if == PHY_INTERFACE_MODE_XGMII)
+			mac_dev->phy_if = PHY_INTERFACE_MODE_10GBASER;
 
 		pr_debug("%s: mac_dev %p cell_index %d\n",
 			 __func__, mac_dev, mac_dev->cell_index);
@@ -2554,10 +2447,6 @@ __init int fsl_usdpaa_init_early(void)
 	}
 	pfn_start = phys_start >> PAGE_SHIFT;
 	pfn_size = phys_size >> PAGE_SHIFT;
-#ifdef CONFIG_PPC
-	first_tlb = current_tlb = tlbcam_index;
-	tlbcam_index += num_tlb;
-#endif
 	pr_info("USDPAA region at %llx:%llx(%lx:%lx), %d TLB1 entries)\n",
 		phys_start, phys_size, pfn_start, pfn_size, num_tlb);
 	return 0;
@@ -2571,7 +2460,6 @@ static int __init usdpaa_init(void)
 	int ret;
 	u64 tmp_size = phys_size;
 	u64 tmp_start = phys_start;
-	u64 tmp_pfn_size = pfn_size;
 	u64 tmp_pfn_start = pfn_start;
 
 	pr_info("Freescale USDPAA process driver\n");
@@ -2601,7 +2489,6 @@ static int __init usdpaa_init(void)
 		tmp_start += frag_size;
 		tmp_size -= frag_size;
 		tmp_pfn_start += frag_size / PAGE_SIZE;
-		tmp_pfn_size -= frag_size / PAGE_SIZE;
 	}
 	ret = misc_register(&usdpaa_miscdev);
 	if (ret)

@@ -428,11 +428,6 @@ static int max96789_dsi_drm_probe(struct platform_device *pdev)
 	return max96789_dsi_dt_parse(max96789_dsi);
 }
 
-static int max96789_dsi_drm_remove(struct platform_device *pdev)
-{
-	return 0;
-}
-
 static const struct of_device_id max96789_dsi_of_match[] = {
 	{ .compatible = "maxim,max96789-dsi", .data = (void *)ID_MAX96789 },
 	{}
@@ -441,7 +436,6 @@ MODULE_DEVICE_TABLE(of, max96789_dsi_of_match);
 
 static struct platform_driver max96789_dsi_platform_driver = {
 	.probe	= max96789_dsi_drm_probe,
-	.remove	= max96789_dsi_drm_remove,
 	.driver	= {
 		.name	= "max96789-dsi",
 		.of_match_table = of_match_ptr(max96789_dsi_of_match),

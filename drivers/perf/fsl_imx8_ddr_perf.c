@@ -666,12 +666,10 @@ static int ddr_perf_event_add(struct perf_event *event, int flags)
 			if (cfg == 0x41) {
 				/* revert axi read channel(axi_channel) value */
 				cfg2 ^= READ_CHANNEL_REVERT;
-
 				cfg2 |= FIELD_PREP(READ_PORT_MASK, cfg2);
 			} else {
 				/* revert axi write channel(axi_channel) value */
 				cfg2 ^= WRITE_CHANNEL_REVERT;
-
 				cfg2 |= FIELD_PREP(WRITE_PORT_MASK, cfg2);
 			}
 
@@ -732,6 +730,7 @@ static void ddr_perf_init(struct ddr_pmu *pmu, void __iomem *base,
 	*pmu = (struct ddr_pmu) {
 		.pmu = (struct pmu) {
 			.module	      = THIS_MODULE,
+			.parent      = dev,
 			.capabilities = PERF_PMU_CAP_NO_EXCLUDE,
 			.task_ctx_nr = perf_invalid_context,
 			.event_init  = ddr_perf_event_init,
@@ -932,7 +931,7 @@ cpuhp_state_err:
 	return ret;
 }
 
-static int ddr_perf_remove(struct platform_device *pdev)
+static void ddr_perf_remove(struct platform_device *pdev)
 {
 	struct ddr_pmu *pmu = platform_get_drvdata(pdev);
 
@@ -947,8 +946,6 @@ static int ddr_perf_remove(struct platform_device *pdev)
 		ddr_perf_clks_disable(pmu);
 		ida_free(&db_ida, pmu->id);
 	}
-
-	return 0;
 }
 
 static struct platform_driver imx_ddr_pmu_driver = {
@@ -958,8 +955,9 @@ static struct platform_driver imx_ddr_pmu_driver = {
 		.suppress_bind_attrs = true,
 	},
 	.probe          = ddr_perf_probe,
-	.remove         = ddr_perf_remove,
+	.remove_new     = ddr_perf_remove,
 };
 
 module_platform_driver(imx_ddr_pmu_driver);
+MODULE_DESCRIPTION("Freescale i.MX8 DDR Performance Monitor Driver");
 MODULE_LICENSE("GPL v2");

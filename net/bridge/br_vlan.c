@@ -149,9 +149,12 @@ static int __vlan_vid_del(struct net_device *dev, struct net_bridge *br,
 	/* Try switchdev op first. In case it is not supported, fallback to
 	 * 8021q del.
 	 */
-	err = br_switchdev_port_vlan_del(dev, v->vid);
-	if (!(v->priv_flags & BR_VLFLAG_ADDED_BY_SWITCHDEV))
+	if (!(v->priv_flags & BR_VLFLAG_ADDED_BY_SWITCHDEV)) {
 		vlan_vid_del(dev, br->vlan_proto, v->vid);
+		return 0;
+	}
+
+	err = br_switchdev_port_vlan_del(dev, v->vid);
 	return err == -EOPNOTSUPP ? 0 : err;
 }
 
@@ -841,7 +844,7 @@ void br_vlan_flush(struct net_bridge *br)
 	vg = br_vlan_group(br);
 	__vlan_flush(br, NULL, vg);
 	RCU_INIT_POINTER(br->vlgrp, NULL);
-	synchronize_rcu();
+	synchronize_net();
 	__vlan_group_free(vg);
 }
 
@@ -1372,7 +1375,7 @@ void nbp_vlan_flush(struct net_bridge_port *port)
 	vg = nbp_vlan_group(port);
 	__vlan_flush(port->br, port, vg);
 	RCU_INIT_POINTER(port->vlgrp, NULL);
-	synchronize_rcu();
+	synchronize_net();
 	__vlan_group_free(vg);
 }
 
@@ -2296,19 +2299,18 @@ static int br_vlan_rtm_process(struct sk_buff *skb, struct nlmsghdr *nlh,
 	return err;
 }
 
-void br_vlan_rtnl_init(void)
+static const struct rtnl_msg_handler br_vlan_rtnl_msg_handlers[] = {
+	{THIS_MODULE, PF_BRIDGE, RTM_NEWVLAN, br_vlan_rtm_process, NULL, 0},
+	{THIS_MODULE, PF_BRIDGE, RTM_DELVLAN, br_vlan_rtm_process, NULL, 0},
+	{THIS_MODULE, PF_BRIDGE, RTM_GETVLAN, NULL, br_vlan_rtm_dump, 0},
+};
+
+int br_vlan_rtnl_init(void)
 {
-	rtnl_register_module(THIS_MODULE, PF_BRIDGE, RTM_GETVLAN, NULL,
-			     br_vlan_rtm_dump, 0);
-	rtnl_register_module(THIS_MODULE, PF_BRIDGE, RTM_NEWVLAN,
-			     br_vlan_rtm_process, NULL, 0);
-	rtnl_register_module(THIS_MODULE, PF_BRIDGE, RTM_DELVLAN,
-			     br_vlan_rtm_process, NULL, 0);
+	return rtnl_register_many(br_vlan_rtnl_msg_handlers);
 }
 
 void br_vlan_rtnl_uninit(void)
 {
-	rtnl_unregister(PF_BRIDGE, RTM_GETVLAN);
-	rtnl_unregister(PF_BRIDGE, RTM_NEWVLAN);
-	rtnl_unregister(PF_BRIDGE, RTM_DELVLAN);
+	rtnl_unregister_many(br_vlan_rtnl_msg_handlers);
 }

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Copyright 2014-2016 Freescale Semiconductor Inc.
- * Copyright 2017-2022 NXP
+ * Copyright 2017-2024 NXP
  *
  */
 
@@ -806,4 +806,6 @@ struct dpsw_lag_cfg {
 int dpsw_lag_set(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,
 		 const struct dpsw_lag_cfg *cfg);
 
+int dpsw_if_set_lag_state(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,
+			  u16 if_id, u8 tx_enabled);
 #endif /* __FSL_DPSW_H */

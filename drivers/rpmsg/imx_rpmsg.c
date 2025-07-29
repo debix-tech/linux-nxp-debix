@@ -217,12 +217,11 @@ static void imx_rpmsg_del_vqs(struct virtio_device *vdev)
 
 static int imx_rpmsg_find_vqs(struct virtio_device *vdev, unsigned int nvqs,
 		       struct virtqueue *vqs[],
-		       vq_callback_t *callbacks[],
-		       const char * const names[],
-		       const bool *ctx,
+		       struct virtqueue_info vqs_info[],
 		       struct irq_affinity *desc)
 {
 	struct imx_virdev *virdev = to_imx_virdev(vdev);
+	struct virtqueue_info *vqi;
 	int i, err;
 
 	/* we maintain two virtqueues per remote processor (for RX and TX) */
@@ -230,8 +229,9 @@ static int imx_rpmsg_find_vqs(struct virtio_device *vdev, unsigned int nvqs,
 		return -EINVAL;
 
 	for (i = 0; i < nvqs; ++i) {
-		vqs[i] = rp_find_vq(vdev, i, callbacks[i], names[i],
-				ctx ? ctx[i] : false);
+		vqi = &vqs_info[i];
+		vqs[i] = rp_find_vq(vdev, i, vqi->callback, vqi->name,
+				    vqi->ctx);
 		if (IS_ERR(vqs[i])) {
 			err = PTR_ERR(vqs[i]);
 			goto error;
@@ -366,7 +366,7 @@ static void rpmsg_work_handler(struct work_struct *work)
 }
 
 #ifdef CONFIG_IMX_SCU
-void imx_rpmsg_restore(struct imx_rpmsg_vproc *rpdev)
+static void imx_rpmsg_restore(struct imx_rpmsg_vproc *rpdev)
 {
 	int i;
 	int vdev_nums = rpdev->vdev_nums;

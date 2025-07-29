@@ -329,7 +329,7 @@ exit_unroll_pm:
 	return ret;
 }
 
-static int imx8_remove(struct snd_sof_dev *sdev)
+static void imx8_remove(struct snd_sof_dev *sdev)
 {
 	struct imx8_priv *priv = sdev->pdata->hw_pdata;
 	int i;
@@ -341,8 +341,6 @@ static int imx8_remove(struct snd_sof_dev *sdev)
 		device_link_del(priv->link[i]);
 		dev_pm_domain_detach(priv->pd_dev[i], false);
 	}
-
-	return 0;
 }
 
 /* on i.MX8 there is 1 to 1 match between type and BAR idx */
@@ -480,7 +478,7 @@ static int imx8_dsp_set_power_state(struct snd_sof_dev *sdev,
 }
 
 /* i.MX8 ops */
-static struct snd_sof_dsp_ops sof_imx8_ops = {
+static const struct snd_sof_dsp_ops sof_imx8_ops = {
 	/* probe and remove */
 	.probe		= imx8_probe,
 	.remove		= imx8_remove,
@@ -541,7 +539,7 @@ static struct snd_sof_dsp_ops sof_imx8_ops = {
 };
 
 /* i.MX8X ops */
-static struct snd_sof_dsp_ops sof_imx8x_ops = {
+static const struct snd_sof_dsp_ops sof_imx8x_ops = {
 	/* probe and remove */
 	.probe		= imx8_probe,
 	.remove		= imx8_remove,
@@ -602,33 +600,70 @@ static struct snd_sof_dsp_ops sof_imx8x_ops = {
 			SNDRV_PCM_INFO_NO_PERIOD_WAKEUP
 };
 
+static struct snd_sof_of_mach sof_imx8_machs[] = {
+	{
+		.compatible = "fsl,imx8qxp-mek",
+		.sof_tplg_filename = "sof-imx8-wm8960.tplg",
+		.drv_name = "asoc-audio-graph-card2",
+	},
+	{
+		.compatible = "fsl,imx8qxp-mek-wcpu",
+		.sof_tplg_filename = "sof-imx8-wm8962.tplg",
+		.drv_name = "asoc-audio-graph-card2",
+	},
+	{
+		.compatible = "fsl,imx8qm-mek",
+		.sof_tplg_filename = "sof-imx8-wm8960.tplg",
+		.drv_name = "asoc-audio-graph-card2",
+	},
+	{
+		.compatible = "fsl,imx8qm-mek-revd",
+		.sof_tplg_filename = "sof-imx8-wm8962.tplg",
+		.drv_name = "asoc-audio-graph-card2",
+	},
+	{
+		.compatible = "fsl,imx8qxp-mek-bb",
+		.sof_tplg_filename = "sof-imx8-cs42888.tplg",
+		.drv_name = "asoc-audio-graph-card2",
+	},
+	{
+		.compatible = "fsl,imx8qm-mek-bb",
+		.sof_tplg_filename = "sof-imx8-cs42888.tplg",
+		.drv_name = "asoc-audio-graph-card2",
+	},
+
+	{}
+};
+
 static struct sof_dev_desc sof_of_imx8qxp_desc = {
-	.ipc_supported_mask	= BIT(SOF_IPC),
-	.ipc_default		= SOF_IPC,
+	.of_machines	= sof_imx8_machs,
+	.ipc_supported_mask	= BIT(SOF_IPC_TYPE_3),
+	.ipc_default		= SOF_IPC_TYPE_3,
 	.default_fw_path = {
-		[SOF_IPC] = "imx/sof",
+		[SOF_IPC_TYPE_3] = "imx/sof",
 	},
 	.default_tplg_path = {
-		[SOF_IPC] = "imx/sof-tplg",
+		[SOF_IPC_TYPE_3] = "imx/sof-tplg",
 	},
 	.default_fw_filename = {
-		[SOF_IPC] = "sof-imx8x.ri",
+		[SOF_IPC_TYPE_3] = "sof-imx8x.ri",
 	},
 	.nocodec_tplg_filename = "sof-imx8-nocodec.tplg",
 	.ops = &sof_imx8x_ops,
 };
 
 static struct sof_dev_desc sof_of_imx8qm_desc = {
-	.ipc_supported_mask	= BIT(SOF_IPC),
-	.ipc_default		= SOF_IPC,
+	.of_machines	= sof_imx8_machs,
+	.ipc_supported_mask	= BIT(SOF_IPC_TYPE_3),
+	.ipc_default		= SOF_IPC_TYPE_3,
 	.default_fw_path = {
-		[SOF_IPC] = "imx/sof",
+		[SOF_IPC_TYPE_3] = "imx/sof",
 	},
 	.default_tplg_path = {
-		[SOF_IPC] = "imx/sof-tplg",
+		[SOF_IPC_TYPE_3] = "imx/sof-tplg",
 	},
 	.default_fw_filename = {
-		[SOF_IPC] = "sof-imx8.ri",
+		[SOF_IPC_TYPE_3] = "sof-imx8.ri",
 	},
 	.nocodec_tplg_filename = "sof-imx8-nocodec.tplg",
 	.ops = &sof_imx8_ops,
@@ -653,5 +688,6 @@ static struct platform_driver snd_sof_of_imx8_driver = {
 };
 module_platform_driver(snd_sof_of_imx8_driver);
 
-MODULE_IMPORT_NS(SND_SOC_SOF_XTENSA);
 MODULE_LICENSE("Dual BSD/GPL");
+MODULE_DESCRIPTION("SOF support for IMX8 platforms");
+MODULE_IMPORT_NS(SND_SOC_SOF_XTENSA);

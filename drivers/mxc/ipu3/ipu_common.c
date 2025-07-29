@@ -1,6 +1,6 @@
 /*
  * Copyright 2005-2016 Freescale Semiconductor, Inc. All Rights Reserved.
- * Copyright 2020,2021,2023 NXP
+ * Copyright 2020,2021,2023,2024 NXP
  */
 /*
  * The code contained herein is licensed under the GNU General Public
@@ -669,15 +669,13 @@ static int ipu_probe(struct platform_device *pdev)
 	return ret;
 }
 
-int ipu_remove(struct platform_device *pdev)
+static void ipu_remove(struct platform_device *pdev)
 {
 	struct ipu_soc *ipu = platform_get_drvdata(pdev);
 
 	unregister_ipu_device(ipu, ipu->id);
 
 	clk_put(ipu->ipu_clk);
-
-	return 0;
 }
 
 void ipu_dump_registers(struct ipu_soc *ipu)
@@ -2586,8 +2584,8 @@ EXPORT_SYMBOL(ipu_check_buffer_ready);
  * 				ready state.
  *
  */
-void _ipu_clear_buffer_ready(struct ipu_soc *ipu, ipu_channel_t channel, ipu_buffer_t type,
-		uint32_t bufNum)
+static void _ipu_clear_buffer_ready(struct ipu_soc *ipu, ipu_channel_t channel,
+				    ipu_buffer_t type, uint32_t bufNum)
 {
 	uint32_t dma_ch = channel_2_dma(channel, type);
 
@@ -3555,7 +3553,7 @@ int ipu_ch_param_get_axi_id(struct ipu_soc *ipu, ipu_channel_t channel, ipu_buff
 EXPORT_SYMBOL(ipu_ch_param_get_axi_id);
 
 #ifdef CONFIG_PM
-int ipu_runtime_suspend(struct device *dev)
+static int ipu_runtime_suspend(struct device *dev)
 {
 	release_bus_freq(BUS_FREQ_HIGH);
 	dev_dbg(dev, "ipu busfreq high release.\n");
@@ -3563,7 +3561,7 @@ int ipu_runtime_suspend(struct device *dev)
 	return 0;
 }
 
-int ipu_runtime_resume(struct device *dev)
+static int ipu_runtime_resume(struct device *dev)
 {
 	request_bus_freq(BUS_FREQ_HIGH);
 	dev_dbg(dev, "ipu busfreq high requst.\n");
@@ -3591,7 +3589,7 @@ static struct platform_driver mxcipu_driver = {
 	.remove		= ipu_remove,
 };
 
-int32_t __init ipu_gen_init(void)
+static int32_t __init ipu_gen_init(void)
 {
 	int32_t ret;
 

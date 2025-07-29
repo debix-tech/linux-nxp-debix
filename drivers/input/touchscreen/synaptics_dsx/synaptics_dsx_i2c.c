@@ -787,8 +787,7 @@ static int tpd_set_page(struct synaptics_rmi4_data *rmi4_data,
 	return retval;
 }
 
-
-int tpd_i2c_read_data(struct synaptics_rmi4_data *rmi4_data, struct i2c_client *client,
+static int tpd_i2c_read_data(struct synaptics_rmi4_data *rmi4_data, struct i2c_client *client,
 			   unsigned short addr, unsigned char *data, unsigned short length)
 {
 
@@ -843,10 +842,9 @@ exit:
 
 	return retval;
 }
-EXPORT_SYMBOL(tpd_i2c_read_data);
 
 #ifdef USE_I2C_DMA
-int tpd_i2c_write_data_dma(struct synaptics_rmi4_data *rmi4_data, struct i2c_client *client,
+static int tpd_i2c_write_data_dma(struct synaptics_rmi4_data *rmi4_data, struct i2c_client *client,
 				unsigned short addr, unsigned char *data, unsigned short length)
 {
 	int retval = 0;
@@ -904,10 +902,9 @@ exit:
 
 	return retval;
 }
-EXPORT_SYMBOL(tpd_i2c_write_data_dma);
 
 #else
-int tpd_i2c_write_data(struct synaptics_rmi4_data *rmi4_data, struct i2c_client *client,
+static int tpd_i2c_write_data(struct synaptics_rmi4_data *rmi4_data, struct i2c_client *client,
 				unsigned short addr, unsigned char *data, unsigned short length)
 {
 	int retval = 0;
@@ -945,7 +942,6 @@ exit:
 
 	return retval;
 }
-EXPORT_SYMBOL(tpd_i2c_write_data);
 
 #endif
 

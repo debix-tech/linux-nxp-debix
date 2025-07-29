@@ -108,7 +108,7 @@ static int max96789_i2c_init(struct max96789_i2c *max96789_i2c)
 		if (!(mfd->gmsl_link_mask & BIT(link)))
 			continue;
 
-		ret = i2c_mux_add_adapter(max96789_i2c->mux, 0, link, 0);
+		ret = i2c_mux_add_adapter(max96789_i2c->mux, 0, link);
 		if (ret < 0)
 			goto error;
 	}

@@ -903,11 +903,6 @@ void *dpaa2_eth_sgt_get(struct dpaa2_eth_priv *priv);
 
 void dpaa2_eth_sgt_recycle(struct dpaa2_eth_priv *priv, void *sgt_buf);
 
-static inline u64 sci_to_cpu(sci_t sci)
-{
-	return be64_to_cpu((__force __be64)sci);
-}
-
 int dpaa2_eth_macsec_init(struct dpaa2_eth_priv *priv);
 void dpaa2_eth_macsec_deinit(struct dpaa2_eth_priv *priv);
 

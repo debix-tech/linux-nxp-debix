@@ -98,7 +98,7 @@
 		regulator-name = "audio-switch1";
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
-		gpio = <&adp5585gpio 4 GPIO_ACTIVE_HIGH>;
+		gpio = <&adp5585 4 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
 		regulator-always-on;
 	};
@@ -167,14 +167,11 @@
 };
 
 &lpi2c4 {
-	#address-cells = <1>;
-	#size-cells = <0>;
 	clock-frequency = <400000>;
 	dmas = <&edma2 10 0 0>, <&edma2 11 0 1>;
 	dma-names = "tx","rx";
-	pinctrl-names = "default", "sleep";
+	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpi2c4>;
-	pinctrl-1 = <&pinctrl_lpi2c4>;
 	status = "okay";
 
 	pca9555: gpio@21 {

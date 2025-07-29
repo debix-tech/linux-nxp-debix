@@ -57,16 +57,12 @@ struct mxc_isi_fmt mxc_isi_src_formats[] = {
 	}
 };
 
-struct mxc_isi_fmt *mxc_isi_get_format(unsigned int index)
-{
-	return &mxc_isi_out_formats[index];
-}
-
 /*
  * lookup mxc_isi color format by fourcc or media bus format
  */
-struct mxc_isi_fmt *mxc_isi_find_format(const u32 *pixelformat,
-					const u32 *mbus_code, int index)
+static struct mxc_isi_fmt *mxc_isi_find_format(const u32 *pixelformat,
+					       const u32 *mbus_code,
+					       int index)
 {
 	struct mxc_isi_fmt *fmt, *def_fmt = NULL;
 	unsigned int i;
@@ -88,7 +84,7 @@ struct mxc_isi_fmt *mxc_isi_find_format(const u32 *pixelformat,
 	return def_fmt;
 }
 
-struct mxc_isi_fmt *mxc_isi_get_src_fmt(struct v4l2_subdev_format *sd_fmt)
+static struct mxc_isi_fmt *mxc_isi_get_src_fmt(struct v4l2_subdev_format *sd_fmt)
 {
 	u32 index;
 
@@ -551,7 +547,7 @@ static const struct v4l2_ctrl_ops mxc_isi_ctrl_ops = {
 	.s_ctrl = mxc_isi_s_ctrl,
 };
 
-int mxc_isi_ctrls_create(struct mxc_isi_cap_dev *isi_cap)
+static int mxc_isi_ctrls_create(struct mxc_isi_cap_dev *isi_cap)
 {
 	struct mxc_isi_ctrls *ctrls = &isi_cap->ctrls;
 	struct v4l2_ctrl_handler *handler = &ctrls->handler;
@@ -575,7 +571,7 @@ int mxc_isi_ctrls_create(struct mxc_isi_cap_dev *isi_cap)
 	return handler->error;
 }
 
-void mxc_isi_ctrls_delete(struct mxc_isi_cap_dev *isi_cap)
+static void mxc_isi_ctrls_delete(struct mxc_isi_cap_dev *isi_cap)
 {
 	struct mxc_isi_ctrls *ctrls = &isi_cap->ctrls;
 
@@ -799,8 +795,8 @@ static int mxc_isi_cap_querycap(struct file *file, void *priv,
 {
 	struct mxc_isi_cap_dev *isi_cap = video_drvdata(file);
 
-	strlcpy(cap->driver, MXC_ISI_CAPTURE, sizeof(cap->driver));
-	strlcpy(cap->card, MXC_ISI_CAPTURE, sizeof(cap->card));
+	strscpy(cap->driver, MXC_ISI_DRIVER_NAME, sizeof(cap->driver));
+	strscpy(cap->card, MXC_ISI_DRIVER_NAME, sizeof(cap->card));
 	snprintf(cap->bus_info, sizeof(cap->bus_info), "platform:%s.%d",
 		 dev_name(&isi_cap->pdev->dev), isi_cap->id);
 
@@ -1056,26 +1052,41 @@ static int mxc_isi_cap_g_parm(struct file *file, void *fh,
 			      struct v4l2_streamparm *a)
 {
 	struct mxc_isi_cap_dev *isi_cap = video_drvdata(file);
+	struct v4l2_subdev_frame_interval ival = {
+		.which = V4L2_SUBDEV_FORMAT_ACTIVE,
+	};
 	struct v4l2_subdev *sd;
+	int ret;
 
 	sd = mxc_get_remote_subdev(&isi_cap->sd, __func__);
 	if (!sd)
 		return -ENODEV;
 
-	return v4l2_g_parm_cap(video_devdata(file), sd, a);
+	ret = v4l2_subdev_call(sd, pad, get_frame_interval, NULL, &ival);
+	if (ret < 0) {
+		dev_err(&isi_cap->pdev->dev, "failed to call get_frame_interval\n");
+		return ret;
+	}
+
+	a->parm.capture.timeperframe = ival.interval;
+	return 0;
 }
 
 static int mxc_isi_cap_s_parm(struct file *file, void *fh,
 			      struct v4l2_streamparm *a)
 {
 	struct mxc_isi_cap_dev *isi_cap = video_drvdata(file);
+	struct v4l2_subdev_frame_interval ival = {
+		.which = V4L2_SUBDEV_FORMAT_ACTIVE,
+		.interval = a->parm.capture.timeperframe,
+	};
 	struct v4l2_subdev *sd;
 
 	sd = mxc_get_remote_subdev(&isi_cap->sd, __func__);
 	if (!sd)
 		return -ENODEV;
 
-	return v4l2_s_parm_cap(video_devdata(file), sd, a);
+	return v4l2_subdev_call(sd, pad, set_frame_interval, NULL, &ival);
 }
 
 
@@ -1513,7 +1524,7 @@ static int mxc_isi_subdev_set_fmt(struct v4l2_subdev *sd,
 	}
 
 	parent = of_get_parent(isi_cap->pdev->dev.of_node);
-	if (of_device_is_compatible(parent, "fsl,imx8mn-isi") &&
+	if (of_device_is_compatible(parent, "nxp,imx8mn-isi") &&
 	    mf->width > ISI_2K)
 		return -EINVAL;
 
@@ -1553,10 +1564,10 @@ static int mxc_isi_subdev_get_selection(struct v4l2_subdev *sd,
 		return 0;
 
 	case V4L2_SEL_TGT_CROP:
-		try_sel = v4l2_subdev_get_try_crop(sd, sd_state, sel->pad);
+		try_sel = v4l2_subdev_state_get_crop(sd_state, sel->pad);
 		break;
 	case V4L2_SEL_TGT_COMPOSE:
-		try_sel = v4l2_subdev_get_try_compose(sd, sd_state, sel->pad);
+		try_sel = v4l2_subdev_state_get_compose(sd_state, sel->pad);
 		f = &isi_cap->dst_f;
 		break;
 	default:
@@ -1596,10 +1607,10 @@ static int mxc_isi_subdev_set_selection(struct v4l2_subdev *sd,
 
 	switch (sel->target) {
 	case V4L2_SEL_TGT_CROP:
-		try_sel = v4l2_subdev_get_try_crop(sd, sd_state, sel->pad);
+		try_sel = v4l2_subdev_state_get_crop(sd_state, sel->pad);
 		break;
 	case V4L2_SEL_TGT_COMPOSE:
-		try_sel = v4l2_subdev_get_try_compose(sd, sd_state, sel->pad);
+		try_sel = v4l2_subdev_state_get_compose(sd_state, sel->pad);
 		f = &isi_cap->dst_f;
 		break;
 	default:
@@ -1670,7 +1681,7 @@ static int mxc_isi_register_cap_device(struct mxc_isi_cap_dev *isi_cap,
 	q->buf_struct_size = sizeof(struct mxc_isi_buffer);
 	q->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
 	q->lock = &isi_cap->lock;
-	q->min_buffers_needed = 2;
+	q->min_queued_buffers = 2;
 	q->dev = &isi_cap->pdev->dev;
 
 	ret = vb2_queue_init(q);
@@ -1822,7 +1833,7 @@ static int isi_cap_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int isi_cap_remove(struct platform_device *pdev)
+static void isi_cap_remove(struct platform_device *pdev)
 {
 	struct mxc_isi_cap_dev *isi_cap = platform_get_drvdata(pdev);
 	struct v4l2_subdev *sd = &isi_cap->sd;
@@ -1831,8 +1842,6 @@ static int isi_cap_remove(struct platform_device *pdev)
 	media_entity_cleanup(&sd->entity);
 	v4l2_set_subdevdata(sd, NULL);
 	pm_runtime_disable(&pdev->dev);
-
-	return 0;
 }
 
 static int mxc_isi_cap_pm_suspend(struct device *dev)

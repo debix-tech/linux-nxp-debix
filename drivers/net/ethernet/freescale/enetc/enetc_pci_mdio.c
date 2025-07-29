@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
 /* Copyright 2019 NXP */
 #include <linux/fsl/enetc_mdio.h>
-#include <linux/fsl/netc_prb_ierb.h>
+#include <linux/fsl/netc_global.h>
 #include <linux/of_mdio.h>
 #include <linux/of_platform.h>
 #include <linux/pinctrl/consumer.h>
@@ -16,6 +16,15 @@
 DEFINE_STATIC_KEY_FALSE(enetc_has_err050089);
 EXPORT_SYMBOL_GPL(enetc_has_err050089);
 
+static void netc_mdio_supplier_register(struct pci_dev *pdev,
+					struct device *dev)
+{
+	struct device_node *node = pdev->dev.of_node;
+
+	if (of_device_is_compatible(node, "fsl,imx95-netc-emdio"))
+		netc_emdio_supplier_register(dev);
+}
+
 static int enetc_pci_mdio_probe(struct pci_dev *pdev,
 				const struct pci_device_id *ent)
 {
@@ -26,14 +35,6 @@ static int enetc_pci_mdio_probe(struct pci_dev *pdev,
 	struct enetc_hw *hw;
 	struct mii_bus *bus;
 	int err;
-
-	if (of_device_is_compatible(node, "fsl,imx95-netc-emdio")) {
-		err = netc_ierb_get_init_status();
-		if (err) {
-			dev_err(dev, "Cannot get IERB init status: %d\n", err);
-			return err;
-		}
-	}
 
 	pinctrl_pm_select_default_state(dev);
 
@@ -107,6 +108,7 @@ static int enetc_pci_mdio_probe(struct pci_dev *pdev,
 		goto err_mdiobus_reg;
 
 	pci_set_drvdata(pdev, bus);
+	netc_mdio_supplier_register(pdev, dev);
 
 	return 0;
 
@@ -121,6 +123,8 @@ err_mdiobus_alloc:
 err_hw_alloc:
 	iounmap(port_regs);
 err_ioremap:
+	netc_mdio_supplier_register(pdev, ERR_PTR(err));
+
 	return err;
 }
 
@@ -129,6 +133,7 @@ static void enetc_pci_mdio_remove(struct pci_dev *pdev)
 	struct mii_bus *bus = pci_get_drvdata(pdev);
 	struct enetc_mdio_priv *mdio_priv;
 
+	netc_mdio_supplier_register(pdev, NULL);
 	mdiobus_unregister(bus);
 
 	if (pdev->vendor == PCI_VENDOR_ID_FREESCALE &&

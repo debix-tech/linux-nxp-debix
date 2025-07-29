@@ -15,6 +15,7 @@
 #include <linux/of.h>
 #include <linux/clk.h>
 
+#include <soc/imx/soc.h>
 #include <soc/imx/src.h>
 
 #define REV_B1				0x21
@@ -300,6 +301,7 @@ free_soc:
 }
 
 device_initcall(imx8_soc_init);
+MODULE_DESCRIPTION("NXP i.MX8M SoC driver");
 MODULE_LICENSE("GPL");
 
 #define FSL_SIP_SRC                    0xc2000005

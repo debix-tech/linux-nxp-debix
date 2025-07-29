@@ -515,25 +515,26 @@ static void vi_del_vqs(struct virtio_device *vdev)
 
 static int vi_find_vqs(struct virtio_device *vdev, unsigned nvqs,
 		       struct virtqueue *vqs[],
-		       vq_callback_t *callbacks[],
-		       const char * const names[],
-		       const bool *ctx,
+		       struct virtqueue_info vqs_info[],
 		       struct irq_affinity *desc)
 {
 	struct virtio_ivshmem_device *vi_dev = to_virtio_ivshmem_device(vdev);
 	unsigned int vq_vector, desired_vectors;
 	int err, vectors, i, queue_idx = 0;
+	struct virtqueue_info *vqi;
 
 	desired_vectors = 1; /* one for config events */
-	for (i = 0; i < nvqs; i++)
-		if (callbacks[i])
+	for (i = 0; i < nvqs; i++) {
+		vqi = &vqs_info[i];
+		if (vqi->callback)
 			desired_vectors++;
+	}
 
 	vectors = pci_alloc_irq_vectors(vi_dev->pci_dev, desired_vectors,
 					desired_vectors, PCI_IRQ_MSIX);
 	if (vectors != desired_vectors) {
 		vectors = pci_alloc_irq_vectors(vi_dev->pci_dev, 1, 2,
-						PCI_IRQ_LEGACY | PCI_IRQ_MSIX);
+						PCI_IRQ_INTX | PCI_IRQ_MSIX);
 		if (vectors < 0)
 			return vectors;
 	}
@@ -580,13 +581,15 @@ static int vi_find_vqs(struct virtio_device *vdev, unsigned nvqs,
 	}
 
 	for (i = 0; i < nvqs; ++i) {
-		if (!names[i]) {
+		vqi = &vqs_info[i];
+
+		if (!vqi->name) {
 			vqs[i] = NULL;
 			continue;
 		}
 
-		vqs[i] = vi_setup_vq(vdev, queue_idx++, callbacks[i], names[i],
-				     ctx ? ctx[i] : false, vq_vector);
+		vqs[i] = vi_setup_vq(vdev, queue_idx++, vqi->callback,
+				    vqi->name, vqi->ctx, vq_vector);
 		if (IS_ERR(vqs[i])) {
 			vi_del_vqs(vdev);
 			return PTR_ERR(vqs[i]);

@@ -34,7 +34,7 @@
 #ifndef __FSL_FMAN_MEMAC_H
 #define __FSL_FMAN_MEMAC_H
 
-#include "common/general.h"
+#include "std_ext.h"
 #include "fsl_enet.h"
 
 
@@ -104,7 +104,6 @@ _val &= ~TX_FIFO_SECTIONS_TX_EMPTY_MASK;					\
 #define HASH_CTRL_ADDR_MASK	0x0000003F /* 26-31 Hash table address code */
 
 #define GROUP_ADDRESS		0x0000010000000000LL /* MAC mcast indication */
-#define HASH_TABLE_SIZE		64 /* Hash tbl size */
 
 /* Transmit Inter-Packet Gap Length Register (TX_IPG_LENGTH) */
 #define MEMAC_TX_IPG_LENGTH_MASK	0x0000003F

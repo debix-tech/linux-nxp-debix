@@ -10,6 +10,7 @@
 #include <linux/of_device.h>
 #include <linux/phy/phy.h>
 #include <linux/phy/phy-mipi-dphy.h>
+#include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 
 #include <drm/bridge/dw_mipi_dsi.h>
@@ -522,7 +523,7 @@ static int dw_mipi_dsi_imx_probe(struct platform_device *pdev)
 	return ret;
 }
 
-static int dw_mipi_dsi_imx_remove(struct platform_device *pdev)
+static void dw_mipi_dsi_imx_remove(struct platform_device *pdev)
 {
 	struct dw_mipi_dsi_imx *dsi = platform_get_drvdata(pdev);
 
@@ -531,8 +532,6 @@ static int dw_mipi_dsi_imx_remove(struct platform_device *pdev)
 	dw_mipi_dsi_remove(dsi->dmd);
 
 	clk_disable_unprepare(dsi->byte_clk);
-
-	return 0;
 }
 
 #ifdef CONFIG_PM

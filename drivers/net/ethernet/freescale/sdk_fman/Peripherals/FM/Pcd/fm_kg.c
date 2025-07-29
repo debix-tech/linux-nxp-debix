@@ -37,6 +37,8 @@
 
  @Description   FM PCD ...
 *//***************************************************************************/
+#define __ERR_MODULE__ MODULE_FM_PCD
+
 #include "std_ext.h"
 #include "error_ext.h"
 #include "string_ext.h"
@@ -50,7 +52,6 @@
 #include "fm_pcd_ipc.h"
 #include "fm_kg.h"
 #include "fsl_fman_kg.h"
-
 
 /****************************************/
 /*       static functions               */
@@ -1257,7 +1258,6 @@ static t_Error BuildSchemeRegs(t_FmPcdKgScheme            *p_Scheme,
 
     p_SchemeRegs->kgse_mv = p_Scheme->matchVector;
 
-#if (DPAA_VERSION >= 11)
     if (p_SchemeParams->overrideStorageProfile)
     {
         p_SchemeRegs->kgse_om |= KG_SCH_OM_VSPE;
@@ -1292,7 +1292,6 @@ static t_Error BuildSchemeRegs(t_FmPcdKgScheme            *p_Scheme,
     }
     else
         p_SchemeRegs->kgse_vsp = KG_SCH_VSP_NO_KSP_EN;
-#endif /* (DPAA_VERSION >= 11) */
 
     if (p_SchemeParams->useHash)
     {
@@ -1401,11 +1400,9 @@ static t_Error BuildSchemeRegs(t_FmPcdKgScheme            *p_Scheme,
                 case (e_FM_PCD_EXTRACT_BY_HDR):
                     switch (p_Extract->extractByHdr.hdr)
                     {
-#if (DPAA_VERSION >= 11) || ((DPAA_VERSION == 10) && defined(FM_CAPWAP_SUPPORT))
                         case (HEADER_TYPE_UDP_LITE):
                             p_Extract->extractByHdr.hdr = HEADER_TYPE_UDP;
                             break;
-#endif /* (DPAA_VERSION >= 11) || ((DPAA_VERSION == 10) && defined(FM_CAPWAP_SUPPORT)) */
                         case (HEADER_TYPE_UDP_ENCAP_ESP):
                             switch (p_Extract->extractByHdr.type)
                             {
@@ -2197,11 +2194,11 @@ t_Error  FmPcdKgAllocSchemes(t_Handle h_FmPcd, uint8_t numOfSchemes, uint8_t gue
     if (j != numOfSchemes)
     {
         /* roll back */
-        for (j--; j; j--)
+        for (i = 0; i < j; i++)
         {
-            p_FmPcd->p_FmPcdKg->schemesMng[p_SchemesIds[j]].allocated = FALSE;
-            p_FmPcd->p_FmPcdKg->schemesMng[p_SchemesIds[j]].ownerId = 0;
-            p_SchemesIds[j] = 0;
+            p_FmPcd->p_FmPcdKg->schemesMng[p_SchemesIds[i]].allocated = FALSE;
+            p_FmPcd->p_FmPcdKg->schemesMng[p_SchemesIds[i]].ownerId = 0;
+            p_SchemesIds[i] = 0;
         }
 
         RETURN_ERROR(MAJOR, E_NOT_AVAILABLE, ("No schemes found"));
@@ -2776,13 +2773,10 @@ uint8_t FmPcdKgGetSchemeId(t_Handle h_Scheme)
 
 }
 
-#if (DPAA_VERSION >= 11)
 bool FmPcdKgGetVspe(t_Handle h_Scheme)
 {
     return ((t_FmPcdKgScheme*)h_Scheme)->vspe;
-
 }
-#endif /* (DPAA_VERSION >= 11) */
 
 uint8_t FmPcdKgGetRelativeSchemeId(t_Handle h_FmPcd, uint8_t schemeId)
 {

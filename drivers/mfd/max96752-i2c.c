@@ -101,7 +101,7 @@ static int max96752_i2c_init(struct max96752_i2c *max96752_i2c)
 
 	max96752_i2c->gate->priv = max96752_i2c;
 
-	ret = i2c_mux_add_adapter(max96752_i2c->gate, 0, 0, 0);
+	ret = i2c_mux_add_adapter(max96752_i2c->gate, 0, 0);
 	if (ret < 0)
 		goto error;
 

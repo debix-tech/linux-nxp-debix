@@ -1295,7 +1295,7 @@ static int ub960_rxport_get_strobe_pos(struct ub960_data *priv,
 
 	clk_delay += v & UB960_IR_RX_ANA_STROBE_SET_CLK_DELAY_MASK;
 
-	ub960_rxport_read(priv, nport, UB960_RR_SFILTER_STS_1, &v);
+	ret = ub960_rxport_read(priv, nport, UB960_RR_SFILTER_STS_1, &v);
 	if (ret)
 		return ret;
 
@@ -2465,9 +2465,8 @@ static int ub960_configure_ports_for_streaming(struct ub960_data *priv,
 		if (rx_data[nport].num_streams > 2)
 			return -EPIPE;
 
-		fmt = v4l2_subdev_state_get_stream_format(state,
-							  route->sink_pad,
-							  route->sink_stream);
+		fmt = v4l2_subdev_state_get_format(state, route->sink_pad,
+						   route->sink_stream);
 		if (!fmt)
 			return -EPIPE;
 
@@ -2908,8 +2907,6 @@ static int ub960_get_frame_desc(struct v4l2_subdev *sd, unsigned int pad,
 	if (!ub960_pad_is_source(priv, pad))
 		return -EINVAL;
 
-	memset(fd, 0, sizeof(*fd));
-
 	fd->type = V4L2_MBUS_FRAME_DESC_TYPE_CSI2;
 
 	state = v4l2_subdev_lock_and_get_active_state(&priv->sd);
@@ -2966,8 +2963,8 @@ static int ub960_get_frame_desc(struct v4l2_subdev *sd, unsigned int pad,
 			const struct ub960_format_info *ub960_fmt;
 			struct v4l2_mbus_framefmt *fmt;
 
-			fmt = v4l2_subdev_state_get_stream_format(state, pad,
-								  route->source_stream);
+			fmt = v4l2_subdev_state_get_format(state, pad,
+							   route->source_stream);
 
 			if (!fmt) {
 				ret = -EINVAL;
@@ -3015,8 +3012,7 @@ static int ub960_set_fmt(struct v4l2_subdev *sd,
 	if (!ub960_find_format(format->format.code))
 		format->format.code = ub960_formats[0].code;
 
-	fmt = v4l2_subdev_state_get_stream_format(state, format->pad,
-						  format->stream);
+	fmt = v4l2_subdev_state_get_format(state, format->pad, format->stream);
 	if (!fmt)
 		return -EINVAL;
 
@@ -3032,8 +3028,36 @@ static int ub960_set_fmt(struct v4l2_subdev *sd,
 	return 0;
 }
 
-static int ub960_init_cfg(struct v4l2_subdev *sd,
-			  struct v4l2_subdev_state *state)
+static int ub960_get_frame_interval(struct v4l2_subdev *sd,
+				    struct v4l2_subdev_state *state,
+				    struct v4l2_subdev_frame_interval *fi)
+{
+	struct ub960_data *priv = sd_to_ub960(sd);
+
+	if (ub960_pad_is_sink(priv, fi->pad))
+		return -EINVAL;
+
+	fi->interval = priv->interval;
+
+	return 0;
+}
+
+static int ub960_set_frame_interval(struct v4l2_subdev *sd,
+				    struct v4l2_subdev_state *state,
+				    struct v4l2_subdev_frame_interval *fi)
+{
+	struct ub960_data *priv = sd_to_ub960(sd);
+
+	if (ub960_pad_is_sink(priv, fi->pad))
+		return -EINVAL;
+
+	priv->interval = fi->interval;
+
+	return 0;
+}
+
+static int ub960_init_state(struct v4l2_subdev *sd,
+			    struct v4l2_subdev_state *state)
 {
 	struct ub960_data *priv = sd_to_ub960(sd);
 
@@ -3065,7 +3089,8 @@ static const struct v4l2_subdev_pad_ops ub960_pad_ops = {
 	.get_fmt = v4l2_subdev_get_fmt,
 	.set_fmt = ub960_set_fmt,
 
-	.init_cfg = ub960_init_cfg,
+	.get_frame_interval = ub960_get_frame_interval,
+	.set_frame_interval = ub960_set_frame_interval,
 };
 
 static int ub960_log_status(struct v4l2_subdev *sd)
@@ -3217,40 +3242,12 @@ static const struct v4l2_subdev_core_ops ub960_subdev_core_ops = {
 	.unsubscribe_event = v4l2_event_subdev_unsubscribe,
 };
 
-static int ub960_g_frame_interval(struct v4l2_subdev *sd,
-				  struct v4l2_subdev_frame_interval *interval)
-{
-	struct ub960_data *priv = sd_to_ub960(sd);
-
-	if (ub960_pad_is_sink(priv, interval->pad))
-		return -EINVAL;
-
-	interval->interval = priv->interval;
-
-	return 0;
-}
-
-static int ub960_s_frame_interval(struct v4l2_subdev *sd,
-				  struct v4l2_subdev_frame_interval *interval)
-{
-	struct ub960_data *priv = sd_to_ub960(sd);
-
-	if (ub960_pad_is_sink(priv, interval->pad))
-		return -EINVAL;
-
-	priv->interval = interval->interval;
-
-	return 0;
-}
-
-static const struct v4l2_subdev_video_ops ub960_subdev_video_ops = {
-	.g_frame_interval = ub960_g_frame_interval,
-	.s_frame_interval = ub960_s_frame_interval,
+static const struct v4l2_subdev_internal_ops ub960_internal_ops = {
+	.init_state = ub960_init_state,
 };
 
 static const struct v4l2_subdev_ops ub960_subdev_ops = {
 	.core = &ub960_subdev_core_ops,
-	.video = &ub960_subdev_video_ops,
 	.pad = &ub960_pad_ops,
 };
 
@@ -3817,6 +3814,7 @@ static int ub960_create_subdev(struct ub960_data *priv)
 	int ret;
 
 	v4l2_i2c_subdev_init(&priv->sd, priv->client, &ub960_subdev_ops);
+	priv->sd.internal_ops = &ub960_internal_ops;
 
 	v4l2_ctrl_handler_init(&priv->ctrl_handler, 1);
 	priv->sd.ctrl_handler = &priv->ctrl_handler;

@@ -635,7 +635,7 @@ static void imx8m_get_phy_tuning_data(struct imx8mq_usb_phy *imx_phy)
 		imx_phy->comp_dis_tune =
 			phy_comp_dis_tune_from_property(imx_phy->comp_dis_tune);
 
-	if (device_property_read_u32(dev, "fsl,pcs-tx-deemph-3p5db-attenuation-db",
+	if (device_property_read_u32(dev, "fsl,phy-pcs-tx-deemph-3p5db-attenuation-db",
 				     &imx_phy->pcs_tx_deemph_3p5db))
 		imx_phy->pcs_tx_deemph_3p5db = PHY_TUNE_DEFAULT;
 	else
@@ -1139,7 +1139,7 @@ static int imx8mq_usb_phy_probe(struct platform_device *pdev)
 	return PTR_ERR_OR_ZERO(phy_provider);
 }
 
-static int imx8mq_usb_phy_remove(struct platform_device *pdev)
+static void imx8mq_usb_phy_remove(struct platform_device *pdev)
 {
 	struct imx8mq_usb_phy *imx_phy = platform_get_drvdata(pdev);
 
@@ -1149,8 +1149,6 @@ static int imx8mq_usb_phy_remove(struct platform_device *pdev)
 		power_supply_unreg_notifier(&imx_phy->chg_det_nb);
 
 	debug_remove_files(imx_phy);
-
-	return 0;
 }
 
 static struct platform_driver imx8mq_usb_phy_driver = {

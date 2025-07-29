@@ -121,7 +121,7 @@ EXPORT_SYMBOL(imx_sema4_mutex_destroy);
  *
  * \see imx_sema4_mutex_unlock
  */
-int _imx_sema4_mutex_lock(struct imx_sema4_mutex *mutex_ptr)
+static int _imx_sema4_mutex_lock(struct imx_sema4_mutex *mutex_ptr)
 {
 	int ret = 0, i = 0;
 
@@ -370,9 +370,8 @@ err:
 	return ret;
 }
 
-static int imx_sema4_remove(struct platform_device *pdev)
+static void imx_sema4_remove(struct platform_device *pdev)
 {
-	return 0;
 }
 
 static struct platform_driver imx_sema4_driver = {

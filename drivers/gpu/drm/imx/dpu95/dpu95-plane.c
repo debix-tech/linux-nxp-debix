@@ -434,8 +434,7 @@ static void dpu95_plane_atomic_update(struct drm_plane *plane,
 	dma_addr_t baseaddr, uv_baseaddr;
 	enum dpu95_link_id fu_link;
 	enum dpu95_link_id lb_src_link, stage_link;
-	unsigned int src_w, src_h, src_x, src_y, dst_w, dst_h;
-	int bpp;
+	unsigned int src_w, src_h, dst_w;
 	bool need_fetcheco = false, need_hscaler = false;
 
 	/*
@@ -451,24 +450,7 @@ static void dpu95_plane_atomic_update(struct drm_plane *plane,
 
 	src_w = drm_rect_width(&new_state->src) >> 16;
 	src_h = drm_rect_height(&new_state->src) >> 16;
-	src_x = new_state->src.x1 >> 16;
-	src_y = new_state->src.y1 >> 16;
 	dst_w = drm_rect_width(&new_state->dst);
-	dst_h = drm_rect_height(&new_state->dst);
-
-	switch (fb->format->format) {
-	case DRM_FORMAT_YUYV:
-	case DRM_FORMAT_UYVY:
-		bpp = 16;
-		break;
-	case DRM_FORMAT_NV12:
-	case DRM_FORMAT_NV21:
-		bpp = 8;
-		break;
-	default:
-		bpp = fb->format->cpp[0] * 8;
-		break;
-	}
 
 	if (fb->format->num_planes > 1)
 		need_fetcheco = true;

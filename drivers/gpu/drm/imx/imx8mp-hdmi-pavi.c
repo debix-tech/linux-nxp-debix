@@ -11,6 +11,7 @@
 #include <linux/module.h>
 #include <linux/of_device.h>
 #include <linux/of_graph.h>
+#include <linux/of_platform.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <drm/drm_fourcc.h>
@@ -145,12 +146,10 @@ static int imx8mp_hdmi_pavi_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int imx8mp_hdmi_pavi_remove(struct platform_device *pdev)
+static void imx8mp_hdmi_pavi_remove(struct platform_device *pdev)
 {
 	clk_disable_unprepare(gpavi->clk_apb);
 	gpavi = NULL;
-
-	return 0;
 }
 
 static const struct of_device_id imx8mp_hdmi_pavi_dt_ids[] = {

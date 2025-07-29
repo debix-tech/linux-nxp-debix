@@ -256,7 +256,6 @@ static int __formatter_subdev_set_routing(struct v4l2_subdev *sd,
 	return v4l2_subdev_set_routing_with_fmt(sd, state, routing,
 						&formatter_default_fmt);
 }
-
 static int formatter_subdev_init_state(struct v4l2_subdev *sd,
 				       struct v4l2_subdev_state *sd_state)
 {
@@ -288,8 +287,8 @@ static int formatter_subdev_enum_mbus_code(struct v4l2_subdev *sd,
 		if (code->index > 0)
 			return -EINVAL;
 
-		fmt = v4l2_subdev_state_get_stream_format(sd_state, code->pad,
-							  code->stream);
+		fmt = v4l2_subdev_state_get_format(sd_state, code->pad,
+						   code->stream);
 		code->code = fmt->code;
 		return 0;
 	}
@@ -327,8 +326,8 @@ static int formatter_subdev_set_fmt(struct v4l2_subdev *sd,
 			      &sdformat->format.height, 1,
 			      CSI_FORMATTER_MAX_PIX_HEIGHT, 0, 0);
 
-	fmt = v4l2_subdev_state_get_stream_format(sd_state, sdformat->pad,
-						  sdformat->stream);
+	fmt = v4l2_subdev_state_get_format(sd_state, sdformat->pad,
+					   sdformat->stream);
 	*fmt = sdformat->format;
 
 	/* Set default code if user set an invalid value */
@@ -618,7 +617,6 @@ static int formatter_subdev_disable_streams(struct v4l2_subdev *sd,
 }
 
 static const struct v4l2_subdev_pad_ops formatter_subdev_pad_ops = {
-	.init_cfg = formatter_subdev_init_state,
 	.enum_mbus_code	= formatter_subdev_enum_mbus_code,
 	.get_fmt = v4l2_subdev_get_fmt,
 	.set_fmt = formatter_subdev_set_fmt,
@@ -630,6 +628,10 @@ static const struct v4l2_subdev_pad_ops formatter_subdev_pad_ops = {
 
 static const struct v4l2_subdev_ops formatter_subdev_ops = {
 	.pad   = &formatter_subdev_pad_ops,
+};
+
+static const struct v4l2_subdev_internal_ops formatter_internal_ops = {
+	.init_state = formatter_subdev_init_state,
 };
 
 /* -----------------------------------------------------------------------------
@@ -649,6 +651,7 @@ static int csi_formatter_subdev_init(struct csi_formatter *formatter)
 	v4l2_subdev_init(sd, &formatter_subdev_ops);
 
 	snprintf(sd->name, sizeof(sd->name), "%s", dev_name(formatter->dev));
+	sd->internal_ops = &formatter_internal_ops;
 
 	sd->owner = THIS_MODULE;
 	sd->flags |= V4L2_SUBDEV_FL_HAS_DEVNODE |
@@ -851,7 +854,7 @@ static int csi_formatter_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int csi_formatter_remove(struct platform_device *pdev)
+static void csi_formatter_remove(struct platform_device *pdev)
 {
 	struct v4l2_subdev *sd = platform_get_drvdata(pdev);
 	struct csi_formatter *formatter = sd_to_formatter(sd);
@@ -866,7 +869,6 @@ static int csi_formatter_remove(struct platform_device *pdev)
 	fwnode_handle_put(formatter->sd.fwnode);
 
 	pm_runtime_set_suspended(&pdev->dev);
-	return 0;
 }
 
 static const struct of_device_id csi_formatter_of_match[] = {

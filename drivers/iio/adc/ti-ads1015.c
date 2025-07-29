@@ -396,51 +396,16 @@ static
 int ads1015_get_adc_result(struct ads1015_data *data, int chan, int *val)
 {
 	const int *data_rate = data->chip->data_rate;
-	int ret, pga, dr; // , dr_old, conv_time;
+	int ret, pga, dr, dr_old, conv_time;
 	unsigned int old, mask, cfg;
-	int getRegTime = 10;
-	data_rate = data_rate; // avoid warning: unused variable ¡®data_rate¡¯
+
 	if (chan < 0 || chan >= ADS1015_CHANNELS)
 		return -EINVAL;
-	/*	if(chan == 3){
-		ret = regmap_write(data->regmap, ADS1015_CFG_REG, 0xB383);
-	}
 
-	if(chan == 5){
-		ret = regmap_write(data->regmap, ADS1015_CFG_REG, 0xD383);
-	}
-*/
-#if 1
-	pga = data->channel_data[chan].pga;
-	dr = data->channel_data[chan].data_rate;
-	mask = ADS1015_CFG_MUX_MASK | ADS1015_CFG_PGA_MASK |
-		ADS1015_CFG_DR_MASK;
-	cfg = chan << ADS1015_CFG_MUX_SHIFT | pga << ADS1015_CFG_PGA_SHIFT |
-		dr << ADS1015_CFG_DR_SHIFT;
-
-	cfg |= 0x8103;
-
-	//printk("GLS_ADS chan=%d 0x%x cfg=( 0x%x ) in \n", chan,ADS1015_CFG_REG, cfg);
-	ret = regmap_write(data->regmap, ADS1015_CFG_REG, cfg);
-	if (ret)
-		return ret;
-
-	while(getRegTime--){
-			//printk("GLS_ADS in\n");
-		ret = regmap_read(data->regmap, ADS1015_CFG_REG, &old);
-		if (ret)
-			return ret;
-		//printk("GLS_ADS chan=%d 0x%x cfg=( 0x%x == 0x%x )\n", chan,ADS1015_CFG_REG, cfg, old);
-		if(cfg == old) {
-		//	printk("GLS_ADS out\n");
-			break;
-		}
-	}
-#else
 	ret = regmap_read(data->regmap, ADS1015_CFG_REG, &old);
 	if (ret)
 		return ret;
-	printk("GLS_ADS chan=%d 0x%x old=0x%x\n", chan,ADS1015_CFG_REG, old);
+
 	pga = data->channel_data[chan].pga;
 	dr = data->channel_data[chan].data_rate;
 	mask = ADS1015_CFG_MUX_MASK | ADS1015_CFG_PGA_MASK |
@@ -471,7 +436,7 @@ int ads1015_get_adc_result(struct ads1015_data *data, int chan, int *val)
 		usleep_range(conv_time, conv_time + 1);
 		data->conv_invalid = false;
 	}
-#endif
+
 	return regmap_read(data->regmap, ADS1015_CONV_REG, val);
 }
 
@@ -491,7 +456,7 @@ static irqreturn_t ads1015_trigger_handler(int irq, void *p)
 
 	mutex_lock(&data->lock);
 	chan = find_first_bit(indio_dev->active_scan_mask,
-			      indio_dev->masklength);
+			      iio_get_masklength(indio_dev));
 	ret = ads1015_get_adc_result(data, chan, &res);
 	if (ret < 0) {
 		mutex_unlock(&data->lock);
@@ -937,10 +902,9 @@ static int ads1015_client_get_channels_config(struct i2c_client *client)
 	struct iio_dev *indio_dev = i2c_get_clientdata(client);
 	struct ads1015_data *data = iio_priv(indio_dev);
 	struct device *dev = &client->dev;
-	struct fwnode_handle *node;
 	int i = -1;
 
-	device_for_each_child_node(dev, node) {
+	device_for_each_child_node_scoped(dev, node) {
 		u32 pval;
 		unsigned int channel;
 		unsigned int pga = ADS1015_DEFAULT_PGA;
@@ -960,9 +924,8 @@ static int ads1015_client_get_channels_config(struct i2c_client *client)
 
 		if (!fwnode_property_read_u32(node, "ti,gain", &pval)) {
 			pga = pval;
-			if (pga > 6) {
+			if (pga > 5) {
 				dev_err(dev, "invalid gain on %pfw\n", node);
-				fwnode_handle_put(node);
 				return -EINVAL;
 			}
 		}
@@ -971,7 +934,6 @@ static int ads1015_client_get_channels_config(struct i2c_client *client)
 			data_rate = pval;
 			if (data_rate > 7) {
 				dev_err(dev, "invalid data_rate on %pfw\n", node);
-				fwnode_handle_put(node);
 				return -EINVAL;
 			}
 		}
@@ -1004,28 +966,20 @@ static void ads1015_get_channels_config(struct i2c_client *client)
 
 static int ads1015_set_conv_mode(struct ads1015_data *data, int mode)
 {
-#if 0
-	printk("GLS_ADS 01 002 \n");
 	return regmap_update_bits(data->regmap, ADS1015_CFG_REG,
 				  ADS1015_CFG_MOD_MASK,
 				  mode << ADS1015_CFG_MOD_SHIFT);
-#else
-	return 0;
-#endif
 }
 
 static int ads1015_probe(struct i2c_client *client)
 {
-	const struct i2c_device_id *id = i2c_client_get_device_id(client);
 	const struct ads1015_chip_data *chip;
 	struct iio_dev *indio_dev;
 	struct ads1015_data *data;
 	int ret;
 	int i;
 
-	chip = device_get_match_data(&client->dev);
-	if (!chip)
-		chip = (const struct ads1015_chip_data *)id->driver_data;
+	chip = i2c_get_match_data(client);
 	if (!chip)
 		return dev_err_probe(&client->dev, -EINVAL, "Unknown chip\n");
 
@@ -1087,11 +1041,13 @@ static int ads1015_probe(struct i2c_client *client)
 			1 << ADS1015_CFG_COMP_LAT_SHIFT;
 
 		switch (irq_trig) {
+		case IRQF_TRIGGER_FALLING:
 		case IRQF_TRIGGER_LOW:
 			cfg_comp |= ADS1015_CFG_COMP_POL_LOW <<
 					ADS1015_CFG_COMP_POL_SHIFT;
 			break;
 		case IRQF_TRIGGER_HIGH:
+		case IRQF_TRIGGER_RISING:
 			cfg_comp |= ADS1015_CFG_COMP_POL_HIGH <<
 					ADS1015_CFG_COMP_POL_SHIFT;
 			break;
@@ -1111,8 +1067,8 @@ static int ads1015_probe(struct i2c_client *client)
 		if (ret)
 			return ret;
 	}
-	//John_gao set single-shot ret = ads1015_set_conv_mode(data, ADS1015_CONTINUOUS);
-	ret = ads1015_set_conv_mode(data, ADS1015_SINGLESHOT);
+
+	ret = ads1015_set_conv_mode(data, ADS1015_CONTINUOUS);
 	if (ret)
 		return ret;
 
@@ -1166,8 +1122,8 @@ static int ads1015_runtime_resume(struct device *dev)
 	struct iio_dev *indio_dev = i2c_get_clientdata(to_i2c_client(dev));
 	struct ads1015_data *data = iio_priv(indio_dev);
 	int ret;
-	//John_gao set single-shot ret = ads1015_set_conv_mode(data, ADS1015_CONTINUOUS);
-	ret = ads1015_set_conv_mode(data, ADS1015_SINGLESHOT);
+
+	ret = ads1015_set_conv_mode(data, ADS1015_CONTINUOUS);
 	if (!ret)
 		data->conv_invalid = true;
 
@@ -1217,7 +1173,7 @@ static const struct i2c_device_id ads1015_id[] = {
 	{ "ads1015", (kernel_ulong_t)&ads1015_data },
 	{ "ads1115", (kernel_ulong_t)&ads1115_data },
 	{ "tla2024", (kernel_ulong_t)&tla2024_data },
-	{}
+	{ }
 };
 MODULE_DEVICE_TABLE(i2c, ads1015_id);
 
@@ -1225,7 +1181,7 @@ static const struct of_device_id ads1015_of_match[] = {
 	{ .compatible = "ti,ads1015", .data = &ads1015_data },
 	{ .compatible = "ti,ads1115", .data = &ads1115_data },
 	{ .compatible = "ti,tla2024", .data = &tla2024_data },
-	{}
+	{ }
 };
 MODULE_DEVICE_TABLE(of, ads1015_of_match);
 

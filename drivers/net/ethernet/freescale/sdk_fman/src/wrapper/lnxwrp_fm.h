@@ -115,12 +115,7 @@ typedef struct {
     struct device_attribute     *dev_attr_regs;
     struct device_attribute     *dev_attr_bmi_regs;
     struct device_attribute     *dev_attr_qmi_regs;
-#if (DPAA_VERSION >= 11)
     struct device_attribute     *dev_attr_ipv4_opt;
-#endif
-    struct device_attribute     *dev_attr_dsar_regs;
-    struct device_attribute     *dev_attr_dsar_mem;
-    struct auto_res_tables_sizes dsar_table_sizes;
 } t_LnxWrpFmPortDev;
 
 typedef struct {
@@ -217,9 +212,6 @@ typedef struct {
     t_Handle                    h_PcdDev;
     t_Handle                    h_RtcDev;
 
-    t_Handle			h_DsarRxPort;
-    t_Handle			h_DsarTxPort;
-
     t_LnxWrpFmPortDev           hcPort;
     t_LnxWrpFmPortDev           opPorts[FM_MAX_NUM_OF_OH_PORTS-1];
     t_LnxWrpFmPortDev           rxPorts[FM_MAX_NUM_OF_RX_PORTS];
@@ -258,37 +250,8 @@ typedef struct {
 t_Error  LnxwrpFmIOCTL(t_LnxWrpFmDev *p_LnxWrpFmDev, unsigned int cmd, unsigned long arg, bool compat);
 t_Error  LnxwrpFmPortIOCTL(t_LnxWrpFmPortDev *p_LnxWrpFmPortDev, unsigned int cmd, unsigned long arg, bool compat);
 
-
-#if 0
-static __inline__ t_Error AllocSchemesForPort(t_LnxWrpFmDev *p_LnxWrpFmDev, uint8_t numSchemes, uint8_t *p_BaseSchemeNum)
-{
-    uint32_t    schemeMask;
-    uint8_t     i;
-
-    if (!numSchemes)
-        RETURN_ERROR(MINOR, E_INVALID_VALUE, NO_MSG);
-
-    schemeMask = 0x80000000;
-    *p_BaseSchemeNum = 0xff;
-
-    for (i=0; schemeMask && numSchemes; schemeMask>>=1, i++)
-        if ((p_LnxWrpFmDev->usedSchemes & schemeMask) == 0)
-        {
-            p_LnxWrpFmDev->usedSchemes |= schemeMask;
-            numSchemes--;
-            if (*p_BaseSchemeNum==0xff)
-                *p_BaseSchemeNum = i;
-        }
-        else if (*p_BaseSchemeNum!=0xff)
-            RETURN_ERROR(MINOR, E_INVALID_STATE, ("Fragmentation on schemes array!!!"));
-
-    if (numSchemes)
-        RETURN_ERROR(MINOR, E_FULL, ("schemes!!!"));
-    return E_OK;
-}
-#endif
-
 void LnxWrpPCDIOCTLTypeChecking(void);
 void LnxWrpPCDIOCTLEnumChecking(void);
+struct device_node *GetFmAdvArgsDevTreeNode(uint8_t fmIndx);
 
 #endif /* __LNXWRP_FM_H__ */

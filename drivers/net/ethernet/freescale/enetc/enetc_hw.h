@@ -21,10 +21,7 @@
 #define ENETC_SICTR0	0x18
 #define ENETC_SICTR1	0x1c
 #define ENETC_SIPCAPR0	0x20
-#define ENETC_SIPCAPR0_PSFP	BIT(9)
 #define ENETC_SIPCAPR0_RSS	BIT(8)
-#define ENETC_SIPCAPR0_QBV	BIT(4)
-#define ENETC_SIPCAPR0_QBU	BIT(3)
 #define ENETC_SIPCAPR0_RFS	BIT(2)
 #define ENETC_SIPCAPR0_LSO	BIT(1)
 #define ENETC_SIPCAPR0_RSC	BIT(0)
@@ -105,7 +102,7 @@ static inline u32 enetc_vsi_set_msize(u32 size)
 #define ENETC_SICAPR1	0x904
 
 #define ENETC_PSIIER	0xa00
-#define ENETC_PSIIER_MR_MASK	GENMASK(2, 1)
+#define  PSIIER_MR(n)	BIT((n) + 1) /* n = VSI index */
 
 #define ENETC_VSIIER	0xa00
 #define  VSIIER_MRIE	BIT(9)
@@ -218,6 +215,9 @@ enum enetc_bdr_type {TX, RX};
 #define ENETC_PCAPR0		0x0900
 #define ENETC_PCAPR0_RXBDR(val)	((val) >> 24)
 #define ENETC_PCAPR0_TXBDR(val)	(((val) >> 16) & 0xff)
+#define ENETC_PCAPR0_PSFP	BIT(9)
+#define ENETC_PCAPR0_QBV	BIT(4)
+#define ENETC_PCAPR0_QBU	BIT(3)
 #define ENETC_PCAPR1		0x0904
 #define ENETC_PSICFGR0(n)	(0x0940 + (n) * 0xc)  /* n = SI index */
 #define ENETC_PSICFGR0_SET_TXBDR(val)	((val) & 0xff)
@@ -396,6 +396,7 @@ enum enetc_bdr_type {TX, RX};
 /** Global regs, offset: 2_0000h */
 #define ENETC_GLOBAL_BASE	0x20000
 #define ENETC_G_EIPBRR0		0x0bf8
+#define  EIPBRR0_REVISION	GENMASK(15, 0)
 #define ENETC_G_EIPBRR1		0x0bfc
 #define ENETC_G_EPFBLPR(n)	(0xd00 + 4 * (n))
 #define ENETC_G_EPFBLPR1_XGMII	0x80000000
@@ -692,7 +693,7 @@ union enetc_rx_bd {
 
 #define ENETC_MAC_ADDR_FILT_CNT	8 /* # of supported entries per port */
 #define EMETC_MAC_ADDR_FILT_RES	3 /* # of reserved entries at the beginning */
-#define ENETC_MAX_NUM_VFS	2
+#define ENETC_MAX_NUM_VFS	8
 
 #define ENETC_CBD_FLAGS_SF	BIT(7) /* short format */
 #define ENETC_CBD_STATUS_MASK	0xf

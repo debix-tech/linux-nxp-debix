@@ -35,14 +35,6 @@
 		};
 	};
 
-	modem_reset: modem-reset {
-		compatible = "gpio-reset";
-		reset-gpios = <&pca9557_b 7 GPIO_ACTIVE_LOW>;
-		reset-delay-us = <2000>;
-		reset-post-delay-ms = <40>;
-		#reset-cells = <0>;
-	};
-
 	reserved-memory {
 		#address-cells = <2>;
 		#size-cells = <2>;
@@ -693,7 +685,6 @@
 &lpuart1 { /* BT */
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpuart1>;
-	resets = <&modem_reset>;
 	status = "disabled";
 };
 
@@ -701,22 +692,6 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpuart3>;
 	status = "disabled";
-};
-
-&isi_0 {
-	status = "okay";
-};
-
-&isi_1 {
-	status = "okay";
-};
-
-&isi_2 {
-	status = "okay";
-};
-
-&isi_3 {
-	status = "okay";
 };
 
 &gpu_3d0 {

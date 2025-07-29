@@ -32,7 +32,7 @@
 #include "dpu-crtc.h"
 #include "dpu-kms.h"
 #include "dpu-plane.h"
-#include "../imx-drm.h"
+#include "imx-drm.h"
 
 static inline struct dpu_plane_state **
 alloc_dpu_plane_states(struct dpu_crtc *dpu_crtc)
@@ -1022,7 +1022,6 @@ static void dpu_crtc_mode_set_nofb(struct drm_crtc *crtc)
 	struct dpu_plane *dplane = to_dpu_plane(crtc->primary);
 	struct dpu_plane_res *res = &dplane->grp->res;
 	struct dpu_constframe *pa_cf, *sa_cf;
-	struct dpu_disengcfg *dec;
 	struct dpu_extdst *ed, *plane_ed;
 	struct dpu_framegen *fg;
 	struct dpu_tcon *tcon;
@@ -1059,7 +1058,6 @@ again:
 	if (cfg_aux_pipe) {
 		pa_cf = dpu_crtc->aux_pa_cf;
 		sa_cf = dpu_crtc->aux_sa_cf;
-		dec = dpu_crtc->aux_dec;
 		ed = dpu_crtc->aux_ed;
 		fg = dpu_crtc->aux_fg;
 		tcon = dpu_crtc->aux_tcon;
@@ -1068,7 +1066,6 @@ again:
 	} else {
 		pa_cf = dpu_crtc->pa_cf;
 		sa_cf = dpu_crtc->sa_cf;
-		dec = dpu_crtc->dec;
 		ed = dpu_crtc->ed;
 		fg = dpu_crtc->fg;
 		tcon = dpu_crtc->tcon;
@@ -1445,10 +1442,9 @@ static int dpu_crtc_probe(struct platform_device *pdev)
 	return component_add(dev, &dpu_crtc_ops);
 }
 
-static int dpu_crtc_remove(struct platform_device *pdev)
+static void dpu_crtc_remove(struct platform_device *pdev)
 {
 	component_del(&pdev->dev, &dpu_crtc_ops);
-	return 0;
 }
 
 static struct platform_driver dpu_crtc_driver = {

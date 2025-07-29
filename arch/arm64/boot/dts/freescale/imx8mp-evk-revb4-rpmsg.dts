@@ -9,18 +9,17 @@
 
 &rpmsg_audio {
 	model = "wm8962-audio";
+	audio-codec = <&wm8962>;
 	audio-routing =
 		"IN1R", "MICBIAS",
 		"IN1L", "MICBIAS";
-	fsl,lpa-widgets =
+	ignore-suspend-widgets =
 		"HPOUTL", "HPOUTR", "Playback",
 		"Capture", "IN1L", "IN1R";
 };
 
 &i2c_rpbus_3 {
-	/delete-node/ wm8960@1a;
-
-	codec: wm8962@1a {
+	wm8962: codec@1a {
 		compatible = "wlf,wm8962";
 		reg = <0x1a>;
 		DCVDD-supply = <&reg_audio_pwr>;

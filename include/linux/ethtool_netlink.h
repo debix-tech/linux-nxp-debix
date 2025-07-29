@@ -23,8 +23,10 @@ struct phy_device;
 int ethnl_cable_test_alloc(struct phy_device *phydev, u8 cmd);
 void ethnl_cable_test_free(struct phy_device *phydev);
 void ethnl_cable_test_finished(struct phy_device *phydev);
-int ethnl_cable_test_result(struct phy_device *phydev, u8 pair, u8 result);
-int ethnl_cable_test_fault_length(struct phy_device *phydev, u8 pair, u32 cm);
+int ethnl_cable_test_result_with_src(struct phy_device *phydev, u8 pair,
+				     u8 result, u32 src);
+int ethnl_cable_test_fault_length_with_src(struct phy_device *phydev, u8 pair,
+					   u32 cm, u32 src);
 int ethnl_cable_test_amplitude(struct phy_device *phydev, u8 pair, s16 mV);
 int ethnl_cable_test_pulse(struct phy_device *phydev, u16 mV);
 int ethnl_cable_test_step(struct phy_device *phydev, u32 first, u32 last,
@@ -56,14 +58,14 @@ static inline void ethnl_cable_test_free(struct phy_device *phydev)
 static inline void ethnl_cable_test_finished(struct phy_device *phydev)
 {
 }
-static inline int ethnl_cable_test_result(struct phy_device *phydev, u8 pair,
-					  u8 result)
+static inline int ethnl_cable_test_result_with_src(struct phy_device *phydev,
+						   u8 pair, u8 result, u32 src)
 {
 	return -EOPNOTSUPP;
 }
 
-static inline int ethnl_cable_test_fault_length(struct phy_device *phydev,
-						u8 pair, u32 cm)
+static inline int ethnl_cable_test_fault_length_with_src(struct phy_device *phydev,
+							 u8 pair, u32 cm, u32 src)
 {
 	return -EOPNOTSUPP;
 }
@@ -126,4 +128,19 @@ static inline void mm_state_to_cfg(const struct ethtool_mm_state *state,
 }
 
 #endif /* IS_ENABLED(CONFIG_ETHTOOL_NETLINK) */
+
+static inline int ethnl_cable_test_result(struct phy_device *phydev, u8 pair,
+					  u8 result)
+{
+	return ethnl_cable_test_result_with_src(phydev, pair, result,
+						ETHTOOL_A_CABLE_INF_SRC_TDR);
+}
+
+static inline int ethnl_cable_test_fault_length(struct phy_device *phydev,
+						u8 pair, u32 cm)
+{
+	return ethnl_cable_test_fault_length_with_src(phydev, pair, cm,
+						      ETHTOOL_A_CABLE_INF_SRC_TDR);
+}
+
 #endif /* _LINUX_ETHTOOL_NETLINK_H_ */

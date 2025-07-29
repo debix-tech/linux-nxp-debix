@@ -31,7 +31,7 @@
 #define DAC_CLK_EXT_48K 24576000UL
 
 struct imx_pcm512x_data {
-	struct asoc_simple_priv *priv;
+	struct simple_util_priv *priv;
 	struct gpio_desc *mute_gpio;
 	bool dac_sclk;
 	bool adc_pluspro;
@@ -183,7 +183,7 @@ static int pcm1863_add_controls(struct snd_soc_component *component)
 
 static int imx_pcm186x_dai_init(struct snd_soc_pcm_runtime *rtd)
 {
-	struct snd_soc_dai *adc_dai = asoc_rtd_to_codec(rtd, 1);
+	struct snd_soc_dai *adc_dai = snd_soc_rtd_to_codec(rtd, 1);
 	struct snd_soc_component *adc = adc_dai->component;
 	int ret;
 
@@ -265,7 +265,7 @@ static int imx_pcm512x_set_bias_level(struct snd_soc_card *card,
 	struct snd_soc_dai *codec_dai;
 
 	rtd = snd_soc_get_pcm_runtime(card, card->dai_link);
-	codec_dai = asoc_rtd_to_codec(rtd, 0);
+	codec_dai = snd_soc_rtd_to_codec(rtd, 0);
 
 	if (dapm->dev != codec_dai->dev)
 		return 0;
@@ -293,7 +293,7 @@ static int imx_pcm512x_set_bias_level(struct snd_soc_card *card,
 static unsigned long pcm512x_get_mclk_rate(struct snd_pcm_substream *substream,
 					  struct snd_pcm_hw_params *params)
 {
-	struct snd_soc_pcm_runtime *rtd = asoc_substream_to_rtd(substream);
+	struct snd_soc_pcm_runtime *rtd = snd_soc_substream_to_rtd(substream);
 	struct imx_pcm512x_data *data = snd_soc_card_get_drvdata(rtd->card);
 	unsigned int channels = params_channels(params);
 	unsigned int width = params_width(params);
@@ -318,9 +318,9 @@ static unsigned long pcm512x_get_mclk_rate(struct snd_pcm_substream *substream,
 static int imx_pcm512x_hw_params(struct snd_pcm_substream *substream,
 				struct snd_pcm_hw_params *params)
 {
-	struct snd_soc_pcm_runtime *rtd = asoc_substream_to_rtd(substream);
-	struct snd_soc_dai *cpu_dai = asoc_rtd_to_cpu(rtd, 0);
-	struct snd_soc_dai *codec_dai = asoc_rtd_to_codec(rtd, 0);
+	struct snd_soc_pcm_runtime *rtd = snd_soc_substream_to_rtd(substream);
+	struct snd_soc_dai *cpu_dai = snd_soc_rtd_to_cpu(rtd, 0);
+	struct snd_soc_dai *codec_dai = snd_soc_rtd_to_codec(rtd, 0);
 	struct snd_soc_component *comp = codec_dai->component;
 	struct snd_soc_card *card = rtd->card;
 	struct imx_pcm512x_data *data = snd_soc_card_get_drvdata(card);
@@ -384,12 +384,12 @@ static int imx_pcm512x_hw_params(struct snd_pcm_substream *substream,
 
 static int imx_pcm512x_startup(struct snd_pcm_substream *substream)
 {
-	struct snd_soc_pcm_runtime *rtd = asoc_substream_to_rtd(substream);
+	struct snd_soc_pcm_runtime *rtd = snd_soc_substream_to_rtd(substream);
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct snd_soc_card *card = rtd->card;
 	struct imx_pcm512x_data *data = snd_soc_card_get_drvdata(card);
 	static struct snd_pcm_hw_constraint_list constraint_rates;
-	struct snd_soc_dai *codec_dai = asoc_rtd_to_codec(rtd, 0);
+	struct snd_soc_dai *codec_dai = snd_soc_rtd_to_codec(rtd, 0);
 	struct snd_soc_component *comp = codec_dai->component;
 	bool ext_44sclk, ext_48sclk, ext_nosclk;
 	int ret;
@@ -410,7 +410,7 @@ static int imx_pcm512x_startup(struct snd_pcm_substream *substream)
 			snd_soc_component_update_bits(comp, PCM512x_GPIO_CONTROL_1, 0x08, 0x08);
 		} else {
 			if (data->adc_pluspro) {
-				struct snd_soc_dai *adc_dai = asoc_rtd_to_codec(rtd, 1);
+				struct snd_soc_dai *adc_dai = snd_soc_rtd_to_codec(rtd, 1);
 				struct snd_soc_component *adc = adc_dai->component;
 
 				snd_soc_component_update_bits(adc, PCM186X_GPIO_IN_OUT, 0x40, 0x40);
@@ -445,7 +445,7 @@ static void imx_pcm512x_shutdown(struct snd_pcm_substream *substream)
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_card *card = rtd->card;
 	struct imx_pcm512x_data *data = snd_soc_card_get_drvdata(card);
-	struct snd_soc_dai *codec_dai = asoc_rtd_to_codec(rtd, 0);
+	struct snd_soc_dai *codec_dai = snd_soc_rtd_to_codec(rtd, 0);
 	struct snd_soc_component *comp = codec_dai->component;
 
 	if (data->dac_led_status) {
@@ -453,7 +453,7 @@ static void imx_pcm512x_shutdown(struct snd_pcm_substream *substream)
 			snd_soc_component_update_bits(comp, PCM512x_GPIO_CONTROL_1, 0x08, 0x00);
 		else {
 			if (data->adc_pluspro) {
-				struct snd_soc_dai *adc_dai = asoc_rtd_to_codec(rtd, 1);
+				struct snd_soc_dai *adc_dai = snd_soc_rtd_to_codec(rtd, 1);
 				struct snd_soc_component *adc = adc_dai->component;
 
 				snd_soc_component_update_bits(adc, PCM186X_GPIO_IN_OUT, 0x40, 0x00);
@@ -472,11 +472,11 @@ static struct snd_soc_ops imx_pcm512x_ops = {
 };
 
 static int imx_asoc_card_parse_dt(struct snd_soc_card *card,
-				  struct asoc_simple_priv *priv)
+				  struct simple_util_priv *priv)
 {
 	struct device_node *np, *cpu_np, *codec_np = NULL;
 	struct snd_soc_dai_link_component *dlc;
-	struct asoc_simple_dai *simple_dai;
+	struct simple_util_dai *simple_dai;
 	struct device *dev = card->dev;
 	struct snd_soc_dai_link *link;
 	struct of_phandle_args args;
@@ -598,7 +598,7 @@ static int imx_asoc_card_parse_dt(struct snd_soc_card *card,
 			link->codecs->name = "snd-soc-dummy";
 		}
 
-		ret = asoc_simple_parse_daifmt(dev, np, codec_np, NULL,
+		ret = simple_util_parse_daifmt(dev, np, codec_np, NULL,
 					       &link->dai_fmt);
 		if (ret) {
 			dev_warn(dev, "failed to parse dai format\n");
@@ -607,7 +607,7 @@ static int imx_asoc_card_parse_dt(struct snd_soc_card *card,
 				SND_SOC_DAIFMT_I2S;
 		}
 
-		ret = asoc_simple_parse_tdm(np, simple_dai);
+		ret = simple_util_parse_tdm(np, simple_dai);
 		if (ret) {
 			dev_err(dev, "failed to parse dai tdm\n");
 		}
@@ -665,7 +665,7 @@ static int imx_pcm512x_parse_dt(struct imx_pcm512x_data *data)
 
 static int imx_pcm512x_probe(struct platform_device *pdev)
 {
-	struct asoc_simple_priv *priv;
+	struct simple_util_priv *priv;
 	struct imx_pcm512x_data *data;
 	struct snd_soc_card *card;
 	int ret, i;
@@ -718,7 +718,7 @@ static int imx_pcm512x_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int imx_pcm512x_remove(struct platform_device *pdev)
+static void imx_pcm512x_remove(struct platform_device *pdev)
 {
 	struct imx_pcm512x_data *data = platform_get_drvdata(pdev);
 
@@ -726,8 +726,6 @@ static int imx_pcm512x_remove(struct platform_device *pdev)
 		gpiod_set_value_cansleep(data->mute_gpio, 0);
 
 	snd_soc_unregister_card(&data->priv->snd_card);
-
-	return 0;
 }
 
 static const struct of_device_id imx_pcm512x_dt_ids[] = {

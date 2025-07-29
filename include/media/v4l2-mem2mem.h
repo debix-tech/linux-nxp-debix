@@ -668,7 +668,7 @@ v4l2_m2m_next_dst_buf(struct v4l2_m2m_ctx *m2m_ctx)
 struct vb2_v4l2_buffer *v4l2_m2m_last_buf(struct v4l2_m2m_queue_ctx *q_ctx);
 
 /**
- * v4l2_m2m_last_src_buf() - return last destination buffer from the list of
+ * v4l2_m2m_last_src_buf() - return last source buffer from the list of
  * ready buffers
  *
  * @m2m_ctx: m2m context assigned to the instance given by struct &v4l2_m2m_ctx
@@ -867,6 +867,8 @@ int v4l2_m2m_ioctl_reqbufs(struct file *file, void *priv,
 				struct v4l2_requestbuffers *rb);
 int v4l2_m2m_ioctl_create_bufs(struct file *file, void *fh,
 				struct v4l2_create_buffers *create);
+int v4l2_m2m_ioctl_remove_bufs(struct file *file, void *priv,
+			       struct v4l2_remove_buffers *d);
 int v4l2_m2m_ioctl_querybuf(struct file *file, void *fh,
 				struct v4l2_buffer *buf);
 int v4l2_m2m_ioctl_expbuf(struct file *file, void *fh,

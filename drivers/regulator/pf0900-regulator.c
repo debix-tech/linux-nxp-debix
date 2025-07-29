@@ -214,7 +214,7 @@ static int pf0900_regulator_disable_regmap(struct regulator_dev *rdev)
  * enable_reg and enable_mask fields in their descriptor and then use
  * this as their is_enabled operation, saving some code.
  */
-int pf0900_regulator_is_enabled_regmap(struct regulator_dev *rdev)
+static int pf0900_regulator_is_enabled_regmap(struct regulator_dev *rdev)
 {
 	unsigned int val;
 	int ret;
@@ -307,7 +307,7 @@ static int find_closest_bigger(unsigned int target, const unsigned int *table,
  * and ramp_mask fields in their descriptor and then use this as their
  * set_ramp_delay operation, saving some code.
  */
-int pf0900_regulator_set_ramp_delay_regmap(struct regulator_dev *rdev,
+static int pf0900_regulator_set_ramp_delay_regmap(struct regulator_dev *rdev,
 					   int ramp_delay)
 {
 	int ret;
@@ -341,7 +341,7 @@ int pf0900_regulator_set_ramp_delay_regmap(struct regulator_dev *rdev,
  * vsel_reg and vsel_mask fields in their descriptor and then use this
  * as their get_voltage_vsel operation, saving some code.
  */
-int pf0900_regulator_get_voltage_sel_regmap(struct regulator_dev *rdev)
+static int pf0900_regulator_get_voltage_sel_regmap(struct regulator_dev *rdev)
 {
 	unsigned int val;
 	int ret;

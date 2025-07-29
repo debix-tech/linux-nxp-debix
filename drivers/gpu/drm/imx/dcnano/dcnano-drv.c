@@ -13,7 +13,7 @@
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_drv.h>
 #include <drm/drm_fb_helper.h>
-#include <drm/drm_fbdev_generic.h>
+#include <drm/drm_fbdev_dma.h>
 #include <drm/drm_gem_dma_helper.h>
 #include <drm/drm_modeset_helper.h>
 #include <drm/drm_print.h>
@@ -237,7 +237,7 @@ static int dcnano_probe(struct platform_device *pdev)
 		legacyfb_depth = 32;
 	}
 
-	drm_fbdev_generic_setup(drm, legacyfb_depth);
+	drm_fbdev_dma_setup(drm, legacyfb_depth);
 
 	return 0;
 
@@ -255,7 +255,7 @@ err_reset_get:
 	return ret;
 }
 
-static int dcnano_remove(struct platform_device *pdev)
+static void dcnano_remove(struct platform_device *pdev)
 {
 	struct dcnano_dev *dcnano = dev_get_drvdata(&pdev->dev);
 	struct drm_device *drm = &dcnano->base;
@@ -271,8 +271,6 @@ static int dcnano_remove(struct platform_device *pdev)
 	pm_runtime_put_sync(drm->dev);
 
 	pm_runtime_disable(drm->dev);
-
-	return 0;
 }
 
 static int __maybe_unused dcnano_suspend(struct device *dev)

@@ -102,10 +102,6 @@ typedef enum e_FmPortPcdSupport {
     , e_FM_PORT_PCD_SUPPORT_PRS_AND_CC              /**< Use Parser and Coarse Classification */
     , e_FM_PORT_PCD_SUPPORT_PRS_AND_CC_AND_PLCR     /**< Use Parser and Coarse Classification and Policer */
     , e_FM_PORT_PCD_SUPPORT_CC_ONLY                 /**< Use only Coarse Classification */
-#ifdef FM_CAPWAP_SUPPORT
-    , e_FM_PORT_PCD_SUPPORT_CC_AND_KG               /**< Use Coarse Classification,and Keygen */
-    , e_FM_PORT_PCD_SUPPORT_CC_AND_KG_AND_PLCR      /**< Use Coarse Classification, Keygen and Policer */
-#endif /* FM_CAPWAP_SUPPORT */
 } e_FmPortPcdSupport;
 
 /**************************************************************************//**
@@ -137,11 +133,6 @@ typedef uint32_t    fmPortFrameErrSelect_t;                         /**< typedef
 #define FM_PORT_FRM_ERR_IPR_NCSP                (FM_FD_ERR_IPR_NCSP & ~FM_FD_IPR)   /**< IPR non-consistent-sp */
 
 #define FM_PORT_FRM_ERR_IPFE                    0                                   /**< Obsolete; will be removed in the future */
-
-#ifdef FM_CAPWAP_SUPPORT
-#define FM_PORT_FRM_ERR_CRE                     FM_FD_ERR_CRE
-#define FM_PORT_FRM_ERR_CHE                     FM_FD_ERR_CHE
-#endif /* FM_CAPWAP_SUPPORT */
 
 #define FM_PORT_FRM_ERR_PHYSICAL                FM_FD_ERR_PHYSICAL              /**< Rx FIFO overflow, FCS error, code error, running disparity
                                                                                      error (SGMII and TBI modes), FIFO parity error. PHY
@@ -434,47 +425,6 @@ typedef struct t_FmPortPerformanceCnt {
     uint8_t     dmaCompVal;             /**< Dma compare value */
     uint32_t    fifoCompVal;            /**< Fifo compare value (in bytes) */
 } t_FmPortPerformanceCnt;
-
-
-/**************************************************************************//**
- @Description   A structure for defining the sizes of the Deep Sleep
-                the Auto Response tables
-*//***************************************************************************/
-typedef struct t_FmPortDsarTablesSizes
-{
-    uint16_t   maxNumOfArpEntries;
-    uint16_t   maxNumOfEchoIpv4Entries;
-    uint16_t   maxNumOfNdpEntries;
-    uint16_t   maxNumOfEchoIpv6Entries;
-    uint16_t   maxNumOfSnmpIPV4Entries;
-    uint16_t   maxNumOfSnmpIPV6Entries;
-    uint16_t   maxNumOfSnmpOidEntries;
-    uint16_t   maxNumOfSnmpOidChar; /* total amount of character needed for the snmp table */
-
-    uint16_t   maxNumOfIpProtFiltering;
-    uint16_t   maxNumOfTcpPortFiltering;
-    uint16_t   maxNumOfUdpPortFiltering;
-} t_FmPortDsarTablesSizes;
-
-
-/**************************************************************************//**
- @Function      FM_PORT_ConfigDsarSupport
-
- @Description   This function will allocate the amount of MURAM needed for
-                this max number of entries for Deep Sleep Auto Response.
-                it will calculate all needed MURAM for autoresponse including
-                necesary common stuff.
-
-
- @Param[in]     h_FmPort    A handle to a FM Port module.
- @Param[in]     params      A pointer to a structure containing the maximum
-                            sizes of the auto response tables
-
- @Return        E_OK on success; Error code otherwise.
-
- @Cautions      Allowed only following FM_PORT_Config() and before FM_PORT_Init().
-*//***************************************************************************/
-t_Error FM_PORT_ConfigDsarSupport(t_Handle h_FmPortRx, t_FmPortDsarTablesSizes *params);
 
 /**************************************************************************//**
  @Function      FM_PORT_ConfigNumOfOpenDmas
@@ -1236,7 +1186,6 @@ t_Error FM_PORT_ConfigRxFifoPriElevationLevel(t_Handle h_FmPort, uint32_t priEle
 t_Error FM_PORT_ConfigBCBWorkaround(t_Handle h_FmPort);
 #endif /* FM_HEAVY_TRAFFIC_HANG_ERRATA_FMAN_A005669 */
 
-#if (DPAA_VERSION >= 11)
 /**************************************************************************//*
  @Function      FM_PORT_ConfigInternalBuffOffset
 
@@ -1252,7 +1201,6 @@ t_Error FM_PORT_ConfigBCBWorkaround(t_Handle h_FmPort);
  @Cautions      Allowed only following FM_PORT_Config() and before FM_PORT_Init().
 *//***************************************************************************/
 t_Error FM_PORT_ConfigInternalBuffOffset(t_Handle h_FmPort, uint8_t val);
-#endif /* (DPAA_VERSION >= 11) */
 
 /** @} */ /* end of FM_PORT_advanced_init_grp group */
 /** @} */ /* end of FM_PORT_init_grp group */
@@ -1327,278 +1275,11 @@ typedef struct t_FmPortCongestionGrps {
                                                         /**< An array of CG indexes;
                                                              Note that the size of the array should be
                                                              'numOfCongestionGrpsToConsider'. */
-#if (DPAA_VERSION >= 11)
     bool        pfcPrioritiesEn[FM_PORT_NUM_OF_CONGESTION_GRPS][FM_MAX_NUM_OF_PFC_PRIORITIES];
                                                         /**< a matrix that represents the map between the CG ids
                                                              defined in 'congestionGrpsToConsider' to the priorties
                                                              mapping array. */
-#endif /* (DPAA_VERSION >= 11) */
 } t_FmPortCongestionGrps;
-
-/**************************************************************************//**
- @Description   Structure for Deep Sleep Auto Response ARP Entry
-*//***************************************************************************/
-typedef struct t_FmPortDsarArpEntry
-{
-    uint32_t  ipAddress;
-    uint8_t   mac[6];
-    bool      isVlan;
-    uint16_t  vid;
-} t_FmPortDsarArpEntry;
-
-/**************************************************************************//**
- @Description   Structure for Deep Sleep Auto Response ARP info
-*//***************************************************************************/
-typedef struct t_FmPortDsarArpInfo
-{
-    uint8_t           tableSize;
-    t_FmPortDsarArpEntry *p_AutoResTable;
-    bool              enableConflictDetection; /* when TRUE Conflict Detection will be checked and wake the host if needed */
-} t_FmPortDsarArpInfo;
-
-/**************************************************************************//**
- @Description   Structure for Deep Sleep Auto Response NDP Entry
-*//***************************************************************************/
-typedef struct t_FmPortDsarNdpEntry
-{
-    uint32_t  ipAddress[4];
-    uint8_t   mac[6];
-    bool      isVlan;
-    uint16_t  vid;
-} t_FmPortDsarNdpEntry;
-
-/**************************************************************************//**
- @Description   Structure for Deep Sleep Auto Response NDP info
-*//***************************************************************************/
-typedef struct t_FmPortDsarNdpInfo
-{
-    uint32_t              multicastGroup;
-
-    uint8_t               tableSizeAssigned;
-    t_FmPortDsarNdpEntry  *p_AutoResTableAssigned; /* This list refer to solicitation IP addresses.
-                                                                 Note that all IP adresses must be from the same multicast group.
-                                                                 This will be checked and if not operation will fail. */
-    uint8_t               tableSizeTmp;
-    t_FmPortDsarNdpEntry  *p_AutoResTableTmp;      /* This list refer to temp IP addresses.
-                                                             Note that all temp IP adresses must be from the same multicast group.
-                                                             This will be checked and if not operation will fail. */
-
-    bool                  enableConflictDetection; /* when TRUE Conflict Detection will be checked and wake the host if needed */
-
-} t_FmPortDsarNdpInfo;
-
-/**************************************************************************//**
- @Description   Structure for Deep Sleep Auto Response ICMPV4 info
-*//***************************************************************************/
-typedef struct t_FmPortDsarEchoIpv4Info
-{
-    uint8_t            tableSize;
-    t_FmPortDsarArpEntry  *p_AutoResTable;
-} t_FmPortDsarEchoIpv4Info;
-
-/**************************************************************************//**
- @Description   Structure for Deep Sleep Auto Response ICMPV6 info
-*//***************************************************************************/
-typedef struct t_FmPortDsarEchoIpv6Info
-{
-    uint8_t            tableSize;
-    t_FmPortDsarNdpEntry  *p_AutoResTable;
-} t_FmPortDsarEchoIpv6Info;
-
-/**************************************************************************//**
-@Description    Deep Sleep Auto Response SNMP OIDs table entry
-
-*//***************************************************************************/
-typedef struct {
-	uint16_t     oidSize;
-	uint8_t      *oidVal; /* only the oid string */
-	uint16_t     resSize;
-	uint8_t      *resVal; /* resVal will be the entire reply,
-				i.e. "Type|Length|Value" */
-} t_FmPortDsarOidsEntry;
-
-/**************************************************************************//**
- @Description   Deep Sleep Auto Response SNMP IPv4 Addresses Table Entry
-                Refer to the FMan Controller spec for more details.
-*//***************************************************************************/
-typedef struct
-{
-    uint32_t ipv4Addr; /*!< 32 bit IPv4 Address. */
-    bool      isVlan;
-    uint16_t vid;   /*!< 12 bits VLAN ID. The 4 left-most bits should be cleared                      */
-                       /*!< This field should be 0x0000 for an entry with no VLAN tag or a null VLAN ID. */
-} t_FmPortDsarSnmpIpv4AddrTblEntry;
-
-/**************************************************************************//**
- @Description   Deep Sleep Auto Response SNMP IPv6 Addresses Table Entry
-                Refer to the FMan Controller spec for more details.
-*//***************************************************************************/
-typedef struct
-{
-    uint32_t ipv6Addr[4];  /*!< 4 * 32 bit IPv6 Address.                                                     */
-    bool      isVlan;
-    uint16_t vid;       /*!< 12 bits VLAN ID. The 4 left-most bits should be cleared                      */
-                           /*!< This field should be 0x0000 for an entry with no VLAN tag or a null VLAN ID. */
-} t_FmPortDsarSnmpIpv6AddrTblEntry;
-
-/**************************************************************************//**
- @Description   Deep Sleep Auto Response SNMP Descriptor
-
-*//***************************************************************************/
-typedef struct
-{
-    uint16_t control;                          /**< Control bits [0-15]. */
-    uint16_t maxSnmpMsgLength;                 /**< Maximal allowed SNMP message length. */
-    uint16_t numOfIpv4Addresses;               /**< Number of entries in IPv4 addresses table. */
-    uint16_t numOfIpv6Addresses;               /**< Number of entries in IPv6 addresses table. */
-    t_FmPortDsarSnmpIpv4AddrTblEntry *p_Ipv4AddrTbl; /**< Pointer to IPv4 addresses table. */
-    t_FmPortDsarSnmpIpv6AddrTblEntry *p_Ipv6AddrTbl; /**< Pointer to IPv6 addresses table. */
-    uint8_t *p_RdOnlyCommunityStr;             /**< Pointer to the Read Only Community String. */
-    uint8_t *p_RdWrCommunityStr;               /**< Pointer to the Read Write Community String. */
-    t_FmPortDsarOidsEntry *p_OidsTbl;                 /**< Pointer to OIDs table. */
-    uint32_t oidsTblSize;                      /**< Number of entries in OIDs table. */
-} t_FmPortDsarSnmpInfo;
-
-/**************************************************************************//**
- @Description   Structure for Deep Sleep Auto Response filtering Entry
-*//***************************************************************************/
-typedef struct t_FmPortDsarFilteringEntry
-{
-    uint16_t    srcPort;
-    uint16_t    dstPort;
-    uint16_t    srcPortMask;
-    uint16_t    dstPortMask;
-} t_FmPortDsarFilteringEntry;
-
-/**************************************************************************//**
- @Description   Structure for Deep Sleep Auto Response filtering info
-*//***************************************************************************/
-typedef struct t_FmPortDsarFilteringInfo
-{
-    /* IP protocol filtering parameters */
-    uint8_t     ipProtTableSize;
-    uint8_t     *p_IpProtTablePtr;
-    bool        ipProtPassOnHit;  /* when TRUE, miss in the table will cause the packet to be droped,
-                                         hit will pass the packet to UDP/TCP filters if needed and if not
-                                         to the classification tree. If the classification tree will pass
-                                         the packet to a queue it will cause a wake interupt.
-                                         When FALSE it the other way around. */
-    /* UDP port filtering parameters */
-    uint8_t     udpPortsTableSize;
-    t_FmPortDsarFilteringEntry *p_UdpPortsTablePtr;
-    bool        udpPortPassOnHit; /* when TRUE, miss in the table will cause the packet to be droped,
-                                         hit will pass the packet to classification tree.
-                                         If the classification tree will pass the packet to a queue it
-                                         will cause a wake interupt.
-                                         When FALSE it the other way around. */
-    /* TCP port filtering parameters */
-    uint16_t    tcpFlagsMask;
-    uint8_t     tcpPortsTableSize;
-    t_FmPortDsarFilteringEntry *p_TcpPortsTablePtr;
-    bool        tcpPortPassOnHit; /* when TRUE, miss in the table will cause the packet to be droped,
-                                         hit will pass the packet to classification tree.
-                                         If the classification tree will pass the packet to a queue it
-                                         will cause a wake interupt.
-                                         When FALSE it the other way around. */
-} t_FmPortDsarFilteringInfo;
-
-/**************************************************************************//**
- @Description   Structure for Deep Sleep Auto Response parameters
-*//***************************************************************************/
-typedef struct t_FmPortDsarParams
-{
-    t_Handle                  h_FmPortTx;
-    t_FmPortDsarArpInfo       *p_AutoResArpInfo;
-    t_FmPortDsarEchoIpv4Info  *p_AutoResEchoIpv4Info;
-    t_FmPortDsarNdpInfo       *p_AutoResNdpInfo;
-    t_FmPortDsarEchoIpv6Info  *p_AutoResEchoIpv6Info;
-    t_FmPortDsarSnmpInfo      *p_AutoResSnmpInfo;
-    t_FmPortDsarFilteringInfo *p_AutoResFilteringInfo;
-} t_FmPortDsarParams;
-
-/**************************************************************************//**
- @Function      FM_PORT_EnterDsar
-
- @Description   Enter Deep Sleep Auto Response mode.
-                This function write the apropriate values to in the relevant
-                tables in the MURAM.
-
- @Param[in]     h_FmPortRx - FM PORT module descriptor
- @Param[in]     params - Auto Response parameters
-
- @Return        E_OK on success; Error code otherwise.
-
- @Cautions      Allowed only following FM_PORT_Init().
-*//***************************************************************************/
-t_Error FM_PORT_EnterDsar(t_Handle h_FmPortRx, t_FmPortDsarParams *params);
-
-/**************************************************************************//**
- @Function      FM_PORT_EnterDsarFinal
-
- @Description   Enter Deep Sleep Auto Response mode.
-                This function sets the Tx port in independent mode as needed
-                and redirect the receive flow to go through the
-                Dsar Fman-ctrl code
-
- @Param[in]     h_DsarRxPort - FM Rx PORT module descriptor
- @Param[in]     h_DsarTxPort - FM Tx PORT module descriptor
-
- @Return        E_OK on success; Error code otherwise.
-
- @Cautions      Allowed only following FM_PORT_Init().
-*//***************************************************************************/
-t_Error FM_PORT_EnterDsarFinal(t_Handle h_DsarRxPort, t_Handle h_DsarTxPort);
-
-/**************************************************************************//**
- @Function      FM_PORT_ExitDsar
-
- @Description   Exit Deep Sleep Auto Response mode.
-                This function reverse the AR mode and put the ports back into
-                their original wake mode
-
- @Param[in]     h_FmPortRx - FM PORT Rx module descriptor
- @Param[in]     h_FmPortTx - FM PORT Tx module descriptor
-
- @Return        E_OK on success; Error code otherwise.
-
- @Cautions      Allowed only following FM_PORT_EnterDsar().
-*//***************************************************************************/
-void FM_PORT_ExitDsar(t_Handle h_FmPortRx, t_Handle h_FmPortTx);
-
-/**************************************************************************//**
- @Function      FM_PORT_IsInDsar
-
- @Description   This function returns TRUE if the port was set as Auto Response
-                and FALSE if not. Once Exit AR mode it will return FALSE as well
-                until re-enabled once more.
-
- @Param[in]     h_FmPort - FM PORT module descriptor
-
- @Return        E_OK on success; Error code otherwise.
-*//***************************************************************************/
-bool FM_PORT_IsInDsar(t_Handle h_FmPort);
-
-typedef struct t_FmPortDsarStats
-{
-    uint32_t arpArCnt;
-    uint32_t echoIcmpv4ArCnt;
-    uint32_t ndpArCnt;
-    uint32_t echoIcmpv6ArCnt;
-    uint32_t snmpGetCnt;
-    uint32_t snmpGetNextCnt;
-} t_FmPortDsarStats;
-
-/**************************************************************************//**
- @Function      FM_PORT_GetDsarStats
-
- @Description   Return statistics for Deep Sleep Auto Response
-
- @Param[in]     h_FmPortRx - FM PORT module descriptor
- @Param[out]    stats - structure containing the statistics counters
-
- @Return        E_OK on success; Error code otherwise.
-*//***************************************************************************/
-t_Error FM_PORT_GetDsarStats(t_Handle h_FmPortRx, t_FmPortDsarStats *stats);
 
 #if (defined(DEBUG_ERRORS) && (DEBUG_ERRORS > 0))
 /**************************************************************************//**
@@ -2271,9 +1952,7 @@ typedef struct t_FmPortPcdParams {
                                                      profile is not generated
                                                      ('bypassPlcrProfileGeneration selected'). */
     t_Handle                h_IpReassemblyManip;    /**< IP Reassembly manipulation */
-#if (DPAA_VERSION >= 11)
     t_Handle                h_CapwapReassemblyManip;/**< CAPWAP Reassembly manipulation */
-#endif /* (DPAA_VERSION >= 11) */
 } t_FmPortPcdParams;
 
 /**************************************************************************//**
@@ -2286,7 +1965,6 @@ typedef struct t_FmPcdPrsStart {
                                              'parsingOffset' */
 } t_FmPcdPrsStart;
 
-#if (DPAA_VERSION >= 11)
 /**************************************************************************//**
  @Description   struct for defining external buffer margins
 *//***************************************************************************/
@@ -2297,8 +1975,6 @@ typedef struct t_FmPortVSPAllocParams {
                                              if relevant function called for Rx port */
     t_Handle    h_FmTxPort;             /**< Handle to coupled Tx Port; not relevant for OP port. */
 } t_FmPortVSPAllocParams;
-#endif /* (DPAA_VERSION >= 11) */
-
 
 /**************************************************************************//**
  @Function      FM_PORT_SetPCD
@@ -2404,7 +2080,6 @@ t_Error FM_PORT_PcdPlcrAllocProfiles(t_Handle h_FmPort, uint16_t numOfProfiles);
 *//***************************************************************************/
 t_Error FM_PORT_PcdPlcrFreeProfiles(t_Handle h_FmPort);
 
-#if (DPAA_VERSION >= 11)
 /**************************************************************************//**
  @Function      FM_PORT_VSPAlloc
 
@@ -2421,7 +2096,6 @@ t_Error FM_PORT_PcdPlcrFreeProfiles(t_Handle h_FmPort);
                 and also before FM_PORT_Enable(); i.e. the port should be disabled.
 *//***************************************************************************/
 t_Error FM_PORT_VSPAlloc(t_Handle h_FmPort, t_FmPortVSPAllocParams *p_Params);
-#endif /* (DPAA_VERSION >= 11) */
 
 /**************************************************************************//**
  @Function      FM_PORT_PcdKgModifyInitialScheme
@@ -2597,12 +2271,5 @@ t_Error  FM_PORT_ImRx(t_Handle h_FmPort);
 /** @} */ /* end of FM_PORT_runtime_data_grp group */
 /** @} */ /* end of FM_PORT_grp group */
 /** @} */ /* end of FM_grp group */
-
-
-
-#ifdef NCSW_BACKWARD_COMPATIBLE_API
-#define FM_PORT_ConfigTxFifoDeqPipelineDepth FM_PORT_ConfigFifoDeqPipelineDepth
-#endif /* NCSW_BACKWARD_COMPATIBLE_API */
-
 
 #endif /* __FM_PORT_EXT */

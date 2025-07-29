@@ -93,9 +93,9 @@ MODULE_PARM_DESC(hantro_dynamic_clock, "enable or disable dynamic clock rate");
 #define HANTRO_G2_DEC_FIRST_REG            0
 #define HANTRO_G2_DEC_LAST_REG             (HANTRO_G2_DEC_REGS - 1)
 
-#define MAX(a, b) (((a) > (b)) ? (a) : (b))
+#define MAX_VAL(a, b) (((a) > (b)) ? (a) : (b))
 
-#define DEC_IO_SIZE_MAX             (MAX(HANTRO_G2_DEC_REGS, HANTRO_G1_TOTAL_REGS) * 4)
+#define DEC_IO_SIZE_MAX             (MAX_VAL(HANTRO_G2_DEC_REGS, HANTRO_G1_TOTAL_REGS) * 4)
 
 /********************************************************************
  *                                              PORTING SEGMENT
@@ -1907,7 +1907,7 @@ out:
 	return err;
 }
 
-static int hantro_dev_remove(struct platform_device *pdev)
+static void hantro_dev_remove(struct platform_device *pdev)
 {
 	hantro_clk_enable(&pdev->dev);
 	pm_runtime_get_sync(&pdev->dev);
@@ -1930,8 +1930,6 @@ static int hantro_dev_remove(struct platform_device *pdev)
 		clk_put(hantro_clk_g2);
 	if (!IS_ERR(hantro_clk_bus))
 		clk_put(hantro_clk_bus);
-
-	return 0;
 }
 
 #ifdef CONFIG_PM

@@ -113,14 +113,13 @@ struct pwm_rpmsg_info {
 static struct pwm_rpmsg_info pwm_rpmsg;
 
 struct imx_rpmsg_pwm_data {
-	struct pwm_chip chip;
 	u8 chip_id;
 };
 
 static inline struct imx_rpmsg_pwm_data *
 to_imx_rpmsg_pwm_chip(struct pwm_chip *chip)
 {
-	return container_of(chip, struct imx_rpmsg_pwm_data, chip);
+	return pwmchip_get_drvdata(chip);
 }
 
 static int pwm_rpmsg_cb(struct rpmsg_device *rpdev, void *data, int len,
@@ -344,10 +343,9 @@ static int pwm_rpchip_apply(struct pwm_chip *chip,
 	return ret;
 }
 
-static const struct pwm_ops imx_tpm_pwm_ops = {
+static const struct pwm_ops pwm_rpchip_ops = {
 	.get_state = pwm_rpchip_get_state,
 	.apply = pwm_rpchip_apply,
-	.owner = THIS_MODULE,
 };
 
 static int pwm_rpchip_probe(struct platform_device *pdev)
@@ -356,28 +354,28 @@ static int pwm_rpchip_probe(struct platform_device *pdev)
 	struct device_node *np = dev->of_node;
 	struct imx_rpmsg_pwm_data *rdata;
 	struct pwm_chip *chip;
+	unsigned int npwm;
 	int ret;
 
 	if (!pwm_rpmsg.rpdev)
 		return -EPROBE_DEFER;
 
-	rdata = devm_kzalloc(&pdev->dev, sizeof(*rdata), GFP_KERNEL);
-	if (!rdata)
-		return -ENOMEM;
-
-	chip = &rdata->chip;
-	/* setup pwm chip description */
-	chip->dev = &pdev->dev;
-	chip->ops = &imx_tpm_pwm_ops;
-	chip->base = -1;
-	chip->of_xlate = of_pwm_xlate_with_flags;
-	chip->of_pwm_n_cells = 3;
-	ret = of_property_read_u32(np, "fsl,pwm-channel-number", &chip->npwm);
+	ret = of_property_read_u32(np, "fsl,pwm-channel-number", &npwm);
 	if (ret < 0) {
 		dev_err(dev, "failed to read pwm channel number from dts: %d\n",
 			     ret);
 		return -EINVAL;
 	}
+
+	chip = devm_pwmchip_alloc(&pdev->dev, npwm, sizeof(*rdata));
+	if (IS_ERR(chip))
+		return PTR_ERR(chip);
+	rdata = to_imx_rpmsg_pwm_chip(chip);
+
+	/* setup pwm chip description */
+	chip->ops = &pwm_rpchip_ops;
+	chip->of_xlate = of_pwm_xlate_with_flags;
+
 	rdata->chip_id = of_alias_get_id(np, "pwm");
 	if (rdata->chip_id < 0) {
 		dev_err(dev, "failed to get pwm alias number: %d\n",
@@ -387,7 +385,7 @@ static int pwm_rpchip_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, rdata);
 
-	ret = devm_pwmchip_add(&pdev->dev, &rdata->chip);
+	ret = devm_pwmchip_add(&pdev->dev, chip);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to add PWM chip: %d\n", ret);
 		return ret;

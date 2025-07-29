@@ -79,6 +79,7 @@ enum scmi_syspower_state {
  * @reboot_nb: A notifier_block optionally used to track reboot progress
  * @forceful_work: A worker used to trigger a forceful transition once a
  *		   graceful has timed out.
+ * @suspend_work: A worker used to trigger system suspend
  */
 struct scmi_syspower_conf {
 	struct device *dev;

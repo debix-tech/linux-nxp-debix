@@ -13,9 +13,52 @@
 #include <linux/usb.h>
 #include <linux/usb/hcd.h>
 
-#include "../host/xhci.h"
+#include "../host/xhci-port.h"
+#include "../host/xhci-ext-caps.h"
+#include "../host/xhci-caps.h"
 #include "../host/xhci-plat.h"
 #include "core.h"
+
+#define XHCI_HCSPARAMS1		0x4
+#define XHCI_PORTSC_BASE	0x400
+
+/**
+ * dwc3_power_off_all_roothub_ports - Power off all Root hub ports
+ * @dwc: Pointer to our controller context structure
+ */
+static void dwc3_power_off_all_roothub_ports(struct dwc3 *dwc)
+{
+	void __iomem *xhci_regs;
+	u32 op_regs_base;
+	int port_num;
+	u32 offset;
+	u32 reg;
+	int i;
+
+	/* xhci regs is not mapped yet, do it temperary here */
+	if (dwc->xhci_resources[0].start) {
+		xhci_regs = ioremap(dwc->xhci_resources[0].start, DWC3_XHCI_REGS_END);
+		if (!xhci_regs) {
+			dev_err(dwc->dev, "Failed to ioremap xhci_regs\n");
+			return;
+		}
+
+		op_regs_base = HC_LENGTH(readl(xhci_regs));
+		reg = readl(xhci_regs + XHCI_HCSPARAMS1);
+		port_num = HCS_MAX_PORTS(reg);
+
+		for (i = 1; i <= port_num; i++) {
+			offset = op_regs_base + XHCI_PORTSC_BASE + 0x10 * (i - 1);
+			reg = readl(xhci_regs + offset);
+			reg &= ~PORT_POWER;
+			writel(reg, xhci_regs + offset);
+		}
+
+		iounmap(xhci_regs);
+	} else {
+		dev_err(dwc->dev, "xhci base reg invalid\n");
+	}
+}
 
 static void dwc3_xhci_plat_start(struct usb_hcd *hcd)
 {
@@ -31,7 +74,7 @@ static void dwc3_xhci_plat_start(struct usb_hcd *hcd)
 	dwc3_enable_susphy(dwc, true);
 }
 
-static struct xhci_plat_priv dwc3_xhci_plat_quirk = {
+static const struct xhci_plat_priv dwc3_xhci_plat_quirk = {
 	.plat_start = dwc3_xhci_plat_start,
 };
 
@@ -48,44 +91,6 @@ static void dwc3_host_fill_xhci_irq_res(struct dwc3 *dwc,
 		dwc->xhci_resources[1].name = of_node_full_name(pdev->dev.of_node);
 	else
 		dwc->xhci_resources[1].name = name;
-}
-
-#define XHCI_HCSPARAMS1		0x4
-#define XHCI_PORTSC_BASE	0x400
-
-/*
- * dwc3_power_off_all_roothub_ports - Power off all Root hub ports
- * @dwc3: Pointer to our controller context structure
- */
-static void dwc3_power_off_all_roothub_ports(struct dwc3 *dwc)
-{
-	int i, port_num;
-	u32 reg, op_regs_base, offset;
-	void __iomem *xhci_regs;
-
-	/* xhci regs is not mapped yet, do it temperary here */
-	if (dwc->xhci_resources[0].start) {
-		xhci_regs = ioremap(dwc->xhci_resources[0].start,
-				DWC3_XHCI_REGS_END);
-		if (IS_ERR(xhci_regs)) {
-			dev_err(dwc->dev, "Failed to ioremap xhci_regs\n");
-			return;
-		}
-
-		op_regs_base = HC_LENGTH(readl(xhci_regs));
-		reg = readl(xhci_regs + XHCI_HCSPARAMS1);
-		port_num = HCS_MAX_PORTS(reg);
-
-		for (i = 1; i <= port_num; i++) {
-			offset = op_regs_base + XHCI_PORTSC_BASE + 0x10*(i-1);
-			reg = readl(xhci_regs + offset);
-			reg &= ~PORT_POWER;
-			writel(reg, xhci_regs + offset);
-		}
-
-		iounmap(xhci_regs);
-	} else
-		dev_err(dwc->dev, "xhci base reg invalid\n");
 }
 
 static int dwc3_host_get_irq(struct dwc3 *dwc)
@@ -121,18 +126,16 @@ out:
 
 int dwc3_host_init(struct dwc3 *dwc)
 {
-	struct property_entry	props[5];
+	struct property_entry	props[6];
 	struct platform_device	*xhci;
-	struct dwc3_platform_data *dwc3_pdata;
 	int			ret, irq;
 	int			prop_idx = 0;
 
 	/*
-	 * We have to power off all Root hub ports immediately after DWC3 set
-	 * to host mode to avoid VBUS glitch happen when xhci get reset later.
+	 * Some platforms need to power off all Root hub ports immediately after DWC3 set to host
+	 * mode to avoid VBUS glitch happen when xhci get reset later.
 	 */
-	if (dwc->host_vbus_glitches)
-		dwc3_power_off_all_roothub_ports(dwc);
+	dwc3_power_off_all_roothub_ports(dwc);
 
 	irq = dwc3_host_get_irq(dwc);
 	if (irq < 0)
@@ -159,6 +162,8 @@ int dwc3_host_init(struct dwc3 *dwc)
 
 	props[prop_idx++] = PROPERTY_ENTRY_BOOL("xhci-sg-trb-cache-size-quirk");
 
+	props[prop_idx++] = PROPERTY_ENTRY_BOOL("write-64-hi-lo-quirk");
+
 	if (dwc->usb3_lpm_capable)
 		props[prop_idx++] = PROPERTY_ENTRY_BOOL("usb3-lpm-capable");
 
@@ -184,10 +189,6 @@ int dwc3_host_init(struct dwc3 *dwc)
 			goto err;
 		}
 	}
-
-	dwc3_pdata = (struct dwc3_platform_data *)dev_get_platdata(dwc->dev);
-	if (dwc3_pdata && dwc3_pdata->xhci_priv)
-		dwc3_xhci_plat_quirk.quirks = dwc3_pdata->xhci_priv->quirks;
 
 	ret = platform_device_add_data(xhci, &dwc3_xhci_plat_quirk,
 				       sizeof(struct xhci_plat_priv));

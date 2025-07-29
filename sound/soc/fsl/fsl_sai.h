@@ -209,9 +209,6 @@
 #define FSL_SAI_REC_SYN		BIT(4)
 #define FSL_SAI_USE_I2S_SLAVE	BIT(5)
 
-#define FSL_FMT_TRANSMITTER	0
-#define FSL_FMT_RECEIVER	1
-
 /* SAI clock sources */
 #define FSL_SAI_CLK_BUS		0
 #define FSL_SAI_CLK_MAST1	1
@@ -302,8 +299,6 @@ struct fsl_sai {
 
 	int gpr_idx;
 
-	unsigned int masterflag[2];
-
 	unsigned int mclk_id[2];
 	unsigned int mclk_streams;
 	unsigned int slots;
@@ -311,7 +306,7 @@ struct fsl_sai {
 	unsigned int bclk_ratio;
 
 	const struct fsl_sai_soc_data *soc_data;
-	struct snd_soc_dai_driver cpu_dai_drv;
+	struct snd_soc_dai_driver cpu_dai_drv[3];
 	struct snd_dmaengine_dai_dma_data dma_params_rx;
 	struct snd_dmaengine_dai_dma_data dma_params_tx;
 	struct fsl_sai_verid verid;

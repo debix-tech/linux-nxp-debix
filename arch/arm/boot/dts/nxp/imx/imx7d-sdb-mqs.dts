@@ -44,13 +44,11 @@
 };
 
 &iomuxc {
-	imx7d-sdb {
-		pinctrl_mqs: mqsgrp {
-			fsl,pins = <
-				MX7D_PAD_SAI1_RX_SYNC__MQS_RIGHT	0x120b0
-				MX7D_PAD_SAI1_RX_BCLK__MQS_LEFT		0x120b0
-			>;
-		};
+	pinctrl_mqs: mqsgrp {
+		fsl,pins = <
+			MX7D_PAD_SAI1_RX_SYNC__MQS_RIGHT	0x120b0
+			MX7D_PAD_SAI1_RX_BCLK__MQS_LEFT		0x120b0
+		>;
 	};
 };
 

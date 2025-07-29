@@ -47,6 +47,10 @@ struct scmi_clock_info {
 	bool rate_discrete;
 	bool rate_changed_notifications;
 	bool rate_change_requested_notifications;
+	bool state_ctrl_forbidden;
+	bool rate_ctrl_forbidden;
+	bool parent_ctrl_forbidden;
+	bool extended_config;
 	union {
 		struct {
 			int num_rates;
@@ -60,8 +64,6 @@ struct scmi_clock_info {
 	};
 	int num_parents;
 	u32 *parents;
-	u32 attributes;
-	u32 perm;
 };
 
 enum scmi_power_scale {
@@ -73,6 +75,13 @@ enum scmi_power_scale {
 struct scmi_handle;
 struct scmi_device;
 struct scmi_protocol_handle;
+
+enum scmi_clock_oem_config {
+	SCMI_CLOCK_CFG_DUTY_CYCLE = 0x1,
+	SCMI_CLOCK_CFG_PHASE,
+	SCMI_CLOCK_CFG_OEM_START = 0x80,
+	SCMI_CLOCK_CFG_OEM_END = 0xFF,
+};
 
 /**
  * struct scmi_clk_proto_ops - represents the various operations provided
@@ -106,10 +115,11 @@ struct scmi_clk_proto_ops {
 	int (*state_get)(const struct scmi_protocol_handle *ph, u32 clk_id,
 			 bool *enabled, bool atomic);
 	int (*config_oem_get)(const struct scmi_protocol_handle *ph, u32 clk_id,
-			      u8 oem_type, u32 *oem_val, u32 *attributes,
-			      bool atomic);
+			      enum scmi_clock_oem_config oem_type,
+			      u32 *oem_val, u32 *attributes, bool atomic);
 	int (*config_oem_set)(const struct scmi_protocol_handle *ph, u32 clk_id,
-			      u8 oem_type, u32 oem_val, bool atomic);
+			      enum scmi_clock_oem_config oem_type,
+			      u32 oem_val, bool atomic);
 	int (*parent_get)(const struct scmi_protocol_handle *ph, u32 clk_id, u32 *parent_id);
 	int (*parent_set)(const struct scmi_protocol_handle *ph, u32 clk_id, u32 parent_id);
 };
@@ -130,6 +140,8 @@ struct scmi_perf_domain_info {
  * @level_set: sets the performance level of a domain
  * @level_get: gets the performance level of a domain
  * @transition_latency_get: gets the DVFS transition latency for a given device
+ * @rate_limit_get: gets the minimum time (us) required between successive
+ *	requests
  * @device_opps_add: adds all the OPPs for a given device
  * @freq_set: sets the frequency for a given device using sustained frequency
  *	to sustained performance level mapping
@@ -139,6 +151,8 @@ struct scmi_perf_domain_info {
  *	at a given frequency
  * @fast_switch_possible: indicates if fast DVFS switching is possible or not
  *	for a given device
+ * @fast_switch_rate_limit: gets the minimum time (us) required between
+ *	successive fast_switching requests
  * @power_scale_mw_get: indicates if the power values provided are in milliWatts
  *	or in some other (abstract) scale
  */
@@ -156,6 +170,8 @@ struct scmi_perf_proto_ops {
 			 u32 *level, bool poll);
 	int (*transition_latency_get)(const struct scmi_protocol_handle *ph,
 				      u32 domain);
+	int (*rate_limit_get)(const struct scmi_protocol_handle *ph,
+			      u32 domain, u32 *rate_limit);
 	int (*device_opps_add)(const struct scmi_protocol_handle *ph,
 			       struct device *dev, u32 domain);
 	int (*freq_set)(const struct scmi_protocol_handle *ph, u32 domain,
@@ -166,6 +182,8 @@ struct scmi_perf_proto_ops {
 			     unsigned long *rate, unsigned long *power);
 	bool (*fast_switch_possible)(const struct scmi_protocol_handle *ph,
 				     u32 domain);
+	int (*fast_switch_rate_limit)(const struct scmi_protocol_handle *ph,
+				      u32 domain, u32 *rate_limit);
 	enum scmi_power_scale (*power_scale_get)(const struct scmi_protocol_handle *ph);
 };
 
@@ -725,6 +743,32 @@ enum scmi_pinctrl_selector_type {
 	FUNCTION_TYPE,
 };
 
+enum scmi_pinctrl_conf_type {
+	SCMI_PIN_DEFAULT = 0,
+	SCMI_PIN_BIAS_BUS_HOLD = 1,
+	SCMI_PIN_BIAS_DISABLE = 2,
+	SCMI_PIN_BIAS_HIGH_IMPEDANCE = 3,
+	SCMI_PIN_BIAS_PULL_UP = 4,
+	SCMI_PIN_BIAS_PULL_DEFAULT = 5,
+	SCMI_PIN_BIAS_PULL_DOWN = 6,
+	SCMI_PIN_DRIVE_OPEN_DRAIN = 7,
+	SCMI_PIN_DRIVE_OPEN_SOURCE = 8,
+	SCMI_PIN_DRIVE_PUSH_PULL = 9,
+	SCMI_PIN_DRIVE_STRENGTH = 10,
+	SCMI_PIN_INPUT_DEBOUNCE = 11,
+	SCMI_PIN_INPUT_MODE = 12,
+	SCMI_PIN_PULL_MODE = 13,
+	SCMI_PIN_INPUT_VALUE = 14,
+	SCMI_PIN_INPUT_SCHMITT = 15,
+	SCMI_PIN_LOW_POWER_MODE = 16,
+	SCMI_PIN_OUTPUT_MODE = 17,
+	SCMI_PIN_OUTPUT_VALUE = 18,
+	SCMI_PIN_POWER_SOURCE = 19,
+	SCMI_PIN_SLEW_RATE = 20,
+	SCMI_PIN_OEM_START = 192,
+	SCMI_PIN_OEM_END = 255,
+};
+
 /**
  * struct scmi_pinctrl_proto_ops - represents the various operations provided
  * by SCMI Pinctrl Protocol
@@ -735,8 +779,10 @@ enum scmi_pinctrl_selector_type {
  * @function_groups_get: returns the set of groups, assigned to the specified
  *	function
  * @mux_set: set muxing function for groups of pins
- * @config_get: returns configuration parameter for pin or group
- * @config_set: sets the configuration parameter for pin or group
+ * @settings_get_one: returns one configuration parameter for pin or group
+ *	specified by config_type
+ * @settings_get_all: returns all configuration parameters for pin or group
+ * @settings_conf: sets the configuration parameter for pin or group
  * @pin_request: aquire pin before selecting mux setting
  * @pin_free: frees pin, acquired by request_pin call
  */
@@ -744,18 +790,32 @@ struct scmi_pinctrl_proto_ops {
 	int (*count_get)(const struct scmi_protocol_handle *ph,
 			 enum scmi_pinctrl_selector_type type);
 	int (*name_get)(const struct scmi_protocol_handle *ph, u32 selector,
-			enum scmi_pinctrl_selector_type type, const char **name);
-	int (*group_pins_get)(const struct scmi_protocol_handle *ph, u32 selector,
-			      const unsigned int **pins, unsigned int *nr_pins);
-	int (*function_groups_get)(const struct scmi_protocol_handle *ph, u32 selector,
-				   unsigned int *nr_groups, const unsigned int **groups);
-	int (*mux_set)(const struct scmi_protocol_handle *ph, u32 selector, u32 group);
-	int (*config_get)(const struct scmi_protocol_handle *ph, u32 selector,
-			  enum scmi_pinctrl_selector_type type,
-			  u8 config_type, unsigned long *config_value);
-	int (*config_set)(const struct scmi_protocol_handle *ph, u32 selector,
-			  enum scmi_pinctrl_selector_type type,
-			  unsigned long *configs, unsigned int num_configs);
+			enum scmi_pinctrl_selector_type type,
+			const char **name);
+	int (*group_pins_get)(const struct scmi_protocol_handle *ph,
+			      u32 selector, const unsigned int **pins,
+			      unsigned int *nr_pins);
+	int (*function_groups_get)(const struct scmi_protocol_handle *ph,
+				   u32 selector, unsigned int *nr_groups,
+				   const unsigned int **groups);
+	int (*mux_set)(const struct scmi_protocol_handle *ph, u32 selector,
+		       u32 group);
+	int (*settings_get_one)(const struct scmi_protocol_handle *ph,
+				u32 selector,
+				enum scmi_pinctrl_selector_type type,
+				enum scmi_pinctrl_conf_type config_type,
+				u32 *config_value);
+	int (*settings_get_all)(const struct scmi_protocol_handle *ph,
+				u32 selector,
+				enum scmi_pinctrl_selector_type type,
+				unsigned int *nr_configs,
+				enum scmi_pinctrl_conf_type *config_types,
+				u32 *config_values);
+	int (*settings_conf)(const struct scmi_protocol_handle *ph,
+			     u32 selector, enum scmi_pinctrl_selector_type type,
+			     unsigned int nr_configs,
+			     enum scmi_pinctrl_conf_type *config_type,
+			     u32 *config_value);
 	int (*pin_request)(const struct scmi_protocol_handle *ph, u32 pin);
 	int (*pin_free)(const struct scmi_protocol_handle *ph, u32 pin);
 };
@@ -806,8 +866,6 @@ struct scmi_notify_ops {
 					    const u32 *src_id,
 					    struct notifier_block *nb);
 	int (*devm_event_notifier_unregister)(struct scmi_device *sdev,
-					      u8 proto_id, u8 evt_id,
-					      const u32 *src_id,
 					      struct notifier_block *nb);
 	int (*event_notifier_register)(const struct scmi_handle *handle,
 				       u8 proto_id, u8 evt_id,
@@ -893,7 +951,7 @@ struct scmi_device {
 	struct scmi_handle *handle;
 };
 
-#define to_scmi_dev(d) container_of(d, struct scmi_device, dev)
+#define to_scmi_dev(d) container_of_const(d, struct scmi_device, dev)
 
 struct scmi_device_id {
 	u8 protocol_id;
@@ -1003,6 +1061,8 @@ struct scmi_perf_limits_report {
 	unsigned int	domain_id;
 	unsigned int	range_max;
 	unsigned int	range_min;
+	unsigned long	range_max_freq;
+	unsigned long	range_min_freq;
 };
 
 struct scmi_perf_level_report {
@@ -1010,6 +1070,7 @@ struct scmi_perf_level_report {
 	unsigned int	agent_id;
 	unsigned int	domain_id;
 	unsigned int	performance_level;
+	unsigned long	performance_level_freq;
 };
 
 struct scmi_sensor_trip_point_report {

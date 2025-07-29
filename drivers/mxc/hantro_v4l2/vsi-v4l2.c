@@ -43,6 +43,21 @@
 
 #define DRIVER_NAME	"vsiv4l2"
 
+#define VSI_IS_ENC BIT(0)
+#define VSI_IS_DEC BIT(1)
+
+struct vsi_match_data {
+	int flags;
+};
+
+static const struct vsi_match_data imx8m_data = {
+	.flags = VSI_IS_ENC | VSI_IS_DEC,
+};
+
+static const struct vsi_match_data imx8mq_data = {
+	.flags = VSI_IS_DEC,
+};
+
 int vsi_kloglvl = LOGLVL_ERROR;
 module_param(vsi_kloglvl, int, 0644);
 
@@ -107,7 +122,7 @@ static int vsi_v4l2_dbg_instance(struct seq_file *s, void *data)
 	num = scnprintf(str, sizeof(str),
 			"output (%2d, %2d): fmt = %c%c%c%c %d x %d, %d;\n",
 			vb2_is_streaming(vq),
-			vq->num_buffers,
+			vb2_get_num_buffers(vq),
 			format.fmt.pix_mp.pixelformat,
 			format.fmt.pix_mp.pixelformat >> 8,
 			format.fmt.pix_mp.pixelformat >> 16,
@@ -124,7 +139,7 @@ static int vsi_v4l2_dbg_instance(struct seq_file *s, void *data)
 	num = scnprintf(str, sizeof(str),
 			"capture(%2d, %2d): fmt = %c%c%c%c %d x %d, %d;\n",
 			vb2_is_streaming(vq),
-			vq->num_buffers,
+			vb2_get_num_buffers(vq),
 			format.fmt.pix_mp.pixelformat,
 			format.fmt.pix_mp.pixelformat >> 8,
 			format.fmt.pix_mp.pixelformat >> 16,
@@ -654,7 +669,7 @@ int vsi_v4l2_handle_cropchange(struct vsi_v4l2_msg *pmsg)
 	return 0;
 }
 
-bool vsi_v4l2_dec_in_source_change(struct vsi_v4l2_ctx *ctx)
+static bool vsi_v4l2_dec_in_source_change(struct vsi_v4l2_ctx *ctx)
 {
 	if (test_bit(CTX_FLAG_DELAY_SRCCHANGED_BIT, &ctx->flag))
 		return true;
@@ -666,7 +681,7 @@ bool vsi_v4l2_dec_in_source_change(struct vsi_v4l2_ctx *ctx)
 	return false;
 }
 
-void vsi_v4l2_dec_handle_last_empty_buffer(struct vsi_v4l2_ctx *ctx)
+static void vsi_v4l2_dec_handle_last_empty_buffer(struct vsi_v4l2_ctx *ctx)
 {
 	if (vsi_v4l2_dec_in_source_change(ctx))
 		return;
@@ -706,7 +721,7 @@ int vsi_v4l2_bufferdone(struct vsi_v4l2_msg *pmsg)
 	v4l2_klog(LOGLVL_FLOW, "%llx:%s:%lx:%d:%d",
 		ctx->ctxid, __func__, ctx->flag, inbufidx, outbufidx);
 	//write comes over once, so avoid this problem.
-	if (inbufidx >= 0 && inbufidx < ctx->input_que.num_buffers) {
+	if (inbufidx >= 0 && inbufidx < vb2_get_num_buffers(&ctx->input_que)) {
 		if (mutex_lock_interruptible(&ctx->ctxlock)) {
 			ret = -EBUSY;
 			goto out;
@@ -716,7 +731,7 @@ int vsi_v4l2_bufferdone(struct vsi_v4l2_msg *pmsg)
 		if (!vb) {
 			v4l2_klog(LOGLVL_ERROR, "%llx:%s:%lx:%d:%d, input vb is NULL pointer\n",
 				  ctx->ctxid, __func__, ctx->flag, inbufidx,
-				  ctx->input_que.num_buffers);
+				  vb2_get_num_buffers(&ctx->input_que));
 			mutex_unlock(&ctx->ctxlock);
 			goto out;
 		}
@@ -750,7 +765,7 @@ int vsi_v4l2_bufferdone(struct vsi_v4l2_msg *pmsg)
 
 		mutex_unlock(&ctx->ctxlock);
 	}
-	if (outbufidx >= 0 && outbufidx < ctx->output_que.num_buffers) {
+	if (outbufidx >= 0 && outbufidx < vb2_get_num_buffers(&ctx->output_que)) {
 		if (mutex_lock_interruptible(&ctx->ctxlock)) {
 			ret = -EBUSY;
 			goto out;
@@ -768,7 +783,7 @@ int vsi_v4l2_bufferdone(struct vsi_v4l2_msg *pmsg)
 		if (!vb) {
 			v4l2_klog(LOGLVL_ERROR, "%llx:%s:%lx:%d:%d, output vb is NULL pointer\n",
 				  ctx->ctxid, __func__, ctx->flag, outbufidx,
-				  ctx->output_que.num_buffers);
+				  vb2_get_num_buffers(&ctx->output_que));
 			mutex_unlock(&ctx->ctxlock);
 			goto out;
 		}
@@ -873,8 +888,15 @@ static void vsi_daemonsdevice_release(struct device *dev)
 static int v4l2_probe(struct platform_device *pdev)
 {
 	struct vsi_v4l2_device *vpu = NULL;
+	const struct vsi_match_data *match_data;
 	struct video_device *venc, *vdec;
 	int ret = 0;
+
+	match_data = device_get_match_data(&pdev->dev);
+	if (!match_data) {
+		v4l2_klog(LOGLVL_ERROR, "missing match_data\n");
+		return -EINVAL;
+	}
 
 	v4l2_klog(LOGLVL_BRIEF, "%s", __func__);
 	if (gvsidev != NULL)
@@ -898,15 +920,19 @@ static int v4l2_probe(struct platform_device *pdev)
 
 	vpu->venc = NULL;
 	vpu->vdec = NULL;
-	venc = vsi_v4l2_probe_enc(pdev, vpu);
-	if (venc == NULL)
-		goto err;
-	vpu->venc = venc;
+	if (match_data->flags & VSI_IS_ENC) {
+		venc = vsi_v4l2_probe_enc(pdev, vpu);
+		if (!venc)
+			goto err;
+		vpu->venc = venc;
+	}
 
-	vdec = vsi_v4l2_probe_dec(pdev, vpu);
-	if (vdec == NULL)
-		goto err;
-	vpu->vdec = vdec;
+	if (match_data->flags & VSI_IS_DEC) {
+		vdec = vsi_v4l2_probe_dec(pdev, vpu);
+		if (!vdec)
+			goto err;
+		vpu->vdec = vdec;
+	}
 
 	ret = vsiv4l2_initdaemon();
 	if (ret < 0)
@@ -953,7 +979,7 @@ err:
 	return ret;
 }
 
-static int v4l2_remove(struct platform_device *pdev)
+static void v4l2_remove(struct platform_device *pdev)
 {
 	void *obj;
 	int id;
@@ -979,7 +1005,6 @@ static int v4l2_remove(struct platform_device *pdev)
 	kfree(vsidaemondev);
 	vsiv4l2_cleanupdaemon();
 	gvsidev = NULL;
-	return 0;
 }
 
 static const struct platform_device_id v4l2_platform_ids[] = {
@@ -990,7 +1015,8 @@ static const struct platform_device_id v4l2_platform_ids[] = {
 };
 
 static const struct of_device_id v4l2_of_match[] = {
-	{ .compatible = "nxp,imx8m-vsiv4l2", },
+	{ .compatible = "nxp,imx8m-vsiv4l2", .data = &imx8m_data},
+	{ .compatible = "nxp,imx8mq-vsiv4l2", .data = &imx8mq_data},
 	{/* sentinel */}
 };
 

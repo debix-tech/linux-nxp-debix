@@ -8,12 +8,6 @@
 #ifndef __FSL_XCVR_H
 #define __FSL_XCVR_H
 
-#include <drm/drm_bridge.h>
-#include <linux/regmap.h>
-#include <linux/reset.h>
-#include <sound/dmaengine_pcm.h>
-#include <sound/pcm_iec958.h>
-
 #define FSL_XCVR_MODE_SPDIF	0
 #define FSL_XCVR_MODE_ARC	1
 #define FSL_XCVR_MODE_EARC	2
@@ -172,6 +166,10 @@
 					 FSL_XCVR_IRQ_FIFO_UOFL_ERR | \
 					 FSL_XCVR_IRQ_HOST_WAKEUP | \
 					 FSL_XCVR_IRQ_CMDC_STATUS_UPD |\
+					 FSL_XCVR_IRQ_B_PRE_MISMATCH |\
+					 FSL_XCVR_IRQ_M_W_PRE_MISMATCH |\
+					 FSL_XCVR_IRQ_PREAMBLE_MISMATCH |\
+					 FSL_XCVR_IRQ_UNEXP_PRE_REC |\
 					 FSL_XCVR_IRQ_ARC_MODE)
 
 #define FSL_XCVR_ISR_CMDC_TX_EN		BIT(3)
@@ -236,6 +234,7 @@
 #define FSL_XCVR_TX_DPTH_CTRL_TM_NO_PRE_BME	GENMASK(31, 30)
 
 #define FSL_XCVR_PHY_AI_CTRL_AI_RESETN		BIT(15)
+#define FSL_XCVR_PHY_AI_CTRL_AI_RWB		BIT(31)
 
 #define FSL_XCVR_PLL_CTRL0			0x00
 #define FSL_XCVR_PLL_CTRL0_SET			0x04
@@ -243,13 +242,25 @@
 #define FSL_XCVR_PLL_NUM			0x20
 #define FSL_XCVR_PLL_DEN			0x30
 #define FSL_XCVR_PLL_PDIV			0x40
+#define FSL_XCVR_PLL_BANDGAP			0x50
 #define FSL_XCVR_PLL_BANDGAP_SET		0x54
+#define FSL_XCVR_PLL_STAT0			0x60
+#define FSL_XCVR_PLL_STAT0_TOG			0x6c
+
 #define FSL_XCVR_PHY_CTRL			0x00
 #define FSL_XCVR_PHY_CTRL_SET			0x04
 #define FSL_XCVR_PHY_CTRL_CLR			0x08
+#define FSL_XCVR_PHY_CTRL_TOG			0x0c
+#define FSL_XCVR_PHY_STATUS			0x10
+#define FSL_XCVR_PHY_ANALOG_TRIM		0x20
+#define FSL_XCVR_PHY_SLEW_RATE_TRIM		0x30
+#define FSL_XCVR_PHY_DATA_TEST_DELAY		0x40
+#define FSL_XCVR_PHY_TEST_CTRL			0x50
+#define FSL_XCVR_PHY_DIFF_CDR_CTRL		0x60
 #define FSL_XCVR_PHY_CTRL2			0x70
 #define FSL_XCVR_PHY_CTRL2_SET			0x74
 #define FSL_XCVR_PHY_CTRL2_CLR			0x78
+#define FSL_XCVR_PHY_CTRL2_TOG			0x7c
 
 #define FSL_XCVR_PLL_BANDGAP_EN_VBG		BIT(0)
 #define FSL_XCVR_PLL_CTRL0_HROFF		BIT(13)
@@ -297,9 +308,6 @@
 #define FSL_XCVR_RX_CS_BUFF_0		0x80 /* First  RX CS buffer */
 #define FSL_XCVR_RX_CS_BUFF_1		0xA0 /* Second RX CS buffer */
 #define FSL_XCVR_CAP_DATA_STR		0x300 /* Capabilities data structure */
-
-#define FSL_XCVR_CAPDS_SIZE	256
-#define SPDIF_NUM_RATES 7
 
 /* GP PLL Registers */
 #define FSL_XCVR_GP_PLL_CTRL			0x00
@@ -391,41 +399,5 @@
 #define FSL_XCVR_GP_PLL_DIV_MFI			GENMASK(24, 16)
 #define FSL_XCVR_GP_PLL_DIV_RDIV		GENMASK(15, 13)
 #define FSL_XCVR_GP_PLL_DIV_ODIV		GENMASK(7, 0)
-
-struct fsl_xcvr_soc_data {
-	const char *fw_name;
-	bool spdif_only;
-	bool use_edma;
-	bool use_phy;
-	int  pll_ver;   /* 0 -> i.MX8MP,  1 -> i.MX95*/
-};
-
-struct fsl_xcvr {
-	const struct fsl_xcvr_soc_data *soc_data;
-	struct platform_device *pdev;
-	struct regmap *regmap;
-	struct clk *ipg_clk;
-	struct clk *pll_ipg_clk;
-	struct clk *phy_clk;
-	struct clk *spba_clk;
-	struct clk *pll8k_clk;
-	struct clk *pll11k_clk;
-	struct reset_control *reset;
-	u8 streams;
-	u32 mode;
-	u32 arc_mode;
-	void __iomem *ram_addr;
-	struct snd_dmaengine_dai_dma_data dma_prms_rx;
-	struct snd_dmaengine_dai_dma_data dma_prms_tx;
-	struct snd_aes_iec958 rx_iec958;
-	struct snd_aes_iec958 tx_iec958;
-	u8 cap_ds[FSL_XCVR_CAPDS_SIZE];
-	struct snd_pcm_hw_constraint_list spdif_constr_rates;
-	u32 spdif_constr_rates_list[SPDIF_NUM_RATES];
-	struct work_struct work;
-	struct drm_bridge *bridge;
-};
-
-const struct attribute_group *fsl_xcvr_get_attr_grp(void);
 
 #endif /* __FSL_XCVR_H */

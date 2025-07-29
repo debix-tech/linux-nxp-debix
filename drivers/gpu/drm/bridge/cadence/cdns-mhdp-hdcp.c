@@ -9,11 +9,12 @@
  * (at your option) any later version.
  */
 
-#include <asm/unaligned.h>
 #include <drm/bridge/cdns-mhdp.h>
 #include <drm/drm_print.h>
+#include <linux/unaligned.h>
 
 #include "cdns-mhdp.h"
+#include "cdns-mhdp-hdcp.h"
 
 static u32 mhdp_hdcp_bus_read(struct cdns_mhdp_device *mhdp, u32 offset)
 {

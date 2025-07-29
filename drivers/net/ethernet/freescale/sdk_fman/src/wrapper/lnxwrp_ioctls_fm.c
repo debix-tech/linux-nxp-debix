@@ -49,13 +49,11 @@
 #include <linux/interrupt.h>
 #include <linux/io.h>
 #include <linux/ioport.h>
+#include <linux/of.h>
 #include <linux/of_platform.h>
+#include <linux/platform_device.h>
 #include <linux/uaccess.h>
 #include <asm/errno.h>
-#ifndef CONFIG_FMAN_ARM
-#include <sysdev/fsl_soc.h>
-#include <linux/fsl/svr.h>
-#endif
 
 #if defined(CONFIG_COMPAT)
 #include <linux/compat.h>
@@ -66,11 +64,6 @@
 #include "fm_pcd_ioctls.h"
 #include "fm_port_ioctls.h"
 #include "fm_vsp_ext.h"
-
-#ifndef CONFIG_FMAN_ARM
-#define IS_T1023_T1024	(SVR_SOC_VER(mfspr(SPRN_SVR)) == SVR_T1024 || \
-			SVR_SOC_VER(mfspr(SPRN_SVR)) == SVR_T1023)
-#endif
 
 #define __ERR_MODULE__  MODULE_FM
 
@@ -127,10 +120,8 @@
 #error Error: please synchronize IOC_ defines!
 #endif
 
-#if DPAA_VERSION >= 11
 #if CMP_IOC_DEFINE(FM_PCD_FRM_REPLIC_MAX_NUM_OF_ENTRIES)
 #error Error: please synchronize IOC_ defines!
-#endif
 #endif
 
 #if CMP_IOC_DEFINE(FM_PCD_MAX_NUM_OF_CC_TREES)
@@ -320,7 +311,6 @@ void LnxWrpPCDIOCTLTypeChecking(void)
     /* fm_pcd_ext.h == fm_pcd_ioctls.h */
     /*ioc_fm_pcd_counters_params_t  : NOT USED */
     /*ioc_fm_pcd_exception_params_t : private */
-#if (DPAA_VERSION >= 11)
     ASSERT_COND(sizeof(ioc_fm_pcd_manip_frag_capwap_params_t) == sizeof(t_FmPcdManipFragCapwapParams));
     ASSERT_COND(sizeof(ioc_fm_pcd_manip_reassem_capwap_params_t) == sizeof(t_FmPcdManipReassemCapwapParams));
     ASSERT_COND(sizeof(ioc_fm_pcd_manip_hdr_insrt_by_hdr_params_t) == sizeof(t_FmPcdManipHdrInsrtByHdrParams));
@@ -332,7 +322,6 @@ void LnxWrpPCDIOCTLTypeChecking(void)
     ASSERT_COND(sizeof(ioc_fm_pcd_manip_frag_capwap_stats_t) == sizeof(t_FmPcdManipFragCapwapStats));
     ASSERT_COND(sizeof(ioc_fm_pcd_manip_reassem_capwap_stats_t) == sizeof(t_FmPcdManipReassemCapwapStats));
     ASSERT_COND(sizeof(ioc_fm_pcd_manip_frag_params_t) == sizeof(t_FmPcdManipFragParams));
-#endif /* (DPAA_VERSION >= 11) */
 
     ASSERT_COND(sizeof(ioc_fm_pcd_prs_label_params_t) == sizeof(t_FmPcdPrsLabelParams));
     ASSERT_COND(sizeof(ioc_fm_pcd_prs_sw_params_t) == sizeof(t_FmPcdPrsSwParams));
@@ -359,9 +348,7 @@ void LnxWrpPCDIOCTLTypeChecking(void)
     ASSERT_COND(sizeof(ioc_fm_pcd_kg_extracted_or_params_t) == sizeof(t_FmPcdKgExtractedOrParams));
     ASSERT_COND(sizeof(ioc_fm_pcd_kg_scheme_counter_t) == sizeof(t_FmPcdKgSchemeCounter));
     ASSERT_COND(sizeof(ioc_fm_pcd_kg_plcr_profile_t) == sizeof(t_FmPcdKgPlcrProfile));
-#if (DPAA_VERSION >= 11)
     ASSERT_COND(sizeof(ioc_fm_pcd_kg_storage_profile_t) == sizeof(t_FmPcdKgStorageProfile));
-#endif
     ASSERT_COND(sizeof(ioc_fm_pcd_kg_cc_t) == sizeof(t_FmPcdKgCc));
 #if !defined(CONFIG_COMPAT)
     /* different alignment */
@@ -391,15 +378,6 @@ void LnxWrpPCDIOCTLTypeChecking(void)
     ASSERT_COND(sizeof(ioc_fm_pcd_plcr_profile_params_t) == sizeof(t_FmPcdPlcrProfileParams) + sizeof(void *));
     /*ioc_fm_pcd_cc_tree_modify_next_engine_params_t : private */
 
-#ifdef FM_CAPWAP_SUPPORT
-#error TODO: unsupported feature
-/*
-    ASSERT_COND(sizeof(TODO) == sizeof(t_FmPcdManipHdrInsrtByTemplateParams));
-    ASSERT_COND(sizeof(TODO) == sizeof(t_CapwapFragmentationParams));
-    ASSERT_COND(sizeof(TODO) == sizeof(t_CapwapReassemblyParams));
-*/
-#endif
-
     /*ioc_fm_pcd_cc_node_modify_next_engine_params_t : private */
     /*ioc_fm_pcd_cc_node_remove_key_params_t : private */
     /*ioc_fm_pcd_cc_node_modify_key_and_next_engine_params_t : private */
@@ -427,9 +405,7 @@ void LnxWrpPCDIOCTLTypeChecking(void)
     ASSERT_COND(sizeof(ioc_fm_pcd_manip_reassem_stats_t) == sizeof(t_FmPcdManipReassemStats));
     ASSERT_COND(sizeof(ioc_fm_pcd_manip_frag_stats_t) == sizeof(t_FmPcdManipFragStats));
     ASSERT_COND(sizeof(ioc_fm_pcd_manip_stats_t) == sizeof(t_FmPcdManipStats));
-#if DPAA_VERSION >= 11
     ASSERT_COND(sizeof(ioc_fm_pcd_frm_replic_group_params_t) == sizeof(t_FmPcdFrmReplicGroupParams) + sizeof(void *));
-#endif
 
     /* fm_port_ext.h == fm_port_ioctls.h */
     ASSERT_COND(sizeof(ioc_fm_port_rate_limit_t) == sizeof(t_FmPortRateLimit));
@@ -453,7 +429,7 @@ void LnxWrpPCDIOCTLEnumChecking(void)
     /* fm_ext.h == fm_ioctls.h */
     ASSERT_COND((unsigned long)e_IOC_FM_PORT_TYPE_DUMMY == (unsigned long)e_FM_PORT_TYPE_DUMMY);
     ASSERT_COND((unsigned long)e_IOC_EX_MURAM_ECC == (unsigned long)e_FM_EX_MURAM_ECC);
-    ASSERT_COND((unsigned long)e_IOC_FM_COUNTERS_DEQ_CONFIRM == (unsigned long)e_FM_COUNTERS_DEQ_CONFIRM);
+    ASSERT_COND((unsigned long)e_IOC_FM_COUNTERS_DEQ_CONFIRM == (unsigned long)E_FMAN_COUNTERS_DEQ_CONFIRM);
 
     /* fm_pcd_ext.h == fm_pcd_ioctls.h */
     ASSERT_COND((unsigned long)e_IOC_FM_PCD_PRS_COUNTERS_FPM_COMMAND_STALL_CYCLES == (unsigned long)e_FM_PCD_PRS_COUNTERS_FPM_COMMAND_STALL_CYCLES);
@@ -476,31 +452,18 @@ void LnxWrpPCDIOCTLEnumChecking(void)
     ASSERT_COND((unsigned long)e_IOC_FM_PCD_PLCR_PROFILE_RECOLOURED_RED_PACKET_TOTAL_COUNTER == (unsigned long)e_FM_PCD_PLCR_PROFILE_RECOLOURED_RED_PACKET_TOTAL_COUNTER);
     ASSERT_COND((unsigned long)e_IOC_FM_PCD_ACTION_INDEXED_LOOKUP == (unsigned long)e_FM_PCD_ACTION_INDEXED_LOOKUP);
     ASSERT_COND((unsigned long)e_IOC_FM_PORT_PCD_SUPPORT_PRS_AND_KG_AND_PLCR == (unsigned long)e_FM_PORT_PCD_SUPPORT_PRS_AND_KG_AND_PLCR);
-#if !defined(FM_CAPWAP_SUPPORT)
     ASSERT_COND((unsigned long)e_IOC_FM_PCD_MANIP_INSRT_GENERIC == (unsigned long)e_FM_PCD_MANIP_INSRT_GENERIC);
     ASSERT_COND((unsigned long)e_IOC_FM_PCD_MANIP_RMV_GENERIC == (unsigned long)e_FM_PCD_MANIP_RMV_GENERIC);
-#else
-    ASSERT_COND((unsigned long)e_IOC_FM_PCD_MANIP_INSRT_BY_TEMPLATE == (unsigned long)e_FM_PCD_MANIP_INSRT_BY_TEMPLATE);
-    ASSERT_COND((unsigned long)e_IOC_FM_PCD_MANIP_RMV_BY_HDR == (unsigned long)e_FM_PCD_MANIP_RMV_BY_HDR);
-    ASSERT_COND((unsigned long)e_IOC_FM_PCD_MANIP_RMV_BY_HDR_FROM_START == (unsigned long)e_FM_PCD_MANIP_RMV_BY_HDR_FROM_START);
-#endif
     ASSERT_COND((unsigned long)e_IOC_FM_PCD_MANIP_TIME_OUT_BETWEEN_FRAG == (unsigned long)e_FM_PCD_MANIP_TIME_OUT_BETWEEN_FRAG);
     ASSERT_COND((unsigned long)e_IOC_FM_PCD_MANIP_EIGHT_WAYS_HASH == (unsigned long)e_FM_PCD_MANIP_EIGHT_WAYS_HASH);
 
-#ifdef FM_CAPWAP_SUPPORT
-    ASSERT_COND((unsigned long)e_IOC_FM_PCD_STATS_PER_FLOWID == (unsigned long)e_FM_PCD_STATS_PER_FLOWID);
-#endif
     ASSERT_COND((unsigned long)e_IOC_FM_PCD_MANIP_SPECIAL_OFFLOAD == (unsigned long)e_FM_PCD_MANIP_SPECIAL_OFFLOAD);
     ASSERT_COND((unsigned long)e_IOC_FM_PCD_CC_STATS_MODE_FRAME == (unsigned long)e_FM_PCD_CC_STATS_MODE_FRAME);
     ASSERT_COND((unsigned long)e_IOC_FM_PCD_MANIP_CONTINUE_WITHOUT_FRAG == (unsigned long)e_FM_PCD_MANIP_CONTINUE_WITHOUT_FRAG);
     ASSERT_COND((unsigned long)e_IOC_FM_PCD_MANIP_SPECIAL_OFFLOAD_IPSEC == (unsigned long)e_FM_PCD_MANIP_SPECIAL_OFFLOAD_IPSEC);
 
     /* fm_port_ext.h == fm_port_ioctls.h */
-#if !defined(FM_CAPWAP_SUPPORT)
     ASSERT_COND((unsigned long)e_IOC_FM_PORT_PCD_SUPPORT_PRS_AND_KG_AND_PLCR == (unsigned long)e_FM_PORT_PCD_SUPPORT_PRS_AND_KG_AND_PLCR);
-#else
-    ASSERT_COND((unsigned long)e_IOC_FM_PORT_PCD_SUPPORT_CC_AND_KG_AND_PLCR == (unsigned long)e_FM_PORT_PCD_SUPPORT_CC_AND_KG_AND_PLCR);
-#endif
     ASSERT_COND((unsigned long)e_IOC_FM_PORT_COUNTERS_DEQ_CONFIRM == (unsigned long)e_FM_PORT_COUNTERS_DEQ_CONFIRM);
     ASSERT_COND((unsigned long)e_IOC_FM_PORT_DUAL_RATE_LIMITER_SCALE_DOWN_BY_8 == (unsigned long)e_FM_PORT_DUAL_RATE_LIMITER_SCALE_DOWN_BY_8);
 
@@ -574,13 +537,6 @@ Status: not exported
 
     FM_VSP_GetStatistics -- it's not available yet
 #endif
-
-Status: feature not supported
-#ifdef FM_CAPWAP_SUPPORT
-#error unsupported feature
-    FM_PCD_StatisticsSetNode
-#endif
-
  */
     _fm_ioctl_dbg("cmd:0x%08x(type:0x%02x, nr:%u).\n",
             cmd, _IOC_TYPE(cmd), _IOC_NR(cmd) - 20);
@@ -1559,15 +1515,7 @@ Status: feature not supported
 
                     case (e_IOC_FM_PORT_TYPE_RX_10G):
                         if (port_params->port_id < FM_MAX_NUM_OF_10G_RX_PORTS) {
-#ifndef CONFIG_FMAN_ARM
-                            if (IS_T1023_T1024) {
-                                h_Port = p_LnxWrpFmDev->rxPorts[port_params->port_id].h_Dev;
-                            } else {
-#else
-                            {
-#endif
-                                h_Port = p_LnxWrpFmDev->rxPorts[port_params->port_id + FM_MAX_NUM_OF_1G_RX_PORTS].h_Dev;
-                            }
+                            h_Port = p_LnxWrpFmDev->rxPorts[port_params->port_id + FM_MAX_NUM_OF_1G_RX_PORTS].h_Dev;
                             break;
                         }
                         goto invalid_port_id;
@@ -2990,7 +2938,6 @@ invalid_port_id:
             break;
 	}
 
-#if (DPAA_VERSION >= 11)
 #if defined(CONFIG_COMPAT)
 	case FM_PCD_IOC_FRM_REPLIC_GROUP_SET_COMPAT:
 #endif
@@ -3430,24 +3377,6 @@ invalid_port_id:
 
         break;
     }
-#endif /* (DPAA_VERSION >= 11) */
-
-#ifdef FM_CAPWAP_SUPPORT
-#warning "feature not supported!"
-#if defined(CONFIG_COMPAT)
-        case FM_PCD_IOC_STATISTICS_SET_NODE_COMPAT:
-#endif
-        case FM_PCD_IOC_STATISTICS_SET_NODE:
-        {
-/*          ioc_fm_pcd_stats_params_t param;
-            ...
-            param->id = FM_PCD_StatisticsSetNode(p_LnxWrpFmDev->h_PcdDev,
-                                (t_FmPcdStatsParams *)&param);
-*/
-            err = E_NOT_SUPPORTED;
-            break;
-        }
-#endif /* FM_CAPWAP_SUPPORT */
 
         default:
             RETURN_ERROR(MINOR, E_INVALID_SELECTION,
@@ -3461,7 +3390,7 @@ invalid_port_id:
     return E_OK;
 }
 
-void FM_Get_Api_Version(ioc_fm_api_version_t *p_version)
+static void FM_Get_Api_Version(ioc_fm_api_version_t *p_version)
 {
 	p_version->version.major = FMD_API_VERSION_MAJOR;
 	p_version->version.minor = FMD_API_VERSION_MINOR;
@@ -3574,9 +3503,8 @@ t_Error LnxwrpFmIOCTL(t_LnxWrpFmDev *p_LnxWrpFmDev, unsigned int cmd, unsigned l
                 }
             }
 
-			err = FM_ModifyCounter(p_LnxWrpFmDev->h_Dev,
-					       (e_FmCounters)param->cnt,
-					       param->val);
+            err = FM_ModifyCounter(p_LnxWrpFmDev->h_Dev, (enum fman_counters)param->cnt,
+                                   param->val);
 
             XX_Free(param);
             break;
@@ -3611,8 +3539,8 @@ t_Error LnxwrpFmIOCTL(t_LnxWrpFmDev *p_LnxWrpFmDev, unsigned int cmd, unsigned l
                 }
             }
 
-			param->val = FM_GetCounter(p_LnxWrpFmDev->h_Dev,
-						   (e_FmCounters)param->cnt);
+            param->val = FM_GetCounter(p_LnxWrpFmDev->h_Dev,
+                                       (enum fman_counters)param->cnt);
 
 #if defined(CONFIG_COMPAT)
             if (compat)
@@ -3978,9 +3906,7 @@ t_Error LnxwrpFmPortIOCTL(t_LnxWrpFmPortDev *p_LnxWrpFmPortDev, unsigned int cmd
                     port_pcd_params->p_kg_params           = compat_ptr(compat_port_pcd_params->p_kg_params);
                     port_pcd_params->p_plcr_params         = compat_ptr(compat_port_pcd_params->p_plcr_params);
                     port_pcd_params->p_ip_reassembly_manip = compat_ptr(compat_port_pcd_params->p_ip_reassembly_manip);
-#if (DPAA_VERSION >= 11)
                     port_pcd_params->p_capwap_reassembly_manip = compat_ptr(compat_port_pcd_params->p_capwap_reassembly_manip);
-#endif
                     /* the prs member is the same, no compat structure...memcpy only */
                     if (port_pcd_params->p_prs_params)
                     {
@@ -4522,7 +4448,6 @@ t_Error LnxwrpFmPortIOCTL(t_LnxWrpFmPortDev *p_LnxWrpFmPortDev, unsigned int cmd
             break;
         }
 
-#if (DPAA_VERSION >= 11)
 #if defined(CONFIG_COMPAT)
         case FM_PORT_IOC_VSP_ALLOC_COMPAT:
 #endif
@@ -4596,7 +4521,6 @@ t_Error LnxwrpFmPortIOCTL(t_LnxWrpFmPortDev *p_LnxWrpFmPortDev, unsigned int cmd
             XX_Free(param);
             break;
         }
-#endif /* (DPAA_VERSION >= 11) */
 
         case FM_PORT_IOC_GET_MAC_STATISTICS:
         {

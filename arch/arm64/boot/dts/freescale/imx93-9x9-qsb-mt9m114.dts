@@ -4,6 +4,7 @@
  */
 
 #include "imx93-9x9-qsb.dts"
+#include <dt-bindings/media/video-interfaces.h>
 
 / {
 	reg_mt9m114_dovdd: regulator-mt9m114-dovdd {
@@ -116,39 +117,44 @@
 	status = "okay";
 };
 
-&cameradev {
-	parallel_csi;
-	status = "okay";
-};
-
-&isi_0 {
-	interface = <6 0 2>;
+&isi{
 	status = "okay";
 
-	cap_device {
-		status = "okay";
+	port {
+		isi_in: endpoint {
+			remote-endpoint = <&parallel_csi_out>;
+		};
 	};
 };
 
 &parallel_csi {
 	status = "okay";
 
-	port {
-		parallel_csi_ep: endpoint {
-			remote-endpoint = <&mt9m114_ep>;
+	ports {
+
+		port@0 {
+			reg = <0>;
+
+			parallel_csi_in: endpoint {
+				remote-endpoint = <&mt9m114_ep>;
+			};
+		};
+
+		port@1 {
+			reg = <1>;
+
+			parallel_csi_out: endpoint {
+				remote-endpoint = <&isi_in>;
+			};
 		};
 	};
-};
-
-&mipi_csi {
-	status = "disabled";
 };
 
 &lpi2c8 {
 	#address-cells = <1>;
 	#size-cells = <0>;
 	clock-frequency = <400000>;
-	pinctrl-names = "default", "sleep";
+	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpi2c8>;
 	pinctrl-1 = <&pinctrl_lpi2c8>;
 	pinctrl-assert-gpios = <&pcal6524 22 GPIO_ACTIVE_HIGH>;
@@ -166,22 +172,22 @@
 	mt9m114: mt9m114@48 {
 		compatible = "on,mt9m114";
 		reg = <0x48>;
-		pinctrl-names    = "default";
-		pinctrl-0        = <&pinctrl_parallel_csi>;
-		reset-gpios      = <&gpio2 4 GPIO_ACTIVE_HIGH>;
-		powerdown-gpios  = <&gpio2 5 GPIO_ACTIVE_HIGH>;
-		DOVDD-supply     = <&reg_mt9m114_dovdd>;
-		AVDD-supply      = <&reg_mt9m114_avdd>;
-		DVDD-supply      = <&reg_mt9m114_dvdd>;
-		EXTCLK-supply    = <&reg_mt9m114_extclk>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_parallel_csi>;
+		reset-gpios = <&gpio2 4 GPIO_ACTIVE_HIGH>;
+		powerdown-gpios = <&gpio2 5 GPIO_ACTIVE_HIGH>;
+		DOVDD-supply = <&reg_mt9m114_dovdd>;
+		AVDD-supply = <&reg_mt9m114_avdd>;
+		DVDD-supply = <&reg_mt9m114_dvdd>;
+		EXTCLK-supply = <&reg_mt9m114_extclk>;
 		CTRL_4T245-supply = <&reg_mt9m114_ctrl_4t245>;
-		mclk             = <27000000>;
+		mclk = <27000000>;
 		status = "okay";
 
 		port {
 			mt9m114_ep: endpoint {
-				remote-endpoint = <&parallel_csi_ep>;
-				bus-type = <5>; /* V4L2_FWNODE_BUS_TYPE_PARALLEL */
+				remote-endpoint = <&parallel_csi_in>;
+				bus-type = <MEDIA_BUS_TYPE_PARALLEL>;
 				bus-width = <8>;
 				vsync-active = <1>;
 				hsync-active = <1>;

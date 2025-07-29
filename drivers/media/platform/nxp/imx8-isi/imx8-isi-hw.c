@@ -80,6 +80,18 @@ void mxc_isi_channel_set_outbuf(struct mxc_isi_pipe *pipe,
 	mxc_isi_write(pipe, CHNL_OUT_BUF_CTRL, val);
 }
 
+void mxc_isi_channel_set_max_size(struct mxc_isi_pipe *pipe,
+				  const struct vb2_v4l2_buffer *v4l2_buf,
+				  const bool buf_max_size)
+{
+	if (!buf_max_size)
+		return;
+
+	mxc_isi_write(pipe, CHNL_OUT_BUF_MAX_SIZE_Y, v4l2_buf->planes[0].length);
+	mxc_isi_write(pipe, CHNL_OUT_BUF_MAX_SIZE_U, v4l2_buf->planes[1].length);
+	mxc_isi_write(pipe, CHNL_OUT_BUF_MAX_SIZE_V, v4l2_buf->planes[2].length);
+}
+
 void mxc_isi_channel_m2m_start(struct mxc_isi_pipe *pipe)
 {
 	u32 val;
@@ -112,7 +124,13 @@ static u32 mxc_isi_channel_scaling_ratio(unsigned int from, unsigned int to,
 	else
 		*dec = 8;
 
-	return min_t(u32, from * 0x1000 / (to * *dec), ISI_DOWNSCALE_THRESHOLD);
+	/*
+	 * As mentioned in reference manual, ISI actual output line
+	 * value will be rounded up to an integer, so in some cases,
+	 * its output line value will bigger than the value set by
+	 * user. So adjust scale factor to make them equal.
+	 */
+	return min_t(u32, DIV_ROUND_UP(from * 0x1000, to * *dec), ISI_DOWNSCALE_THRESHOLD);
 }
 
 static void mxc_isi_channel_set_scaling(struct mxc_isi_pipe *pipe,
@@ -215,8 +233,7 @@ static void mxc_isi_channel_set_csc(struct mxc_isi_pipe *pipe,
 		[MXC_ISI_ENC_RGB] = "RGB",
 		[MXC_ISI_ENC_YUV] = "YUV",
 	};
-	const u32 *coeffs;
-	bool cscen = true;
+	const u32 *coeffs = NULL;
 	u32 val;
 
 	val = mxc_isi_read(pipe, CHNL_IMG_CTRL);
@@ -235,14 +252,13 @@ static void mxc_isi_channel_set_csc(struct mxc_isi_pipe *pipe,
 		val |= CHNL_IMG_CTRL_CSC_MODE(CHNL_IMG_CTRL_CSC_MODE_RGB2YCBCR);
 	} else {
 		/* Bypass CSC */
-		cscen = false;
 		val |= CHNL_IMG_CTRL_CSC_BYPASS;
 	}
 
 	dev_dbg(pipe->isi->dev, "CSC: %s -> %s\n",
 		encodings[in_encoding], encodings[out_encoding]);
 
-	if (cscen) {
+	if (coeffs) {
 		mxc_isi_write(pipe, CHNL_CSC_COEFF0, coeffs[0]);
 		mxc_isi_write(pipe, CHNL_CSC_COEFF1, coeffs[1]);
 		mxc_isi_write(pipe, CHNL_CSC_COEFF2, coeffs[2]);
@@ -253,7 +269,7 @@ static void mxc_isi_channel_set_csc(struct mxc_isi_pipe *pipe,
 
 	mxc_isi_write(pipe, CHNL_IMG_CTRL, val);
 
-	*bypass = !cscen;
+	*bypass = !coeffs;
 }
 
 void mxc_isi_channel_set_alpha(struct mxc_isi_pipe *pipe, u8 alpha)

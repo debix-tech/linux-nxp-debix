@@ -42,21 +42,19 @@
 #include <linux/module.h>
 #include <linux/of_platform.h>
 #include <linux/of_address.h>
+#include <linux/platform_device.h>
 #include <linux/cdev.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
-#ifndef CONFIG_FMAN_ARM
-#include <linux/fsl/svr.h>
-#endif
 #include <linux/io.h>
 
 #include "sprint_ext.h"
 #include "fm_common.h"
+#include "lnxwrp_fm.h"
+#include "lnxwrp_fm_port.h"
 #include "lnxwrp_fsl_fman.h"
 #include "fm_port_ext.h"
-#if (DPAA_VERSION >= 11)
 #include "fm_vsp_ext.h"
-#endif /* DPAA_VERSION >= 11 */
 #include "fm_ioctls.h"
 #include "lnxwrp_resources.h"
 #include "lnxwrp_sysfs_fm_port.h"
@@ -78,11 +76,6 @@ do {\
 		("Number of advanced-configuration entries exceeded"));\
 	} \
 } while (0)
-
-#ifndef CONFIG_FMAN_ARM
-#define IS_T1023_T1024	(SVR_SOC_VER(mfspr(SPRN_SVR)) == SVR_T1024 || \
-			SVR_SOC_VER(mfspr(SPRN_SVR)) == SVR_T1023)
-#endif
 
 static volatile int hcFrmRcv/* = 0 */;
 static spinlock_t lock;
@@ -191,22 +184,6 @@ static struct qman_fq *FqAlloc(t_LnxWrpFmDev * p_LnxWrpFmDev,
 	return fq;
 }
 
-static void FqFree(struct qman_fq *fq)
-{
-	int _errno;
-
-	_errno = qman_retire_fq(fq, NULL);
-	if (unlikely(_errno < 0))
-		printk(KERN_WARNING "qman_retire_fq(%u) = %d\n", qman_fq_fqid(fq), _errno);
-
-	_errno = qman_oos_fq(fq);
-	if (unlikely(_errno < 0))
-		printk(KERN_WARNING "qman_oos_fq(%u) = %d\n", qman_fq_fqid(fq), _errno);
-
-	qman_destroy_fq(fq, 0);
-	XX_Free((t_FmTestFq *) fq);
-}
-
 static t_Error QmEnqueueCB(t_Handle h_Arg, void *p_Fd)
 {
 	t_LnxWrpFmDev *p_LnxWrpFmDev = (t_LnxWrpFmDev *) h_Arg;
@@ -264,10 +241,6 @@ static t_LnxWrpFmPortDev *ReadFmPortDevTreeNode(struct platform_device
 	int _errno = 0, lenp;
 	uint32_t tmp_prop;
 
-#ifdef CONFIG_FMAN_P1023
-	static unsigned char have_oh_port/* = 0 */;
-#endif
-
 	port_node = of_node_get(of_dev->dev.of_node);
 
 	/* Get the FM node */
@@ -300,18 +273,6 @@ static t_LnxWrpFmPortDev *ReadFmPortDevTreeNode(struct platform_device
 	if (of_device_is_compatible(port_node, "fsl,fman-port-oh") ||
 	    of_device_is_compatible(port_node, "fsl,fman-v2-port-oh") ||
 	    of_device_is_compatible(port_node, "fsl,fman-v3-port-oh")) {
-#ifndef CONFIG_FMAN_ARM
-#ifdef CONFIG_FMAN_P3040_P4080_P5020
-		/* On PPC FMan v2, OH ports start from cell-index 0x1 */
-		tmp_prop -= 0x1;
-#else
-		/* On PPC FMan v3 (Low and High), OH ports start from
-		 * cell-index 0x2
-		 */
-		tmp_prop -= 0x2;
-#endif // CONFIG_FMAN_P3040_P4080_P5020
-#endif // CONFIG_FMAN_ARM
-
 		if (unlikely(tmp_prop >= FM_MAX_NUM_OF_OH_PORTS)) {
 			REPORT_ERROR(MAJOR, E_INVALID_VALUE,
 				     ("of_get_property(%s, cell-index) failed",
@@ -319,17 +280,9 @@ static t_LnxWrpFmPortDev *ReadFmPortDevTreeNode(struct platform_device
 			return NULL;
 		}
 
-#ifdef CONFIG_FMAN_P1023
-		/* Beware, this can be done when there is only
-		   one FMan to be initialized */
-		if (!have_oh_port) {
-			have_oh_port = 1; /* first OP/HC port
-					     is used for host command */
-#else
 		/* Here it is hardcoded the use of the OH port 1
 		   (with cell-index 0) */
 		if (tmp_prop == 0) {
-#endif
 			p_LnxWrpFmPortDev = &p_LnxWrpFmDev->hcPort;
 			p_LnxWrpFmPortDev->id = 0;
 			/*
@@ -396,12 +349,6 @@ static t_LnxWrpFmPortDev *ReadFmPortDevTreeNode(struct platform_device
 			settings.param.specificParams.nonRxParams.qmChannel =
 			p_LnxWrpFmPortDev->txCh;
 	} else if (of_device_is_compatible(port_node, "fsl,fman-port-10g-tx")) {
-#ifndef CONFIG_FMAN_ARM
-		/* On T102x, the 10G TX port IDs start from 0x28 */
-		if (IS_T1023_T1024)
-			tmp_prop -= 0x28;
-		else
-#endif
 		tmp_prop -= 0x30;
 
 		if (unlikely(tmp_prop>= FM_MAX_NUM_OF_10G_TX_PORTS)) {
@@ -412,11 +359,6 @@ static t_LnxWrpFmPortDev *ReadFmPortDevTreeNode(struct platform_device
 		}
 		p_LnxWrpFmPortDev = &p_LnxWrpFmDev->txPorts[tmp_prop +
 			FM_MAX_NUM_OF_1G_TX_PORTS];
-#ifndef CONFIG_FMAN_ARM
-		if (IS_T1023_T1024)
-			p_LnxWrpFmPortDev = &p_LnxWrpFmDev->txPorts[tmp_prop];
-#endif
-
 		p_LnxWrpFmPortDev->id = tmp_prop;
 		p_LnxWrpFmPortDev->settings.param.portId =
 			p_LnxWrpFmPortDev->id;
@@ -452,12 +394,6 @@ static t_LnxWrpFmPortDev *ReadFmPortDevTreeNode(struct platform_device
 		if (p_LnxWrpFmDev->pcdActive)
 			p_LnxWrpFmPortDev->defPcd = p_LnxWrpFmDev->defPcd;
 	} else if (of_device_is_compatible(port_node, "fsl,fman-port-10g-rx")) {
-#ifndef CONFIG_FMAN_ARM
-		/* On T102x, the 10G RX port IDs start from 0x08 */
-		if (IS_T1023_T1024)
-			tmp_prop -= 0x8;
-		else
-#endif
 		tmp_prop -= 0x10;
 
 		if (unlikely(tmp_prop >= FM_MAX_NUM_OF_10G_RX_PORTS)) {
@@ -468,12 +404,6 @@ static t_LnxWrpFmPortDev *ReadFmPortDevTreeNode(struct platform_device
 		}
 		p_LnxWrpFmPortDev = &p_LnxWrpFmDev->rxPorts[tmp_prop +
 			FM_MAX_NUM_OF_1G_RX_PORTS];
-
-#ifndef CONFIG_FMAN_ARM
-		if (IS_T1023_T1024)
-			p_LnxWrpFmPortDev = &p_LnxWrpFmDev->rxPorts[tmp_prop];
-#endif
-
 		p_LnxWrpFmPortDev->id = tmp_prop;
 		p_LnxWrpFmPortDev->settings.param.portId =
 			p_LnxWrpFmPortDev->id;
@@ -514,9 +444,9 @@ static t_LnxWrpFmPortDev *ReadFmPortDevTreeNode(struct platform_device
 	return p_LnxWrpFmPortDev;
 }
 
-struct device_node * GetFmPortAdvArgsDevTreeNode (struct device_node *fm_node,
-                                                         e_FmPortType       portType,
-                                                         uint8_t            portId)
+struct device_node *GetFmPortAdvArgsDevTreeNode(struct device_node *fm_node,
+						e_FmPortType portType,
+						uint8_t portId)
 {
     struct device_node  *port_node;
     const uint32_t      *uint32_prop;
@@ -656,57 +586,6 @@ static t_Error CheckNConfigFmPortAdvArgs (t_LnxWrpFmPortDev *p_LnxWrpFmPortDev)
             RETURN_ERROR(MINOR, err, NO_MSG);
     }
 
-    uint32_prop = (uint32_t *)of_get_property(port_node, "ar-tables-sizes",
-	&lenp);
-    if (uint32_prop) {
-
-    	if (WARN_ON(lenp != sizeof(uint32_t)*8))
-            RETURN_ERROR(MINOR, E_INVALID_VALUE, NO_MSG);
-    	if (WARN_ON(p_LnxWrpFmPortDev->settings.param.portType !=
-		e_FM_PORT_TYPE_RX) &&
-		(p_LnxWrpFmPortDev->settings.param.portType !=
-		e_FM_PORT_TYPE_RX_10G))
-            RETURN_ERROR(MINOR, E_INVALID_VALUE,
-		("Auto Response is an Rx port atribute."));
-
-        memset(&p_LnxWrpFmPortDev->dsar_table_sizes, 0, sizeof(struct auto_res_tables_sizes));
-
-        p_LnxWrpFmPortDev->dsar_table_sizes.max_num_of_arp_entries        =
-		(uint16_t)be32_to_cpu(uint32_prop[0]);
-        p_LnxWrpFmPortDev->dsar_table_sizes.max_num_of_echo_ipv4_entries  =
-		(uint16_t)be32_to_cpu(uint32_prop[1]);
-        p_LnxWrpFmPortDev->dsar_table_sizes.max_num_of_ndp_entries        =
-		(uint16_t)be32_to_cpu(uint32_prop[2]);
-        p_LnxWrpFmPortDev->dsar_table_sizes.max_num_of_echo_ipv6_entries  =
-		(uint16_t)be32_to_cpu(uint32_prop[3]);
-        p_LnxWrpFmPortDev->dsar_table_sizes.max_num_of_snmp_ipv4_entries   =
-		(uint16_t)be32_to_cpu(uint32_prop[4]);
-        p_LnxWrpFmPortDev->dsar_table_sizes.max_num_of_snmp_ipv6_entries   =
-		(uint16_t)be32_to_cpu(uint32_prop[5]);
-        p_LnxWrpFmPortDev->dsar_table_sizes.max_num_of_snmp_oid_entries   =
-		(uint16_t)be32_to_cpu(uint32_prop[6]);
-        p_LnxWrpFmPortDev->dsar_table_sizes.max_num_of_snmp_char          =
-		(uint16_t)be32_to_cpu(uint32_prop[7]);
-
-	uint32_prop = (uint32_t *)of_get_property(port_node,
-		"ar-filters-sizes", &lenp);
-        if (uint32_prop) {
-        	if (WARN_ON(lenp != sizeof(uint32_t)*3))
-                RETURN_ERROR(MINOR, E_INVALID_VALUE, NO_MSG);
-
-            p_LnxWrpFmPortDev->dsar_table_sizes.max_num_of_ip_prot_filtering  =
-		(uint16_t)be32_to_cpu(uint32_prop[0]);
-            p_LnxWrpFmPortDev->dsar_table_sizes.max_num_of_tcp_port_filtering =
-		(uint16_t)be32_to_cpu(uint32_prop[1]);
-            p_LnxWrpFmPortDev->dsar_table_sizes.max_num_of_udp_port_filtering =
-		(uint16_t)be32_to_cpu(uint32_prop[2]);
-        }
-
-        if ((err = FM_PORT_ConfigDsarSupport(p_LnxWrpFmPortDev->h_Dev,
-		(t_FmPortDsarTablesSizes*)&p_LnxWrpFmPortDev->dsar_table_sizes)) != E_OK)
-		RETURN_ERROR(MINOR, err, NO_MSG);
-    }
-
     of_node_put(port_node);
     of_node_put(fm_node);
 
@@ -731,7 +610,6 @@ static t_Error CheckNSetFmPortAdvArgs (t_LnxWrpFmPortDev *p_LnxWrpFmPortDev)
     if (!port_node) /* no advance parameters for FMan-Port */
         return E_OK;
 
-#if (DPAA_VERSION >= 11)
     uint32_prop = (uint32_t *)of_get_property(port_node, "vsp-window", &lenp);
     if (uint32_prop) {
         t_FmPortVSPAllocParams  portVSPAllocParams;
@@ -765,9 +643,6 @@ static t_Error CheckNSetFmPortAdvArgs (t_LnxWrpFmPortDev *p_LnxWrpFmPortDev)
         {
             portId = fmVspParams.portParams.portId;
             if (p_LnxWrpFmPortDev->settings.param.portType == e_FM_PORT_TYPE_RX_10G){
-#ifndef CONFIG_FMAN_ARM
-		if (!(IS_T1023_T1024))
-#endif
                     portId += FM_MAX_NUM_OF_1G_RX_PORTS;
 	    }
 	    portVSPAllocParams.h_FmTxPort =
@@ -805,9 +680,6 @@ static t_Error CheckNSetFmPortAdvArgs (t_LnxWrpFmPortDev *p_LnxWrpFmPortDev)
         if ((err = FM_VSP_Init(p_LnxWrpFmPortDev->h_DfltVsp)) != E_OK)
             RETURN_ERROR(MINOR, err, NO_MSG);
     }
-#else
-UNUSED(err); UNUSED(uint32_prop); UNUSED(lenp);
-#endif /* (DPAA_VERSION >= 11) */
 
     of_node_put(port_node);
     of_node_put(fm_node);
@@ -887,27 +759,6 @@ static t_Error InitFmPortDev(t_LnxWrpFmPortDev *p_LnxWrpFmPortDev)
 	}
 #endif  /* !FM_QMI_NO_DEQ_OPTIONS_SUPPORT */
 
-#ifndef CONFIG_FMAN_ARM
-#ifdef FM_BCB_ERRATA_BMI_SW001
-/* Configure BCB workaround on Rx ports, only for B4860 rev1 */
-#define SVR_SECURITY_MASK    0x00080000
-#define SVR_PERSONALITY_MASK 0x0000FF00
-#define SVR_VER_IGNORE_MASK (SVR_SECURITY_MASK | SVR_PERSONALITY_MASK)
-#define SVR_B4860_REV1_VALUE 0x86800010
-
-	if ((p_LnxWrpFmPortDev->settings.param.portType ==
-		e_FM_PORT_TYPE_RX_10G) ||
-		(p_LnxWrpFmPortDev->settings.param.portType ==
-		e_FM_PORT_TYPE_RX)) {
-		unsigned int svr;
-
-		svr = mfspr(SPRN_SVR);
-
-		if ((svr & ~SVR_VER_IGNORE_MASK) == SVR_B4860_REV1_VALUE)
-			FM_PORT_ConfigBCBWorkaround(p_LnxWrpFmPortDev->h_Dev);
-	}
-#endif /* FM_BCB_ERRATA_BMI_SW001 */
-#endif /* CONFIG_FMAN_ARM */
 /* Call the driver's advanced configuration routines, if requested:
    Compare the function pointer of each entry to the available routines,
    and invoke the matching routine with proper casting of arguments. */
@@ -1001,11 +852,6 @@ static t_Error InitFmPortDev(t_LnxWrpFmPortDev *p_LnxWrpFmPortDev)
  *  . for P4080, MXT is in range (0..63)
  *
  */
-#if 0
-	if ((p_LnxWrpFmPortDev->defPcd != e_NO_PCD) &&
-	    (InitFmPort3TupleDefPcd(p_LnxWrpFmPortDev) != E_OK))
-		RETURN_ERROR(MAJOR, E_INVALID_STATE, NO_MSG);
-#endif
 	return E_OK;
 }
 
@@ -1268,22 +1114,6 @@ static t_Error InitFmPcdDev(t_LnxWrpFmDev *p_LnxWrpFmDev)
 	return E_OK;
 }
 
-void FreeFmPcdDev(t_LnxWrpFmDev *p_LnxWrpFmDev)
-{
-
-	if (p_LnxWrpFmDev->h_PcdDev)
-		FM_PCD_Free(p_LnxWrpFmDev->h_PcdDev);
-
-	if (p_LnxWrpFmDev->hc_tx_err_fq)
-		FqFree(p_LnxWrpFmDev->hc_tx_err_fq);
-
-	if (p_LnxWrpFmDev->hc_tx_conf_fq)
-		FqFree(p_LnxWrpFmDev->hc_tx_conf_fq);
-
-	if (p_LnxWrpFmDev->hc_tx_fq)
-		FqFree(p_LnxWrpFmDev->hc_tx_fq);
-}
-
 static void FreeFmPortDev(t_LnxWrpFmPortDev *p_LnxWrpFmPortDev)
 {
 	t_LnxWrpFmDev *p_LnxWrpFmDev =
@@ -1344,16 +1174,6 @@ static int /*__devinit*/ fm_port_probe(struct platform_device *of_dev)
 		p_LnxWrpFmPortDev->minor =
 			p_LnxWrpFmPortDev->id + FM_MAX_NUM_OF_1G_RX_PORTS +
 			DEV_FM_RX_PORTS_MINOR_BASE;
-#ifndef CONFIG_FMAN_ARM
-		if (IS_T1023_T1024) {
-			Sprint(p_LnxWrpFmPortDev->name, "%s-port-rx%d",
-				p_LnxWrpFmDev->name,
-				p_LnxWrpFmPortDev->id);
-			p_LnxWrpFmPortDev->minor =
-				p_LnxWrpFmPortDev->id +
-				DEV_FM_RX_PORTS_MINOR_BASE;
-		}
-#endif
 	} else if (p_LnxWrpFmPortDev->settings.param.portType ==
 		 e_FM_PORT_TYPE_TX) {
 		Sprint(p_LnxWrpFmPortDev->name, "%s-port-tx%d",
@@ -1368,16 +1188,6 @@ static int /*__devinit*/ fm_port_probe(struct platform_device *of_dev)
 		p_LnxWrpFmPortDev->minor =
 			p_LnxWrpFmPortDev->id + FM_MAX_NUM_OF_1G_TX_PORTS +
 			DEV_FM_TX_PORTS_MINOR_BASE;
-#ifndef CONFIG_FMAN_ARM
-		if (IS_T1023_T1024) {
-			Sprint(p_LnxWrpFmPortDev->name, "%s-port-tx%d",
-				p_LnxWrpFmDev->name,
-				p_LnxWrpFmPortDev->id);
-			p_LnxWrpFmPortDev->minor =
-				p_LnxWrpFmPortDev->id +
-				DEV_FM_TX_PORTS_MINOR_BASE;
-		}
-#endif
 	} else if (p_LnxWrpFmPortDev->settings.param.portType ==
 		 e_FM_PORT_TYPE_OH_HOST_COMMAND) {
 		Sprint(p_LnxWrpFmPortDev->name, "%s-port-oh%d",
@@ -1418,7 +1228,7 @@ static int /*__devinit*/ fm_port_probe(struct platform_device *of_dev)
 	return 0;
 }
 
-static int fm_port_remove(struct platform_device *of_dev)
+static void fm_port_remove(struct platform_device *of_dev)
 {
 	t_LnxWrpFmPortDev *p_LnxWrpFmPortDev;
 	t_LnxWrpFmDev *p_LnxWrpFmDev;
@@ -1436,8 +1246,6 @@ static int fm_port_remove(struct platform_device *of_dev)
 	FreeFmPortDev(p_LnxWrpFmPortDev);
 
 	dev_set_drvdata(dev, NULL);
-
-	return 0;
 }
 
 static const struct of_device_id fm_port_match[] = {
@@ -1473,24 +1281,9 @@ static struct platform_driver fm_port_driver = {
 	.remove = fm_port_remove
 };
 
-
-t_Error LNXWRP_FM_Port_Init(void)
-{
-	/* Register to the DTB for basic FM port API */
-	if (platform_driver_register(&fm_port_driver))
-		return E_NO_DEVICE;
-
-	return E_OK;
-}
-
-void LNXWRP_FM_Port_Free(void)
-{
-	platform_driver_unregister(&fm_port_driver);
-}
-
 static int __init __cold fm_port_load(void)
 {
-	if (LNXWRP_FM_Port_Init() != E_OK) {
+	if (platform_driver_register(&fm_port_driver)) {
 		printk(KERN_ERR "Failed to init FM Ports wrapper!\n");
 		return -ENODEV;
 	}
@@ -1502,7 +1295,7 @@ static int __init __cold fm_port_load(void)
 
 static void __exit __cold fm_port_unload(void)
 {
-	LNXWRP_FM_Port_Free();
+	platform_driver_unregister(&fm_port_driver);
 }
 
 module_init(fm_port_load);

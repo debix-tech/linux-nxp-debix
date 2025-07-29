@@ -1148,7 +1148,6 @@ static int felix_cbs_set(struct net_device *ndev, u8 tc, u8 bw)
 	struct ocelot *ocelot = dp->ds->priv;
 	struct ocelot_port *ocelot_port;
 	int port = dp->index;
-	struct felix *felix;
 	int speed;
 
 	if (tc > capa.qos_cos_max) {
@@ -1157,7 +1156,6 @@ static int felix_cbs_set(struct net_device *ndev, u8 tc, u8 bw)
 	}
 
 	ocelot_port = ocelot->ports[port];
-	felix = ocelot_to_felix(ocelot);
 	speed = ocelot_port->speed;
 
 	felix_qos_shaper_conf_set(ocelot, port * 8 + tc, bw, speed);
@@ -1470,12 +1468,12 @@ static int felix_pcpmap_set(struct net_device *ndev,
 }
 
 static const struct tsn_ops felix_tsn_ops = {
-	.get_capability                 = felix_tsn_get_cap,
+	.get_capability			= felix_tsn_get_cap,
 	.qbv_set			= felix_qbv_set,
 	.qbv_get			= felix_qbv_get,
 	.qbv_get_status			= felix_qbv_get_status,
 	.qbu_set			= felix_qbu_set,
-	.qbu_get                        = felix_qbu_get,
+	.qbu_get			= felix_qbu_get,
 	.cb_streamid_set		= felix_cb_streamid_set,
 	.cb_streamid_get		= felix_cb_streamid_get,
 	.cb_streamid_counters_get	= felix_cb_streamid_counters_get,
@@ -1498,13 +1496,33 @@ static const struct tsn_ops felix_tsn_ops = {
 	.pcpmap_set			= felix_pcpmap_set,
 };
 
-void felix_tsn_enable(struct dsa_switch *ds)
+int felix_tsn_init(struct dsa_switch *ds)
 {
 	struct dsa_port *dp;
+	int err;
 
 	INIT_LIST_HEAD(&streamtable);
 
+	dsa_switch_for_each_user_port(dp, ds) {
+		err = tsn_port_register(dp->user, &felix_tsn_ops,
+					GROUP_OFFSET_SWITCH);
+		if (err)
+			goto unwind;
+	}
+
+	return 0;
+
+unwind:
+	dsa_switch_for_each_user_port_continue_reverse(dp, ds)
+		tsn_port_unregister(dp->user);
+
+	return err;
+}
+
+void felix_tsn_teardown(struct dsa_switch *ds)
+{
+	struct dsa_port *dp;
+
 	dsa_switch_for_each_user_port(dp, ds)
-		tsn_port_register(dp->slave, (struct tsn_ops *)&felix_tsn_ops,
-				  GROUP_OFFSET_SWITCH);
+		tsn_port_unregister(dp->user);
 }

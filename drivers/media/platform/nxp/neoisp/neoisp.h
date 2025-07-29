@@ -8,6 +8,7 @@
 #ifndef NEOISP_H
 #define NEOISP_H
 
+#include <linux/bits.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
 #include <media/videobuf2-core.h>
@@ -37,9 +38,9 @@
 #define NEOISP_MAX_CTRLS         (1)
 #define NEOISP_CTRL_PARAMS       (0)
 
-#define NEOISP_FMT_VCAP_COUNT    (14)
+#define NEOISP_FMT_VCAP_COUNT    (19)
 #define NEOISP_FMT_VCAP_IR_COUNT (2)
-#define NEOISP_FMT_VOUT_COUNT    (24)
+#define NEOISP_FMT_VOUT_COUNT    (29)
 #define NEOISP_FMT_MCAP_COUNT    (1)
 #define NEOISP_FMT_MOUT_COUNT    (1)
 
@@ -67,25 +68,42 @@
 		((typ) == V4L2_BUF_TYPE_META_OUTPUT) || \
 		((typ) == V4L2_BUF_TYPE_META_CAPTURE))
 
-#define FMT_IS_YUV(x) ( \
+#define FMT_IS_MONOCHROME(x) ( \
 		((x) == V4L2_PIX_FMT_GREY) || \
+		((x) == V4L2_PIX_FMT_Y10)  || \
+		((x) == V4L2_PIX_FMT_Y12)  || \
+		((x) == V4L2_PIX_FMT_Y14)  || \
 		((x) == V4L2_PIX_FMT_Y16)  || \
-		((x) == V4L2_PIX_FMT_NV12) || \
-		((x) == V4L2_PIX_FMT_NV21) || \
-		((x) == V4L2_PIX_FMT_NV16) || \
-		((x) == V4L2_PIX_FMT_NV61) || \
-		((x) == V4L2_PIX_FMT_UYVY) || \
-		((x) == V4L2_PIX_FMT_YUYV) || \
-		((x) == V4L2_PIX_FMT_YUV24) || \
-		((x) == V4L2_PIX_FMT_YUVX32) || \
-		((x) == V4L2_PIX_FMT_VUYX32) || \
-		((x) == V4L2_PIX_FMT_VYUY))
+		((x) == V4L2_PIX_FMT_Y16_BE))
 
 #define NEOISP_SUSPEND_TIMEOUT_MS (500)
 
 /* For logging only */
 #define NODE_NAME(node) \
 	(node_desc[(node)->id].ent_name + sizeof(NEOISP_NAME))
+
+#define NEOISP_COLORSPACE_MASK(colorspace) BIT(colorspace)
+
+#define NEOISP_COLORSPACE_MASK_JPEG \
+	NEOISP_COLORSPACE_MASK(V4L2_COLORSPACE_JPEG)
+#define NEOISP_COLORSPACE_MASK_SMPTE170M \
+	NEOISP_COLORSPACE_MASK(V4L2_COLORSPACE_SMPTE170M)
+#define NEOISP_COLORSPACE_MASK_REC709 \
+	NEOISP_COLORSPACE_MASK(V4L2_COLORSPACE_REC709)
+#define NEOISP_COLORSPACE_MASK_SRGB \
+	NEOISP_COLORSPACE_MASK(V4L2_COLORSPACE_SRGB)
+#define NEOISP_COLORSPACE_MASK_RAW \
+	NEOISP_COLORSPACE_MASK(V4L2_COLORSPACE_RAW)
+
+/*
+ * JPEG, SMPTE170M and REC709 colorspaces are fundamentally sRGB underneath
+ * with different YCbCr encodings. All these colorspaces are defined for
+ * every YUV/RGB video capture formats.
+ */
+#define NEOISP_COLORSPACE_MASK_ALL_SRGB (NEOISP_COLORSPACE_MASK_JPEG	  | \
+					 NEOISP_COLORSPACE_MASK_SRGB	  | \
+					 NEOISP_COLORSPACE_MASK_SMPTE170M | \
+					 NEOISP_COLORSPACE_MASK_REC709)
 
 /*
  * enums
@@ -136,8 +154,10 @@ struct neoisp_fmt_s {
 	__u32 bit_depth;
 	__u32 num_planes;
 	__u8 pl_divisors[VB2_MAX_PLANES];
-	__u8 ibpp;
+	__u8 bpp_enc;
 	__u8 is_rgb;
+	__u32 colorspace_mask;
+	enum v4l2_colorspace colorspace_default;
 	enum neoisp_fmt_type_e type;
 };
 
@@ -205,6 +225,7 @@ struct neoisp_dev_s {
 	struct neoisp_job_s queued_job, running_job;
 	bool hw_busy; /* non-zero if a job is queued or is being started */
 	spinlock_t hw_lock; /* protects "hw_busy" flag and streaming_map */
+	struct dentry *debugfs_entry;
 };
 
 /*
@@ -263,5 +284,8 @@ extern const struct neoisp_fmt_s formats_mout[NEOISP_FMT_MOUT_COUNT];
 extern const struct neoisp_node_desc_s node_desc[NEOISP_NODES_COUNT];
 extern struct neoisp_mod_params_s mod_params;
 extern struct neoisp_meta_params_s neoisp_default_params;
+
+void neoisp_debugfs_init(struct neoisp_dev_s *neoispd);
+void neoisp_debugfs_exit(struct neoisp_dev_s *neoispd);
 
 #endif /* NEOISP_H */

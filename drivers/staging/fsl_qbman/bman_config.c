@@ -32,6 +32,7 @@
 #include <asm/cacheflush.h>
 #include "bman_private.h"
 #include <linux/of_reserved_mem.h>
+#include <linux/platform_device.h>
 
 /* Last updated for v00.79 of the BG */
 
@@ -142,8 +143,7 @@ static const struct bman_error_info_mdata error_mdata[] = {
 /* Add this in Kconfig */
 #define BMAN_ERRS_TO_UNENABLE (BM_EIRQ_FLWI)
 
-/**
- * bm_err_isr_<reg>_<verb> - Manipulate global interrupt registers
+/* bm_err_isr_<reg>_<verb> - Manipulate global interrupt registers
  * @v: for accessors that write values, this is the 32-bit value
  *
  * Manipulates BMAN_ERR_ISR, BMAN_ERR_IER, BMAN_ERR_ISDR, BMAN_ERR_IIR. All
@@ -587,10 +587,9 @@ static struct attribute_group bman_dev_pool_countent_grp = {
 	.name = "pool_count",
 };
 
-static int of_fsl_bman_remove(struct platform_device *ofdev)
+static void of_fsl_bman_remove(struct platform_device *ofdev)
 {
 	sysfs_remove_group(&ofdev->dev.kobj, &bman_dev_attr_grp);
-	return 0;
 };
 
 static int of_fsl_bman_probe(struct platform_device *ofdev)

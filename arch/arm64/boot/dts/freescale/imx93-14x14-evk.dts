@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
- * Copyright 2022 NXP
+ * Copyright 2024 NXP
  */
 
 /dts-v1/;
@@ -77,13 +77,6 @@
 		};
 	};
 
-	ethosu {
-		compatible = "arm,ethosu";
-		fsl,cm33-proc = <&cm33>;
-		memory-region = <&ethosu_mem>;
-		power-domains = <&mlmix>;
-	};
-
 	reg_can1_stby: regulator-can1-stby {
 		compatible = "regulator-fixed";
 		regulator-name = "can1-stby";
@@ -130,8 +123,8 @@
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
 		gpio = <&gpio3 7 GPIO_ACTIVE_HIGH>;
-		off-on-delay-us = <12000>;
 		enable-active-high;
+		off-on-delay-us = <12000>;
 	};
 
 	reg_vdd_12v: regulator-vdd-12v {
@@ -164,60 +157,47 @@
 		enable-active-high;
 	};
 
-	reg_dvdd_sel: regulator-dvdd_sel {
-		compatible = "regulator-fixed";
-		regulator-name = "DVDD_SEL";
-		gpio = <&adp5585gpio_isp 0 GPIO_ACTIVE_HIGH>;
-		enable-active-high;
-		startup-delay-us = <2000>;
-	};
-
 	reg_dvdd_1v2: regulator-dvdd {
 		compatible = "regulator-fixed";
 		regulator-name = "DVDD_1V2";
-		gpio = <&adp5585gpio_isp 6 GPIO_ACTIVE_HIGH>;
+		gpio = <&adp5585_isp 7 GPIO_ACTIVE_HIGH>;
 		regulator-min-microvolt = <1200000>;
 		regulator-max-microvolt = <1200000>;
-		enable-active-high;
-		vin-supply = <&reg_dvdd_sel>;
-	};
-
-	reg_vdd_3v3: regulator-vdd {
-		compatible = "regulator-fixed";
-		regulator-name = "VDD_3V3";
-		gpio = <&adp5585gpio_isp 5 GPIO_ACTIVE_HIGH>;
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		startup-delay-us = <4000>;
 		enable-active-high;
 	};
 
 	reg_vddio_1v8: regulator-vddo {
 		compatible = "regulator-fixed";
 		regulator-name = "VDDIO_1V8";
-		gpio = <&adp5585gpio_isp 9 GPIO_ACTIVE_HIGH>;
+		gpio = <&adp5585_isp 6 GPIO_ACTIVE_HIGH>;
 		regulator-min-microvolt = <1800000>;
 		regulator-max-microvolt = <1800000>;
-		startup-delay-us = <4000>;
-		enable-active-high;
-		vin-supply = <&reg_vdd_3v3>;
-	};
-
-	reg_vaa_sel: regulator-vaa_sel {
-		compatible = "regulator-fixed";
-		regulator-name = "VAA_SEL";
-		gpio = <&adp5585gpio_isp 1 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
 	};
 
 	reg_avdd_2v8: regulator-avdd {
 		compatible = "regulator-fixed";
 		regulator-name = "AVDD_2V8";
-		gpio = <&adp5585gpio_isp 7 GPIO_ACTIVE_HIGH>;
+		gpio = <&adp5585_isp 8 GPIO_ACTIVE_HIGH>;
 		regulator-min-microvolt = <2800000>;
 		regulator-max-microvolt = <2800000>;
 		enable-active-high;
-		vin-supply = <&reg_vaa_sel>;
+	};
+
+	reg_hmisc_vddio: regulator-hmisc-vddio {
+		compatible = "regulator-fixed";
+		regulator-name = "HMISC_VDDIO_1V8";
+		gpio = <&adp5585_isp 10 GPIO_ACTIVE_HIGH>;
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		enable-active-high;
+	};
+
+	ethosu {
+		compatible = "arm,ethosu";
+		fsl,cm33-proc = <&cm33>;
+		memory-region = <&ethosu_mem>;
+		power-domains = <&mlmix>;
 	};
 
 	bt_sco_codec: bt_sco_codec {
@@ -271,7 +251,7 @@
 	#sound-dai-cells = <0>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_spdif>;
-	clocks = <&clk IMX93_CLK_BUS_WAKEUP>,
+	clocks = <&clk IMX93_CLK_SPDIF_IPG>,
 		<&clk IMX93_CLK_SPDIF_GATE>,
 		<&clk IMX93_CLK_DUMMY>,
 		<&clk IMX93_CLK_AUD_XCVR_GATE>,
@@ -363,17 +343,10 @@
 	assigned-clock-rates = <445333333>, <148444444>, <400000000>, <133333333>;
 };
 
-/*
- * When add, delete or change any target device setting in &lpi2c1,
- * please synchronize the changes to the &i3c1 bus in imx93-11x11-evk-i3c.dts.
- */
 &lpi2c1 {
-	#address-cells = <1>;
-	#size-cells = <0>;
 	clock-frequency = <400000>;
-	pinctrl-names = "default", "sleep";
+	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpi2c1>;
-	pinctrl-1 = <&pinctrl_lpi2c1>;
 	status = "okay";
 
 	adv7535: hdmi@3d {
@@ -397,13 +370,17 @@
 };
 
 &lpi2c2 {
-	#address-cells = <1>;
-	#size-cells = <0>;
 	clock-frequency = <400000>;
-	pinctrl-names = "default", "sleep";
+	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpi2c2>;
-	pinctrl-1 = <&pinctrl_lpi2c2>;
 	status = "okay";
+
+	pcal6524_2: gpio@20 {
+		compatible = "nxp,pcal6524";
+		reg = <0x20>;
+		gpio-controller;
+		#gpio-cells = <2>;
+	};
 
 	pmic@25 {
 		compatible = "nxp,pca9452";
@@ -500,54 +477,69 @@
 		interrupt-parent = <&gpio3>;
 		interrupts = <27 IRQ_TYPE_LEVEL_LOW>;
 	};
-
-	pcal6524_2: gpio@20 {
-		compatible = "nxp,pcal6524";
-		reg = <0x20>;
-		gpio-controller;
-		#gpio-cells = <2>;
-	};
 };
 
 &lpi2c3 {
-	#address-cells = <1>;
-	#size-cells = <0>;
 	clock-frequency = <400000>;
-	pinctrl-names = "default", "sleep";
+	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpi2c3>;
-	pinctrl-1 = <&pinctrl_lpi2c3>;
 	status = "okay";
 
-	adp5585_isp: mfd-isp@34 {
-		compatible = "adi,adp5585";
+	adp5585_isp: io-expander-isp@34 {
+		compatible = "adi,adp5585-01", "adi,adp5585";
 		reg = <0x34>;
-		status = "okay";
-
-		adp5585gpio_isp: gpio-isp-adp5585 {
-			compatible = "adp5585-gpio";
-			gpio-controller;
-			#gpio-cells = <2>;
-		};
-
-		adp5585pwm_isp: pwm-isp-adp5585 {
-			compatible = "adp5585-pwm";
-			#pwm-cells = <3>;
-		};
+		gpio-controller;
+		#gpio-cells = <2>;
+		#pwm-cells = <3>;
 	};
 
 	ap1302: ap1302_mipi@3c {
-		compatible = "onsemi,ap1302";
+		compatible = "onnn,ap1302";
 		reg = <0x3c>;
+		clocks = <&clk IMX93_CLK_24M>;
 		reset-gpios   = <&pcal6524_2 0 GPIO_ACTIVE_LOW>;
-		isp_en-gpios  = <&adp5585gpio_isp 2 GPIO_ACTIVE_HIGH>;
+		isp_en-gpios  = <&adp5585_isp 2 GPIO_ACTIVE_HIGH>;
+		orientation = <2>;
+		rotation = <0>;
 		DVDD-supply   = <&reg_dvdd_1v2>;
-		VDDIO-supply  = <&reg_vddio_1v8>;
-		AVDD-supply   = <&reg_avdd_2v8>;
+		VDDIO_HMISC-supply  = <&reg_hmisc_vddio>;
+		VDDIO_SMISC-supply   = <&reg_hmisc_vddio>;
 		status = "okay";
 
-		port {
-			ar1302_mipi_ep: endpoint {
-				remote-endpoint = <&mipi_csi_ep>;
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+			};
+
+			port@1 {
+				reg = <1>;
+			};
+
+			port@2 {
+				reg = <2>;
+
+				isp_out: endpoint {
+					remote-endpoint = <&mipi_csi_in>;
+					data-lanes = <1 2>;
+				};
+			};
+		};
+
+		sensors {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			onnn,model = "onnn,ar0144";
+
+			sensor@0 {
+				reg = <0>;
+
+				vdd-supply = <&reg_dvdd_1v2>;
+				vddio-supply = <&reg_vddio_1v8>;
+				vaa-supply = <&reg_avdd_2v8>;
 			};
 		};
 	};
@@ -562,7 +554,6 @@
 &lpuart5 {
 	/* BT */
 	pinctrl-names = "default";
-	pinctrl-assert-gpios = <&pcal6524 19 GPIO_ACTIVE_HIGH>;
 	pinctrl-0 = <&pinctrl_uart5>;
 	status = "okay";
 
@@ -621,9 +612,8 @@
 	fsl,cd-gpio-wakeup-disable;
 	vmmc-supply = <&reg_usdhc2_vmmc>;
 	bus-width = <4>;
-	status = "okay";
-	no-sdio;
 	no-mmc;
+	status = "okay";
 };
 
 &usdhc3 {
@@ -883,8 +873,8 @@
 
 	pinctrl_spdif: spdifgrp {
 		fsl,pins = <
-			MX93_PAD_GPIO_IO22__SPDIF_IN		0x31e
-			MX93_PAD_GPIO_IO23__SPDIF_OUT		0x31e
+			MX93_PAD_GPIO_IO22__SPDIF_IN		0x3fe
+			MX93_PAD_GPIO_IO23__SPDIF_OUT		0x3fe
 		>;
 	};
 };
@@ -893,28 +883,43 @@
 	status = "okay";
 };
 
-&cameradev {
-	status = "okay";
-};
-
-&isi_0 {
+&isi {
 	status = "okay";
 
-	cap_device {
-		status = "okay";
+	port {
+		isi_in: endpoint {
+			remote-endpoint = <&mipi_csi_out>;
+		};
 	};
 };
 
 &mipi_csi {
 	status = "okay";
 
-	port {
-		mipi_csi_ep: endpoint {
-			remote-endpoint = <&ar1302_mipi_ep>;
-			data-lanes = <2>;
-			cfg-clk-range = <28>;
-			hs-clk-range = <0x2b>;
-			bus-type = <4>;
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@0 {
+			reg = <0>;
+
+			mipi_csi_in: endpoint {
+				remote-endpoint = <&isp_out>;
+				data-lanes = <1 2>;
+				clock-lanes = <0>;
+			};
+		};
+
+		port@1 {
+			reg = <1>;
+
+			mipi_csi_out: endpoint {
+				remote-endpoint = <&isi_in>;
+			};
 		};
 	};
+};
+
+&dphy_rx {
+	status = "okay";
 };

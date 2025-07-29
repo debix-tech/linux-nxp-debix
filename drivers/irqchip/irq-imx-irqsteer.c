@@ -39,7 +39,6 @@ struct irqsteer_data {
 	int			channel;
 	struct irq_domain	*domain;
 	u32			*saved_reg;
-
 	struct device		*dev;
 	struct device		*pd_csi;
 	struct device		*pd_isi;
@@ -126,9 +125,9 @@ static void imx_irqsteer_irq_bus_sync_unlock(struct irq_data *d)
 }
 
 static const struct irq_chip imx_irqsteer_irq_chip = {
-	.name		= "irqsteer",
-	.irq_mask	= imx_irqsteer_irq_mask,
-	.irq_unmask	= imx_irqsteer_irq_unmask,
+	.name			= "irqsteer",
+	.irq_mask		= imx_irqsteer_irq_mask,
+	.irq_unmask		= imx_irqsteer_irq_unmask,
 	.irq_bus_lock		= imx_irqsteer_irq_bus_lock,
 	.irq_bus_sync_unlock	= imx_irqsteer_irq_bus_sync_unlock,
 };
@@ -288,8 +287,6 @@ static int imx_irqsteer_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, data);
 
-	pm_runtime_set_autosuspend_delay(&pdev->dev, 100);
-	pm_runtime_use_autosuspend(&pdev->dev);
 	pm_runtime_enable(&pdev->dev);
 
 	return 0;
@@ -298,7 +295,7 @@ out:
 	return ret;
 }
 
-static int imx_irqsteer_remove(struct platform_device *pdev)
+static void imx_irqsteer_remove(struct platform_device *pdev)
 {
 	struct irqsteer_data *irqsteer_data = platform_get_drvdata(pdev);
 	int i;
@@ -310,8 +307,6 @@ static int imx_irqsteer_remove(struct platform_device *pdev)
 	irq_domain_remove(irqsteer_data->domain);
 
 	clk_disable_unprepare(irqsteer_data->ipg_clk);
-
-	return 0;
 }
 
 #ifdef CONFIG_PM
@@ -375,12 +370,12 @@ MODULE_DEVICE_TABLE(of, imx_irqsteer_dt_ids);
 
 static struct platform_driver imx_irqsteer_driver = {
 	.driver = {
-		.name = "imx-irqsteer",
-		.of_match_table = imx_irqsteer_dt_ids,
-		.pm = &imx_irqsteer_pm_ops,
+		.name		= "imx-irqsteer",
+		.of_match_table	= imx_irqsteer_dt_ids,
+		.pm		= &imx_irqsteer_pm_ops,
 	},
-	.probe = imx_irqsteer_probe,
-	.remove = imx_irqsteer_remove,
+	.probe		= imx_irqsteer_probe,
+	.remove_new	= imx_irqsteer_remove,
 };
 module_platform_driver(imx_irqsteer_driver);
 MODULE_LICENSE("GPL v2");

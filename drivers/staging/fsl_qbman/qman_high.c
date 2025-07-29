@@ -29,8 +29,10 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "qman_low.h"
 #include <linux/dma-map-ops.h>
+#include <linux/platform_device.h>
+
+#include "qman_low.h"
 
 /* Compilation constants */
 #define DQRR_MAXFILL	15
@@ -311,21 +313,6 @@ static inline void hw_fqd_to_cpu(struct qm_fqd *fqd)
 }
 
 /* Swap a 40 bit address */
-static inline u64 cpu_to_be40(u64 in)
-{
-#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-	return in;
-#else
-	u64 out = 0;
-	u8 *p = (u8 *) &out;
-	p[0] = in >> 32;
-	p[1] = in >> 24;
-	p[2] = in >> 16;
-	p[3] = in >> 8;
-	p[4] = in >> 0;
-	return out;
-#endif
-}
 static inline u64 be40_to_cpu(u64 in)
 {
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
@@ -449,12 +436,13 @@ static inline void hw_ccgr_query_to_cpu(struct qm_mcr_ceetm_ccgr_query *ccgr_q)
 
 void qman_enable_irqs(void)
 {
+	const cpumask_t *cpus = qman_affine_cpus();
 	struct qman_portal *p;
-	int i;
+	int cpu;
 
-	for (i = 0; i < NR_CPUS; i++) {
-		if (affine_portals[i]) {
-			p = (struct qman_portal *)affine_portals[i];
+	for_each_cpu(cpu, cpus) {
+		p = affine_portals[cpu];
+		if (p) {
 			qm_isr_status_clear(&p->p, 0xffffffff);
 			qm_isr_uninhibit(&p->p);
 		}
@@ -609,15 +597,7 @@ struct qman_portal *qman_create_portal(
 
 	__p = &portal->p;
 
-#if (defined CONFIG_PPC || defined CONFIG_PPC64) && defined CONFIG_FSL_PAMU
-        /* PAMU is required for stashing */
-        portal->use_eqcr_ci_stashing = ((qman_ip_rev >= QMAN_REV30) ?
-					1 : 0);
-#elif defined(CONFIG_ARM) || defined(CONFIG_ARM64)
 	portal->use_eqcr_ci_stashing = 1;
-#else
-        portal->use_eqcr_ci_stashing = 0;
-#endif
 
 	/* prep the low-level portal struct with the mapped addresses from the
 	 * config, everything that follows depends on it and "config" is more
@@ -706,7 +686,7 @@ struct qman_portal *qman_create_portal(
 		goto fail_devregister;
 	}
 
-	arch_setup_dma_ops(&portal->pdev->dev, 0, 0, NULL, true);
+	arch_setup_dma_ops(&portal->pdev->dev, true);
 
 	portal->pdev->dev.pm_domain = &qman_portal_device_pm_domain;
 	portal->pdev->dev.platform_data = portal;
@@ -928,12 +908,13 @@ EXPORT_SYMBOL(qman_get_portal_config);
 
 struct qm_portal *qm_get_portal_for_channel(u16 channel)
 {
+	const cpumask_t *cpus = qman_affine_cpus();
 	const struct qman_portal_config *pcfg;
 	struct qman_portal *p;
-	int i;
+	int cpu;
 
-	for (i = 0; i < num_possible_cpus(); i++) {
-		p = (struct qman_portal *)affine_portals[i];
+	for_each_cpu(cpu, cpus) {
+		p = affine_portals[cpu];
 		if (!p)
 			continue;
 
@@ -1445,16 +1426,8 @@ const cpumask_t *qman_affine_cpus(void)
 }
 EXPORT_SYMBOL(qman_affine_cpus);
 
-u16 qman_affine_channel(int cpu)
+u16 qman_affine_channel(unsigned int cpu)
 {
-	if (cpu < 0) {
-		struct qman_portal *portal = get_raw_affine_portal();
-#ifdef CONFIG_FSL_DPA_PORTAL_SHARE
-		BUG_ON(portal->sharing_redirect);
-#endif
-		cpu = portal->config->public_cfg.cpu;
-		put_affine_portal();
-	}
 	BUG_ON(!cpumask_test_cpu(cpu, &affine_mask));
 	return affine_channels[cpu];
 }

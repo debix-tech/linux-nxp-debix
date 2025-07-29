@@ -71,10 +71,7 @@
 #define FM_MM_IMEM              0x000C4000
 #define FM_MM_CGP               0x000DB000
 #define FM_MM_TRB(i)            (0x000D0200 + 0x400 * (i))
-#if (DPAA_VERSION >= 11)
 #define FM_MM_SP                0x000dc000
-#endif /* (DPAA_VERSION >= 11) */
-
 
 /**************************************************************************//**
  @Description   Enum for inter-module interrupts registration
@@ -87,7 +84,6 @@ typedef enum e_FmEventModules{
     e_FM_MOD_1G_MAC,                /**< 1G MAC event */
     e_FM_MOD_TMR,                   /**< Timer event */
     e_FM_MOD_FMAN_CTRL,             /**< FMAN Controller  Timer event */
-    e_FM_MOD_MACSEC,
     e_FM_MOD_DUMMY_LAST
 } e_FmEventModules;
 
@@ -149,25 +145,24 @@ typedef enum e_FmInterModuleEvent
  @Description   PCD KG scheme registers
 *//***************************************************************************/
 typedef _Packed struct t_FmPcdPlcrProfileRegs {
-    volatile uint32_t fmpl_pemode;      /* 0x090 FMPL_PEMODE - FM Policer Profile Entry Mode*/
-    volatile uint32_t fmpl_pegnia;      /* 0x094 FMPL_PEGNIA - FM Policer Profile Entry GREEN Next Invoked Action*/
-    volatile uint32_t fmpl_peynia;      /* 0x098 FMPL_PEYNIA - FM Policer Profile Entry YELLOW Next Invoked Action*/
-    volatile uint32_t fmpl_pernia;      /* 0x09C FMPL_PERNIA - FM Policer Profile Entry RED Next Invoked Action*/
-    volatile uint32_t fmpl_pecir;       /* 0x0A0 FMPL_PECIR  - FM Policer Profile Entry Committed Information Rate*/
-    volatile uint32_t fmpl_pecbs;       /* 0x0A4 FMPL_PECBS  - FM Policer Profile Entry Committed Burst Size*/
-    volatile uint32_t fmpl_pepepir_eir; /* 0x0A8 FMPL_PEPIR_EIR - FM Policer Profile Entry Peak/Excess Information Rate*/
-    volatile uint32_t fmpl_pepbs_ebs;   /* 0x0AC FMPL_PEPBS_EBS - FM Policer Profile Entry Peak/Excess Information Rate*/
-    volatile uint32_t fmpl_pelts;       /* 0x0B0 FMPL_PELTS  - FM Policer Profile Entry Last TimeStamp*/
-    volatile uint32_t fmpl_pects;       /* 0x0B4 FMPL_PECTS  - FM Policer Profile Entry Committed Token Status*/
-    volatile uint32_t fmpl_pepts_ets;   /* 0x0B8 FMPL_PEPTS_ETS - FM Policer Profile Entry Peak/Excess Token Status*/
-    volatile uint32_t fmpl_pegpc;       /* 0x0BC FMPL_PEGPC  - FM Policer Profile Entry GREEN Packet Counter*/
-    volatile uint32_t fmpl_peypc;       /* 0x0C0 FMPL_PEYPC  - FM Policer Profile Entry YELLOW Packet Counter*/
-    volatile uint32_t fmpl_perpc;       /* 0x0C4 FMPL_PERPC  - FM Policer Profile Entry RED Packet Counter */
-    volatile uint32_t fmpl_perypc;      /* 0x0C8 FMPL_PERYPC - FM Policer Profile Entry Recolored YELLOW Packet Counter*/
-    volatile uint32_t fmpl_perrpc;      /* 0x0CC FMPL_PERRPC - FM Policer Profile Entry Recolored RED Packet Counter*/
-    volatile uint32_t fmpl_res1[12];    /* 0x0D0-0x0FF Reserved */
+	uint32_t fmpl_pemode;      /* 0x090 FMPL_PEMODE - FM Policer Profile Entry Mode*/
+	uint32_t fmpl_pegnia;      /* 0x094 FMPL_PEGNIA - FM Policer Profile Entry GREEN Next Invoked Action*/
+	uint32_t fmpl_peynia;      /* 0x098 FMPL_PEYNIA - FM Policer Profile Entry YELLOW Next Invoked Action*/
+	uint32_t fmpl_pernia;      /* 0x09C FMPL_PERNIA - FM Policer Profile Entry RED Next Invoked Action*/
+	uint32_t fmpl_pecir;       /* 0x0A0 FMPL_PECIR  - FM Policer Profile Entry Committed Information Rate*/
+	uint32_t fmpl_pecbs;       /* 0x0A4 FMPL_PECBS  - FM Policer Profile Entry Committed Burst Size*/
+	uint32_t fmpl_pepepir_eir; /* 0x0A8 FMPL_PEPIR_EIR - FM Policer Profile Entry Peak/Excess Information Rate*/
+	uint32_t fmpl_pepbs_ebs;   /* 0x0AC FMPL_PEPBS_EBS - FM Policer Profile Entry Peak/Excess Information Rate*/
+	uint32_t fmpl_pelts;       /* 0x0B0 FMPL_PELTS  - FM Policer Profile Entry Last TimeStamp*/
+	uint32_t fmpl_pects;       /* 0x0B4 FMPL_PECTS  - FM Policer Profile Entry Committed Token Status*/
+	uint32_t fmpl_pepts_ets;   /* 0x0B8 FMPL_PEPTS_ETS - FM Policer Profile Entry Peak/Excess Token Status*/
+	uint32_t fmpl_pegpc;       /* 0x0BC FMPL_PEGPC  - FM Policer Profile Entry GREEN Packet Counter*/
+	uint32_t fmpl_peypc;       /* 0x0C0 FMPL_PEYPC  - FM Policer Profile Entry YELLOW Packet Counter*/
+	uint32_t fmpl_perpc;       /* 0x0C4 FMPL_PERPC  - FM Policer Profile Entry RED Packet Counter */
+	uint32_t fmpl_perypc;      /* 0x0C8 FMPL_PERYPC - FM Policer Profile Entry Recolored YELLOW Packet Counter*/
+	uint32_t fmpl_perrpc;      /* 0x0CC FMPL_PERRPC - FM Policer Profile Entry Recolored RED Packet Counter*/
+	uint32_t fmpl_res1[12];    /* 0x0D0-0x0FF Reserved */
 } _PackedType t_FmPcdPlcrProfileRegs;
-
 
 typedef _Packed struct t_FmPcdCcCapwapReassmTimeoutParams {
     volatile uint32_t                       portIdAndCapwapReassmTbl;
@@ -481,11 +476,7 @@ static __inline__ bool TRY_LOCK(t_Handle h_Spinlock, volatile bool *p_Flag)
 /**************************************************************************//**
  @Description       Port Id defines
 *//***************************************************************************/
-#if (DPAA_VERSION == 10)
-#define BASE_OH_PORTID              1
-#else
 #define BASE_OH_PORTID              2
-#endif /* (DPAA_VERSION == 10) */
 #define BASE_1G_RX_PORTID           8
 #define BASE_10G_RX_PORTID          0x10
 #define BASE_1G_TX_PORTID           0x28
@@ -702,9 +693,7 @@ uint16_t    FmPcdKgGetClsPlanGrpSize(t_Handle h_FmPcd, uint8_t clsPlanGrp);
 t_Error     FmPcdKgBuildClsPlanGrp(t_Handle h_FmPcd, t_FmPcdKgInterModuleClsPlanGrpParams *p_Grp, t_FmPcdKgInterModuleClsPlanSet *p_ClsPlanSet);
 
 uint8_t     FmPcdKgGetSchemeId(t_Handle h_Scheme);
-#if (DPAA_VERSION >= 11)
 bool        FmPcdKgGetVspe(t_Handle h_Scheme);
-#endif /* (DPAA_VERSION >= 11) */
 uint8_t     FmPcdKgGetRelativeSchemeId(t_Handle h_FmPcd, uint8_t schemeId);
 void        FmPcdKgDestroyClsPlanGrp(t_Handle h_FmPcd, uint8_t grpId);
 t_Error     FmPcdKgCheckInvalidateSchemeSw(t_Handle h_Scheme);
@@ -793,7 +782,6 @@ t_Error     FmPcdManipUpdate(t_Handle h_FmPcd, t_Handle h_PcdParams, t_Handle h_
 /***********************************************************************/
 /*          Common API for FM-Port module                            */
 /***********************************************************************/
-#if (DPAA_VERSION >= 11)
 typedef enum e_FmPortGprFuncType
 {
     e_FM_PORT_GPR_EMPTY = 0,
@@ -801,18 +789,13 @@ typedef enum e_FmPortGprFuncType
 } e_FmPortGprFuncType;
 
 t_Error     FmPortSetGprFunc(t_Handle h_FmPort, e_FmPortGprFuncType gprFunc, void **p_Value);
-#endif /* DPAA_VERSION >= 11) */
 t_Error     FmGetSetParams(t_Handle h_Fm, t_FmGetSetParams *p_FmGetSetParams);
 t_Error     FmPortGetSetCcParams(t_Handle h_FmPort, t_FmPortGetSetCcParams *p_FmPortGetSetCcParams);
 uint8_t     FmPortGetNetEnvId(t_Handle h_FmPort);
 uint8_t     FmPortGetHardwarePortId(t_Handle h_FmPort);
 uint32_t    FmPortGetPcdEngines(t_Handle h_FmPort);
 void        FmPortPcdKgSwUnbindClsPlanGrp (t_Handle h_FmPort);
-
-
-#if (DPAA_VERSION >= 11)
 t_Error     FmPcdFrmReplicUpdate(t_Handle h_FmPcd, t_Handle h_FmPort, t_Handle h_FrmReplic);
-#endif /* (DPAA_VERSION >= 11) */
 
 /**************************************************************************//**
  @Function      FmRegisterIntr
@@ -1189,7 +1172,6 @@ t_Error     FmSetCongestionGroupPFCpriority(t_Handle    h_Fm,
                                             uint32_t    congestionGroupId,
                                             uint8_t     priorityBitMap);
 
-#if (DPAA_VERSION >= 11)
 t_Error     FmVSPAllocForPort(t_Handle         h_Fm,
                               e_FmPortType     portType,
                               uint8_t          portId,
@@ -1210,7 +1192,5 @@ t_Error FmVSPCheckRelativeProfile(t_Handle        h_Fm,
                                   uint16_t        relativeProfile);
 
 uintptr_t   FmGetVSPBaseAddr(t_Handle h_Fm);
-#endif /* (DPAA_VERSION >= 11) */
-
 
 #endif /* __FM_COMMON_H */

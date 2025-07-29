@@ -38,6 +38,7 @@
 #include <asm/exception.h>
 
 #include "irq-gic-common.h"
+#include "irq-msi-lib.h"
 
 #define ITS_FLAGS_CMDQ_NEEDS_FLUSHING		(1ULL << 0)
 #define ITS_FLAGS_WORKAROUND_CAVIUM_22375	(1ULL << 1)
@@ -59,7 +60,7 @@ static u32 lpi_id_bits;
 #define LPI_PROPBASE_SZ		ALIGN(BIT(LPI_NRBITS), SZ_64K)
 #define LPI_PENDBASE_SZ		ALIGN(BIT(LPI_NRBITS) / 8, SZ_64K)
 
-#define LPI_PROP_DEFAULT_PRIO	GICD_INT_DEF_PRI
+static u8 __ro_after_init lpi_prop_prio;
 
 /*
  * Collection structure - just an ID, and a redistributor address to
@@ -786,6 +787,7 @@ static struct its_vpe *its_build_vmapp_cmd(struct its_node *its,
 					   struct its_cmd_block *cmd,
 					   struct its_cmd_desc *desc)
 {
+	struct its_vpe *vpe = valid_vpe(its, desc->its_vmapp_cmd.vpe);
 	unsigned long vpt_addr, vconf_addr;
 	u64 target;
 	bool alloc;
@@ -795,9 +797,14 @@ static struct its_vpe *its_build_vmapp_cmd(struct its_node *its,
 	its_encode_valid(cmd, desc->its_vmapp_cmd.valid);
 
 	if (!desc->its_vmapp_cmd.valid) {
+		alloc = !atomic_dec_return(&desc->its_vmapp_cmd.vpe->vmapp_count);
 		if (is_v4_1(its)) {
-			alloc = !atomic_dec_return(&desc->its_vmapp_cmd.vpe->vmapp_count);
 			its_encode_alloc(cmd, alloc);
+			/*
+			 * Unmapping a VPE is self-synchronizing on GICv4.1,
+			 * no need to issue a VSYNC.
+			 */
+			vpe = NULL;
 		}
 
 		goto out;
@@ -810,12 +817,12 @@ static struct its_vpe *its_build_vmapp_cmd(struct its_node *its,
 	its_encode_vpt_addr(cmd, vpt_addr);
 	its_encode_vpt_size(cmd, LPI_NRBITS - 1);
 
+	alloc = !atomic_fetch_inc(&desc->its_vmapp_cmd.vpe->vmapp_count);
+
 	if (!is_v4_1(its))
 		goto out;
 
 	vconf_addr = virt_to_phys(page_address(desc->its_vmapp_cmd.vpe->its_vm->vprop_page));
-
-	alloc = !atomic_fetch_inc(&desc->its_vmapp_cmd.vpe->vmapp_count);
 
 	its_encode_alloc(cmd, alloc);
 
@@ -832,7 +839,7 @@ static struct its_vpe *its_build_vmapp_cmd(struct its_node *its,
 out:
 	its_fixup_cmd(cmd);
 
-	return valid_vpe(its, desc->its_vmapp_cmd.vpe);
+	return vpe;
 }
 
 static struct its_vpe *its_build_vmapti_cmd(struct its_node *its,
@@ -1311,7 +1318,6 @@ static void its_send_vmovp(struct its_vpe *vpe)
 {
 	struct its_cmd_desc desc = {};
 	struct its_node *its;
-	unsigned long flags;
 	int col_id = vpe->col_idx;
 
 	desc.its_vmovp_cmd.vpe = vpe;
@@ -1331,8 +1337,7 @@ static void its_send_vmovp(struct its_vpe *vpe)
 	 *
 	 * Wall <-- Head.
 	 */
-	raw_spin_lock_irqsave(&vmovp_lock, flags);
-
+	guard(raw_spinlock)(&vmovp_lock);
 	desc.its_vmovp_cmd.seq_num = vmovp_seq_num++;
 	desc.its_vmovp_cmd.its_list = get_its_list(vpe->its_vm);
 
@@ -1347,8 +1352,6 @@ static void its_send_vmovp(struct its_vpe *vpe)
 		desc.its_vmovp_cmd.col = &its->collections[col_id];
 		its_send_single_vcommand(its, its_build_vmovp_cmd, &desc);
 	}
-
-	raw_spin_unlock_irqrestore(&vmovp_lock, flags);
 }
 
 static void its_send_vinvall(struct its_node *its, struct its_vpe *vpe)
@@ -1785,12 +1788,10 @@ static bool gic_requires_eager_mapping(void)
 
 static void its_map_vm(struct its_node *its, struct its_vm *vm)
 {
-	unsigned long flags;
-
 	if (gic_requires_eager_mapping())
 		return;
 
-	raw_spin_lock_irqsave(&vmovp_lock, flags);
+	guard(raw_spinlock_irqsave)(&vm->vmapp_lock);
 
 	/*
 	 * If the VM wasn't mapped yet, iterate over the vpes and get
@@ -1803,37 +1804,31 @@ static void its_map_vm(struct its_node *its, struct its_vm *vm)
 
 		for (i = 0; i < vm->nr_vpes; i++) {
 			struct its_vpe *vpe = vm->vpes[i];
-			struct irq_data *d = irq_get_irq_data(vpe->irq);
 
-			/* Map the VPE to the first possible CPU */
-			vpe->col_idx = cpumask_first(cpu_online_mask);
-			its_send_vmapp(its, vpe, true);
+			scoped_guard(raw_spinlock, &vpe->vpe_lock)
+				its_send_vmapp(its, vpe, true);
+
 			its_send_vinvall(its, vpe);
-			irq_data_update_effective_affinity(d, cpumask_of(vpe->col_idx));
 		}
 	}
-
-	raw_spin_unlock_irqrestore(&vmovp_lock, flags);
 }
 
 static void its_unmap_vm(struct its_node *its, struct its_vm *vm)
 {
-	unsigned long flags;
-
 	/* Not using the ITS list? Everything is always mapped. */
 	if (gic_requires_eager_mapping())
 		return;
 
-	raw_spin_lock_irqsave(&vmovp_lock, flags);
+	guard(raw_spinlock_irqsave)(&vm->vmapp_lock);
 
 	if (!--vm->vlpi_count[its->list_nr]) {
 		int i;
 
-		for (i = 0; i < vm->nr_vpes; i++)
+		for (i = 0; i < vm->nr_vpes; i++) {
+			guard(raw_spinlock)(&vm->vpes[i]->vpe_lock);
 			its_send_vmapp(its, vm->vpes[i], false);
+		}
 	}
-
-	raw_spin_unlock_irqrestore(&vmovp_lock, flags);
 }
 
 static int its_vlpi_map(struct irq_data *d, struct its_cmd_info *info)
@@ -1920,7 +1915,7 @@ static int its_vlpi_unmap(struct irq_data *d)
 	/* and restore the physical one */
 	irqd_clr_forwarded_to_vcpu(d);
 	its_send_mapti(its_dev, d->hwirq, event);
-	lpi_update_config(d, 0xff, (LPI_PROP_DEFAULT_PRIO |
+	lpi_update_config(d, 0xff, (lpi_prop_prio |
 				    LPI_PROP_ENABLED |
 				    LPI_PROP_GROUP1));
 
@@ -2175,8 +2170,8 @@ static void its_lpi_free(unsigned long *bitmap, u32 base, u32 nr_ids)
 
 static void gic_reset_prop_table(void *va)
 {
-	/* Priority 0xa0, Group-1, disabled */
-	memset(va, LPI_PROP_DEFAULT_PRIO | LPI_PROP_GROUP1, LPI_PROPBASE_SZ);
+	/* Regular IRQ priority, Group-1, disabled */
+	memset(va, lpi_prop_prio | LPI_PROP_GROUP1, LPI_PROPBASE_SZ);
 
 	/* Make sure the GIC will observe the written configuration */
 	gic_flush_dcache_to_poc(va, LPI_PROPBASE_SZ);
@@ -2450,8 +2445,8 @@ static bool its_parse_indirect_baser(struct its_node *its,
 	 * feature is not supported by hardware.
 	 */
 	new_order = max_t(u32, get_order(esz << ids), new_order);
-	if (new_order > MAX_ORDER) {
-		new_order = MAX_ORDER;
+	if (new_order > MAX_PAGE_ORDER) {
+		new_order = MAX_PAGE_ORDER;
 		ids = ilog2(PAGE_ORDER_TO_SIZE(new_order) / (int)esz);
 		pr_warn("ITS@%pa: %s Table too large, reduce ids %llu->%u\n",
 			&its->phys_base, its_base_type_string[type],
@@ -3682,6 +3677,7 @@ static void its_irq_domain_free(struct irq_domain *domain, unsigned int virq,
 }
 
 static const struct irq_domain_ops its_domain_ops = {
+	.select			= msi_lib_irq_domain_select,
 	.alloc			= its_irq_domain_alloc,
 	.free			= its_irq_domain_free,
 	.activate		= its_irq_domain_activate,
@@ -3806,9 +3802,26 @@ static int its_vpe_set_affinity(struct irq_data *d,
 				bool force)
 {
 	struct its_vpe *vpe = irq_data_get_irq_chip_data(d);
-	struct cpumask common, *table_mask;
+	unsigned int from, cpu = nr_cpu_ids;
+	struct cpumask *table_mask;
 	unsigned long flags;
-	int from, cpu;
+
+	/*
+	 * Check if we're racing against a VPE being destroyed, for
+	 * which we don't want to allow a VMOVP.
+	 */
+	if (!atomic_read(&vpe->vmapp_count)) {
+		if (gic_requires_eager_mapping())
+			return -EINVAL;
+
+		/*
+		 * If we lazily map the VPEs, this isn't an error and
+		 * we can exit cleanly.
+		 */
+		cpu = cpumask_first(mask_val);
+		irq_data_update_effective_affinity(d, cpumask_of(cpu));
+		return IRQ_SET_MASK_OK_DONE;
+	}
 
 	/*
 	 * Changing affinity is mega expensive, so let's be as lazy as
@@ -3822,7 +3835,14 @@ static int its_vpe_set_affinity(struct irq_data *d,
 	 * protect us, and that we must ensure nobody samples vpe->col_idx
 	 * during the update, hence the lock below which must also be
 	 * taken on any vLPI handling path that evaluates vpe->col_idx.
+	 *
+	 * Finally, we must protect ourselves against concurrent updates of
+	 * the mapping state on this VM should the ITS list be in use (see
+	 * the shortcut in its_send_vmovp() otherewise).
 	 */
+	if (its_list_map)
+		raw_spin_lock(&vpe->its_vm->vmapp_lock);
+
 	from = vpe_to_cpuid_lock(vpe, &flags);
 	table_mask = gic_data_rdist_cpu(from)->vpe_table_mask;
 
@@ -3830,10 +3850,15 @@ static int its_vpe_set_affinity(struct irq_data *d,
 	 * If we are offered another CPU in the same GICv4.1 ITS
 	 * affinity, pick this one. Otherwise, any CPU will do.
 	 */
-	if (table_mask && cpumask_and(&common, mask_val, table_mask))
-		cpu = cpumask_test_cpu(from, &common) ? from : cpumask_first(&common);
-	else
+	if (table_mask)
+		cpu = cpumask_any_and(mask_val, table_mask);
+	if (cpu < nr_cpu_ids) {
+		if (cpumask_test_cpu(from, mask_val) &&
+		    cpumask_test_cpu(from, table_mask))
+			cpu = from;
+	} else {
 		cpu = cpumask_first(mask_val);
+	}
 
 	if (from == cpu)
 		goto out;
@@ -3846,6 +3871,9 @@ static int its_vpe_set_affinity(struct irq_data *d,
 out:
 	irq_data_update_effective_affinity(d, cpumask_of(cpu));
 	vpe_to_cpuid_unlock(vpe, flags);
+
+	if (its_list_map)
+		raw_spin_unlock(&vpe->its_vm->vmapp_lock);
 
 	return IRQ_SET_MASK_OK_DONE;
 }
@@ -3914,6 +3942,8 @@ static void its_vpe_deschedule(struct its_vpe *vpe)
 static void its_vpe_invall(struct its_vpe *vpe)
 {
 	struct its_node *its;
+
+	guard(raw_spinlock_irqsave)(&vpe->its_vm->vmapp_lock);
 
 	list_for_each_entry(its, &its_nodes, entry) {
 		if (!is_v4(its))
@@ -4416,12 +4446,12 @@ static const struct irq_domain_ops its_sgi_domain_ops = {
 
 static int its_vpe_id_alloc(void)
 {
-	return ida_simple_get(&its_vpeid_ida, 0, ITS_MAX_VPEID, GFP_KERNEL);
+	return ida_alloc_max(&its_vpeid_ida, ITS_MAX_VPEID - 1, GFP_KERNEL);
 }
 
 static void its_vpe_id_free(u16 id)
 {
-	ida_simple_remove(&its_vpeid_ida, id);
+	ida_free(&its_vpeid_ida, id);
 }
 
 static int its_vpe_init(struct its_vpe *vpe)
@@ -4450,9 +4480,8 @@ static int its_vpe_init(struct its_vpe *vpe)
 	raw_spin_lock_init(&vpe->vpe_lock);
 	vpe->vpe_id = vpe_id;
 	vpe->vpt_page = vpt_page;
-	if (gic_rdists->has_rvpeid)
-		atomic_set(&vpe->vmapp_count, 0);
-	else
+	atomic_set(&vpe->vmapp_count, 0);
+	if (!gic_rdists->has_rvpeid)
 		vpe->vpe_proxy_event = -1;
 
 	return 0;
@@ -4501,8 +4530,6 @@ static int its_vpe_irq_domain_alloc(struct irq_domain *domain, unsigned int virq
 	struct page *vprop_page;
 	int base, nr_ids, i, err = 0;
 
-	BUG_ON(!vm);
-
 	bitmap = its_lpi_alloc(roundup_pow_of_two(nr_irqs), &base, &nr_ids);
 	if (!bitmap)
 		return -ENOMEM;
@@ -4522,6 +4549,7 @@ static int its_vpe_irq_domain_alloc(struct irq_domain *domain, unsigned int virq
 	vm->db_lpi_base = base;
 	vm->nr_db_lpis = nr_ids;
 	vm->vprop_page = vprop_page;
+	raw_spin_lock_init(&vm->vmapp_lock);
 
 	if (gic_rdists->has_rvpeid)
 		irqchip = &its_vpe_4_1_irq_chip;
@@ -4553,6 +4581,10 @@ static int its_vpe_irq_domain_activate(struct irq_domain *domain,
 	struct its_vpe *vpe = irq_data_get_irq_chip_data(d);
 	struct its_node *its;
 
+	/* Map the VPE to the first possible CPU */
+	vpe->col_idx = cpumask_first(cpu_online_mask);
+	irq_data_update_effective_affinity(d, cpumask_of(vpe->col_idx));
+
 	/*
 	 * If we use the list map, we issue VMAPP on demand... Unless
 	 * we're on a GICv4.1 and we eagerly map the VPE on all ITSs
@@ -4561,9 +4593,6 @@ static int its_vpe_irq_domain_activate(struct irq_domain *domain,
 	if (!gic_requires_eager_mapping())
 		return 0;
 
-	/* Map the VPE to the first possible CPU */
-	vpe->col_idx = cpumask_first(cpu_online_mask);
-
 	list_for_each_entry(its, &its_nodes, entry) {
 		if (!is_v4(its))
 			continue;
@@ -4571,8 +4600,6 @@ static int its_vpe_irq_domain_activate(struct irq_domain *domain,
 		its_send_vmapp(its, vpe, true);
 		its_send_vinvall(its, vpe);
 	}
-
-	irq_data_update_effective_affinity(d, cpumask_of(vpe->col_idx));
 
 	return 0;
 }
@@ -4983,6 +5010,9 @@ static int its_init_domain(struct its_node *its)
 	}
 
 	irq_domain_update_bus_token(inner_domain, DOMAIN_BUS_NEXUS);
+
+	inner_domain->msi_parent_ops = &gic_v3_its_msi_parent_ops;
+	inner_domain->flags |= IRQ_DOMAIN_FLAG_MSI_PARENT;
 
 	return 0;
 }
@@ -5571,6 +5601,10 @@ static int __init gic_acpi_parse_madt_its(union acpi_subtable_headers *header,
 		goto node_err;
 	}
 
+	if (acpi_get_madt_revision() >= 7 &&
+	    (its_entry->flags & ACPI_MADT_ITS_NON_COHERENT))
+		its->flags |= ITS_FLAGS_FORCE_NON_SHAREABLE;
+
 	err = its_probe_one(its);
 	if (!err)
 		return 0;
@@ -5641,7 +5675,7 @@ int __init its_lpi_memreserve_init(void)
 }
 
 int __init its_init(struct fwnode_handle *handle, struct rdists *rdists,
-		    struct irq_domain *parent_domain)
+		    struct irq_domain *parent_domain, u8 irq_prio)
 {
 	struct device_node *of_node;
 	struct its_node *its;
@@ -5651,6 +5685,7 @@ int __init its_init(struct fwnode_handle *handle, struct rdists *rdists,
 
 	gic_rdists = rdists;
 
+	lpi_prop_prio = irq_prio;
 	its_parent = parent_domain;
 	of_node = to_of_node(handle);
 	if (of_node)

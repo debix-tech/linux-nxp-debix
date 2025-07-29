@@ -6,10 +6,6 @@
 #include "imx8mq-evk.dts"
 
 / {
-	modem_reset: modem-reset {
-		reset-gpios = <&gpio3 5 GPIO_ACTIVE_HIGH>;
-	};
-
 	usdhc2_pwrseq: usdhc2_pwrseq {
 		compatible = "mmc-pwrseq-simple";
 		pinctrl-names = "default";
@@ -22,6 +18,12 @@
 	pinctrl_usdhc2_pwrseq: usdhc2pwrseq {
 		fsl,pins = <
 			MX8MQ_IOMUXC_SD2_RESET_B_GPIO2_IO19		0x46
+		>;
+	};
+
+	pinctrl_usdhc2_vsel: usdhc2vselgrp {
+		fsl,pins = <
+			MX8MQ_IOMUXC_GPIO1_IO04_GPIO1_IO4		0x49
 		>;
 	};
 };
@@ -40,7 +42,6 @@
 		MX8MQ_IOMUXC_SD2_DATA1_USDHC2_DATA1		0xc3
 		MX8MQ_IOMUXC_SD2_DATA2_USDHC2_DATA2		0xc3
 		MX8MQ_IOMUXC_SD2_DATA3_USDHC2_DATA3		0xc3
-		MX8MQ_IOMUXC_GPIO1_IO04_GPIO1_IO4               0x49
 		MX8MQ_IOMUXC_SD2_WP_GPIO2_IO20			0x41
 	>;
 };
@@ -53,7 +54,6 @@
 		MX8MQ_IOMUXC_SD2_DATA1_USDHC2_DATA1		0xc5
 		MX8MQ_IOMUXC_SD2_DATA2_USDHC2_DATA2		0xc5
 		MX8MQ_IOMUXC_SD2_DATA3_USDHC2_DATA3		0xc5
-		MX8MQ_IOMUXC_GPIO1_IO04_GPIO1_IO4               0x49
 		MX8MQ_IOMUXC_SD2_WP_GPIO2_IO20			0x41
 	>;
 };
@@ -66,7 +66,6 @@
 		MX8MQ_IOMUXC_SD2_DATA1_USDHC2_DATA1		0xc7
 		MX8MQ_IOMUXC_SD2_DATA2_USDHC2_DATA2		0xc7
 		MX8MQ_IOMUXC_SD2_DATA3_USDHC2_DATA3		0xc7
-		MX8MQ_IOMUXC_GPIO1_IO04_GPIO1_IO4               0x49
 		MX8MQ_IOMUXC_SD2_WP_GPIO2_IO20			0x41
 	>;
 };
@@ -90,7 +89,6 @@
 };
 
 &usdhc2 {
-	pinctrl-assert-gpios = <&gpio1 4 GPIO_ACTIVE_HIGH>;
 	/delete-property/ cd-gpios;
 	keep-power-in-suspend;
 	non-removable;
@@ -102,6 +100,25 @@
 		interrupt-parent = <&gpio2>;
 		interrupts = <20 IRQ_TYPE_LEVEL_LOW>;
 		interrupt-names = "host-wake";
+	};
+};
+
+&gpio1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_usdhc2_vsel>;
+
+	usdhc2-vsel-hog {
+		gpio-hog;
+		gpios = <4 GPIO_ACTIVE_HIGH>;
+		output-high;
+	};
+};
+
+&gpio3 {
+	/* enable the M.2 BT */
+	bt-reg-on-hog {
+		/delete-property/ output-high;
+		output-low;
 	};
 };
 

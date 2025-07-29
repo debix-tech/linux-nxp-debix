@@ -194,8 +194,6 @@ static int tja11xx_soft_reset(struct phy_device *phydev)
 	if (ret)
 		return ret;
 
-	genphy_resume(phydev);
-
 	return genphy_soft_reset(phydev);
 }
 
@@ -418,10 +416,8 @@ static void tja11xx_get_strings(struct phy_device *phydev, u8 *data)
 {
 	int i;
 
-	for (i = 0; i < ARRAY_SIZE(tja11xx_hw_stats); i++) {
-		strncpy(data + i * ETH_GSTRING_LEN,
-			tja11xx_hw_stats[i].string, ETH_GSTRING_LEN);
-	}
+	for (i = 0; i < ARRAY_SIZE(tja11xx_hw_stats); i++)
+		ethtool_puts(&data, tja11xx_hw_stats[i].string);
 }
 
 static void tja11xx_get_stats(struct phy_device *phydev,

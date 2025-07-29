@@ -14,7 +14,8 @@
 #if IS_ENABLED(CONFIG_TSN)
 
 void felix_cbs_reset(struct ocelot *ocelot, int port, u32 speed);
-void felix_tsn_enable(struct dsa_switch *ds);
+int felix_tsn_init(struct dsa_switch *ds);
+void felix_tsn_teardown(struct dsa_switch *ds);
 
 #else
 
@@ -23,7 +24,12 @@ static inline void felix_cbs_reset(struct ocelot *ocelot, int port,
 {
 }
 
-static inline void felix_tsn_enable(struct dsa_switch *ds)
+static inline int felix_tsn_init(struct dsa_switch *ds)
+{
+	return 0;
+}
+
+static inline void felix_tsn_teardown(struct dsa_switch *ds)
 {
 }
 

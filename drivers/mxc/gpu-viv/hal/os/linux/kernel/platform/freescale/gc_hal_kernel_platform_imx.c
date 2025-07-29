@@ -408,7 +408,7 @@ static struct thermal_cooling_device *device_gpu_cooling_register(struct device_
 {
     struct thermal_cooling_device *cdev;
     struct gpufreq_cooling_device *gpufreq_dev = NULL;
-    char dev_name[THERMAL_NAME_LENGTH];
+    char *name;
     int ret = 0;
 
     gpufreq_dev = kzalloc(sizeof(struct gpufreq_cooling_device),
@@ -422,12 +422,17 @@ static struct thermal_cooling_device *device_gpu_cooling_register(struct device_
         return ERR_PTR(-EINVAL);
     }
 
-    snprintf(dev_name, sizeof(dev_name), "thermal-gpufreq-%d",
-              gpufreq_dev->id);
+    name = kasprintf(GFP_KERNEL, "thermal-gpufreq-%d", gpufreq_dev->id);
+    if (!name) {
+        release_idr(&gpufreq_idr, gpufreq_dev->id);
+        kfree(gpufreq_dev);
+        return ERR_PTR(-ENOMEM);
+    }
 
     gpufreq_dev->max_state = states;
-    cdev = thermal_of_cooling_device_register(np, dev_name, gpufreq_dev,
+    cdev = thermal_of_cooling_device_register(np, name, gpufreq_dev,
                                          &gpufreq_cooling_ops);
+    kfree(name);
     if (!cdev) {
         release_idr(&gpufreq_idr, gpufreq_dev->id);
         kfree(gpufreq_dev);
@@ -865,10 +870,16 @@ static int mxc_gpu_sub_probe(struct platform_device *pdev)
     return component_add(&pdev->dev, &mxc_gpu_sub_ops);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)
+static void mxc_gpu_sub_remove(struct platform_device *pdev)
+#else
 static int mxc_gpu_sub_remove(struct platform_device *pdev)
+#endif
 {
     component_del(&pdev->dev, &mxc_gpu_sub_ops);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
     return 0;
+#endif
 }
 
 struct platform_driver mxc_gpu_sub_driver =
@@ -1085,6 +1096,10 @@ static inline int get_power_imx8_subsystem(struct device *pdev)
     if (core_node)
         of_node_put(core_node);
 
+#ifdef CONFIG_PM
+    pm_runtime_enable(pdev);
+#endif
+
     return 0;
 }
 
@@ -1236,7 +1251,7 @@ static int patch_param(struct platform_device *pdev,
 
     if (res && !args->baseAddress && !args->physSize) {
         args->baseAddress = res->start;
-        args->physSize = res->end - res->start + 1;
+        args->physSize = res->end > res->start ? res->end - res->start + 1 : 0;
     }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 1, 0)
@@ -1336,10 +1351,10 @@ free_priv(void)
 }
 
 static int set_clock(int gpu, int enable);
-static int set_power(int gpu, int enable);
+static int set_power(struct device *pdev, int gpu, int enable);
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
-static void imx6sx_optimize_qosc_for_GPU(void)
+static void imx6sx_optimize_qosc_for_GPU(struct device *pdev)
 {
     struct device_node *np;
     void __iomem *src_base;
@@ -1351,7 +1366,7 @@ static void imx6sx_optimize_qosc_for_GPU(void)
     src_base = of_iomap(np, 0);
     WARN_ON(!src_base);
 
-    set_power(gcvCORE_MAJOR, 1);
+    set_power(pdev, gcvCORE_MAJOR, 1);
     set_clock(gcvCORE_MAJOR, 1);
 
     writel_relaxed(0, src_base); /* Disable clkgate & soft_rst */
@@ -1361,7 +1376,7 @@ static void imx6sx_optimize_qosc_for_GPU(void)
     writel_relaxed(0x0f000822, src_base+0x1400+0xe0); /* Set Read QoS 8 for gpu */
 
     set_clock(gcvCORE_MAJOR, 0);
-    set_power(gcvCORE_MAJOR, 0);
+    set_power(pdev, gcvCORE_MAJOR, 0);
 
     return;
 }
@@ -1530,7 +1545,7 @@ static inline int get_power(struct device *pdev)
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
-    imx6sx_optimize_qosc_for_GPU();
+    imx6sx_optimize_qosc_for_GPU(pdev);
 #endif
 
     return 0;
@@ -1569,7 +1584,7 @@ static inline int get_power_ls(struct device *pdev)
     return 0;
 }
 
-static inline void put_power(void)
+static inline void put_power(struct device *pdev)
 {
     int core = 0;
     struct gpu_clk *imx_clk = NULL;
@@ -1608,6 +1623,11 @@ static inline void put_power(void)
         }
 #endif
     }
+
+#if defined(IMX_GPU_SUBSYSTEM) && defined(CONFIG_PM)
+    if (pdev->of_node && use_imx_gpu_subsystem)
+        pm_runtime_disable(pdev);
+#endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 5, 0)
     if (priv->gpu_regulator) {
@@ -1649,7 +1669,7 @@ static inline void put_power_ls(void)
 #endif
 }
 
-static inline int set_power(int gpu, int enable)
+static inline int set_power(struct device *pdev, int gpu, int enable)
 {
 #ifdef CONFIG_PM
     struct imx_priv* priv = &imxPriv;
@@ -1676,6 +1696,10 @@ static inline int set_power(int gpu, int enable)
 
 #ifdef CONFIG_PM
         pm_runtime_get_sync(priv->pmdev[gpu]);
+#ifdef IMX_GPU_SUBSYSTEM
+        if (pdev->of_node && use_imx_gpu_subsystem)
+            pm_runtime_get_sync(pdev);
+#endif
         if(priv->pm_qos_core == gpu) {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 7, 0)
             cpu_latency_qos_add_request(&priv->pm_qos, 0);
@@ -1748,6 +1772,10 @@ static inline int set_power(int gpu, int enable)
             clk_unprepare(clk_ahb);
 #ifdef CONFIG_PM
         pm_runtime_put_sync(priv->pmdev[gpu]);
+#ifdef IMX_GPU_SUBSYSTEM
+        if (pdev->of_node && use_imx_gpu_subsystem)
+            pm_runtime_put_sync(pdev);
+#endif
         if (priv->pm_qos_core == gpu) {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 7, 0)
             cpu_latency_qos_remove_request(&priv->pm_qos);
@@ -1941,7 +1969,7 @@ _PutPower(
     if (is_layerscape)
         put_power_ls();
     else
-        put_power();
+        put_power(&Platform->device->dev);
 
     return gcvSTATUS_OK;
 }
@@ -1955,8 +1983,8 @@ _SetPower(
     gctBOOL Enable
     )
 {
-    return set_power((int)GPU, Enable) ? gcvSTATUS_GENERIC_IO
-                : gcvSTATUS_OK;
+    return set_power(&Platform->device->dev, (int)GPU, Enable) ?
+           gcvSTATUS_GENERIC_IO : gcvSTATUS_OK;
 }
 
 static gceSTATUS

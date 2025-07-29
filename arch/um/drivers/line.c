@@ -83,7 +83,7 @@ unsigned int line_chars_in_buffer(struct tty_struct *tty)
  *
  * Must be called while holding line->lock!
  */
-static int buffer_data(struct line *line, const char *buf, int len)
+static int buffer_data(struct line *line, const u8 *buf, size_t len)
 {
 	int end, room;
 
@@ -383,6 +383,7 @@ int setup_one_line(struct line *lines, int n, char *init,
 			parse_chan_pair(NULL, line, n, opts, error_out);
 			err = 0;
 		}
+		*error_out = "configured as 'none'";
 	} else {
 		char *new = kstrdup(init, GFP_KERNEL);
 		if (!new) {
@@ -406,6 +407,7 @@ int setup_one_line(struct line *lines, int n, char *init,
 			}
 		}
 		if (err) {
+			*error_out = "failed to parse channel pair";
 			line->init_str = NULL;
 			line->valid = 0;
 			kfree(new);
@@ -629,15 +631,18 @@ static irqreturn_t winch_interrupt(int irq, void *data)
 
 	if (fd != -1) {
 		err = generic_read(fd, &c, NULL);
-		if (err < 0) {
+		/* A read of 2 means the winch thread failed and has warned */
+		if (err < 0 || (err == 1 && c == 2)) {
 			if (err != -EAGAIN) {
 				winch->fd = -1;
 				list_del(&winch->list);
 				os_close_file(fd);
-				printk(KERN_ERR "winch_interrupt : "
-				       "read failed, errno = %d\n", -err);
-				printk(KERN_ERR "fd %d is losing SIGWINCH "
-				       "support\n", winch->tty_fd);
+				if (err < 0) {
+					printk(KERN_ERR "winch_interrupt : read failed, errno = %d\n",
+					       -err);
+					printk(KERN_ERR "fd %d is losing SIGWINCH support\n",
+					       winch->tty_fd);
+				}
 				INIT_WORK(&winch->work, __free_winch);
 				schedule_work(&winch->work);
 				return IRQ_HANDLED;

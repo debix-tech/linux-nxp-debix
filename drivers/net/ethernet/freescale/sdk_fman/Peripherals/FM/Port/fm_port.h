@@ -49,9 +49,6 @@
 #include "fm_port_ext.h"
 #include "fsl_fman_port.h"
 
-#define __ERR_MODULE__  MODULE_FM_PORT
-
-
 #define MIN_EXT_BUF_SIZE                                64
 #define DATA_ALIGNMENT                                  64
 #define MAX_LIODN_OFFSET                                64
@@ -106,46 +103,6 @@
 
 #define DEFAULT_notSupported                            0xff
 
-#if (DPAA_VERSION < 11)
-#define DEFAULT_PORT_rxFifoPriElevationLevel            MAX_PORT_FIFO_SIZE
-#define DEFAULT_PORT_rxFifoThreshold                    (MAX_PORT_FIFO_SIZE*3/4)
-
-#define DEFAULT_PORT_txFifoMinFillLevel                 0
-#define DEFAULT_PORT_txFifoLowComfLevel                 (5*KILOBYTE)
-#define DEFAULT_PORT_fifoDeqPipelineDepth_1G            1
-#define DEFAULT_PORT_fifoDeqPipelineDepth_10G           4
-
-#define DEFAULT_PORT_fifoDeqPipelineDepth_OH            2
-
-/* Host command port MUST NOT be changed to more than 1 !!! */
-#define DEFAULT_PORT_numOfTasks(type)                       \
-    (uint32_t)((((type) == e_FM_PORT_TYPE_RX_10G) ||        \
-                ((type) == e_FM_PORT_TYPE_TX_10G)) ? 16 :   \
-               ((((type) == e_FM_PORT_TYPE_RX) ||           \
-                 ((type) == e_FM_PORT_TYPE_TX) ||           \
-                 ((type) == e_FM_PORT_TYPE_OH_OFFLINE_PARSING)) ? 3 : 1))
-
-#define DEFAULT_PORT_extraNumOfTasks(type)                  \
-    (uint32_t)(((type) == e_FM_PORT_TYPE_RX_10G)  ? 8 :    \
-               (((type) == e_FM_PORT_TYPE_RX) ? 2 : 0))
-
-#define DEFAULT_PORT_numOfOpenDmas(type)                    \
-    (uint32_t)((((type) == e_FM_PORT_TYPE_TX_10G) ||        \
-                ((type) == e_FM_PORT_TYPE_RX_10G)) ? 8 : 1 )
-
-#define DEFAULT_PORT_extraNumOfOpenDmas(type)               \
-    (uint32_t)(((type) == e_FM_PORT_TYPE_RX_10G) ? 8 :    \
-               (((type) == e_FM_PORT_TYPE_RX) ? 1 : 0))
-
-#define DEFAULT_PORT_numOfFifoBufs(type)                    \
-    (uint32_t)((((type) == e_FM_PORT_TYPE_RX_10G) ||        \
-                ((type) == e_FM_PORT_TYPE_TX_10G)) ? 48 :   \
-                ((type) == e_FM_PORT_TYPE_RX) ? 45 :        \
-                ((type) == e_FM_PORT_TYPE_TX) ? 44 : 8)
-
-#define DEFAULT_PORT_extraNumOfFifoBufs             0
-
-#else  /* (DPAA_VERSION < 11) */
 /* Defaults are registers' reset values */
 #define DEFAULT_PORT_rxFifoPriElevationLevel            MAX_PORT_FIFO_SIZE
 #define DEFAULT_PORT_rxFifoThreshold                    MAX_PORT_FIFO_SIZE
@@ -182,8 +139,6 @@
 
 #define DEFAULT_PORT_extraNumOfFifoBufs             0
 
-#endif /* (DPAA_VERSION < 11) */
-
 #define DEFAULT_PORT_txBdRingLength                 16
 #define DEFAULT_PORT_rxBdRingLength                 128
 #define DEFAULT_PORT_ImfwExtStructsMemId            0
@@ -213,11 +168,6 @@ typedef uint32_t fmPcdEngines_t; /**< options as defined below: */
 /***********************************************************************/
 /*          SW parser OFFLOAD labels (offsets)                         */
 /***********************************************************************/
-#if (DPAA_VERSION == 10)
-#define OFFLOAD_SW_PATCH_IPv4_IPR_LABEL         0x300
-#define OFFLOAD_SW_PATCH_IPv6_IPR_LABEL         0x325
-#define OFFLOAD_SW_PATCH_IPv6_IPF_LABEL         0x325
-#else
 #define OFFLOAD_SW_PATCH_IPv4_IPR_LABEL         0x100
 /* Will be used for:
  * 1. identify fragments
@@ -230,12 +180,6 @@ typedef uint32_t fmPcdEngines_t; /**< options as defined below: */
  */
 #define OFFLOAD_SW_PATCH_IPv6_IPF_LABEL         0x261
 #define OFFLOAD_SW_PATCH_CAPWAP_LABEL           0x38d
-#endif /* (DPAA_VERSION == 10) */
-
-#if ((DPAA_VERSION == 10) && defined(FM_CAPWAP_SUPPORT))
-#define UDP_LITE_SW_PATCH_LABEL                 0x2E0
-#endif /* ((DPAA_VERSION == 10) && defined(FM_CAPWAP_SUPPORT)) */
-
 
 /**************************************************************************//**
  @Description       Memory Mapped Registers
@@ -247,164 +191,164 @@ typedef uint32_t fmPcdEngines_t; /**< options as defined below: */
 
 typedef struct
 {
-    volatile uint32_t   fmbm_rcfg;      /**< Rx Configuration */
-    volatile uint32_t   fmbm_rst;       /**< Rx Status */
-    volatile uint32_t   fmbm_rda;       /**< Rx DMA attributes*/
-    volatile uint32_t   fmbm_rfp;       /**< Rx FIFO Parameters*/
-    volatile uint32_t   fmbm_rfed;      /**< Rx Frame End Data*/
-    volatile uint32_t   fmbm_ricp;      /**< Rx Internal Context Parameters*/
-    volatile uint32_t   fmbm_rim;       /**< Rx Internal Buffer Margins*/
-    volatile uint32_t   fmbm_rebm;      /**< Rx External Buffer Margins*/
-    volatile uint32_t   fmbm_rfne;      /**< Rx Frame Next Engine*/
-    volatile uint32_t   fmbm_rfca;      /**< Rx Frame Command Attributes.*/
-    volatile uint32_t   fmbm_rfpne;     /**< Rx Frame Parser Next Engine*/
-    volatile uint32_t   fmbm_rpso;      /**< Rx Parse Start Offset*/
-    volatile uint32_t   fmbm_rpp;       /**< Rx Policer Profile  */
-    volatile uint32_t   fmbm_rccb;      /**< Rx Coarse Classification Base */
-    volatile uint32_t   fmbm_reth;      /**< Rx Excessive Threshold */
-    volatile uint32_t   reserved1[0x01];/**< (0x03C) */
-    volatile uint32_t   fmbm_rprai[FM_PORT_PRS_RESULT_NUM_OF_WORDS];
-                                        /**< Rx Parse Results Array Initialization*/
-    volatile uint32_t   fmbm_rfqid;     /**< Rx Frame Queue ID*/
-    volatile uint32_t   fmbm_refqid;    /**< Rx Error Frame Queue ID*/
-    volatile uint32_t   fmbm_rfsdm;     /**< Rx Frame Status Discard Mask*/
-    volatile uint32_t   fmbm_rfsem;     /**< Rx Frame Status Error Mask*/
-    volatile uint32_t   fmbm_rfene;     /**< Rx Frame Enqueue Next Engine */
-    volatile uint32_t   reserved2[0x02];/**< (0x074-0x078) */
-    volatile uint32_t   fmbm_rcmne;     /**< Rx Frame Continuous Mode Next Engine */
-    volatile uint32_t   reserved3[0x20];/**< (0x080 0x0FF)  */
-    volatile uint32_t   fmbm_ebmpi[FM_PORT_MAX_NUM_OF_EXT_POOLS_ALL_INTEGRATIONS];
-                                        /**< Buffer Manager pool Information-*/
-    volatile uint32_t   fmbm_acnt[FM_PORT_MAX_NUM_OF_EXT_POOLS_ALL_INTEGRATIONS];
-                                        /**< Allocate Counter-*/
-    volatile uint32_t   reserved4[0x08];
-                                        /**< 0x130/0x140 - 0x15F reserved -*/
-    volatile uint32_t   fmbm_rcgm[FM_PORT_MAX_NUM_OF_CONGESTION_GRPS_ALL_INTEGRATIONS/32];
-                                        /**< Congestion Group Map*/
-    volatile uint32_t   fmbm_rmpd;      /**< BM Pool Depletion  */
-    volatile uint32_t   reserved5[0x1F];/**< (0x184 0x1FF) */
-    volatile uint32_t   fmbm_rstc;      /**< Rx Statistics Counters*/
-    volatile uint32_t   fmbm_rfrc;      /**< Rx Frame Counter*/
-    volatile uint32_t   fmbm_rfbc;      /**< Rx Bad Frames Counter*/
-    volatile uint32_t   fmbm_rlfc;      /**< Rx Large Frames Counter*/
-    volatile uint32_t   fmbm_rffc;      /**< Rx Filter Frames Counter*/
-    volatile uint32_t   fmbm_rfdc;      /**< Rx Frame Discard Counter*/
-    volatile uint32_t   fmbm_rfldec;    /**< Rx Frames List DMA Error Counter*/
-    volatile uint32_t   fmbm_rodc;      /**< Rx Out of Buffers Discard Counter-*/
-    volatile uint32_t   fmbm_rbdc;      /**< Rx Buffers Deallocate Counter-*/
-    volatile uint32_t   fmbm_rpec;      /**< Rx RX Prepare to enqueue Counter-*/
-    volatile uint32_t   reserved6[0x16];/**< (0x228 0x27F) */
-    volatile uint32_t   fmbm_rpc;       /**< Rx Performance Counters*/
-    volatile uint32_t   fmbm_rpcp;      /**< Rx Performance Count Parameters*/
-    volatile uint32_t   fmbm_rccn;      /**< Rx Cycle Counter*/
-    volatile uint32_t   fmbm_rtuc;      /**< Rx Tasks Utilization Counter*/
-    volatile uint32_t   fmbm_rrquc;     /**< Rx Receive Queue Utilization Counter*/
-    volatile uint32_t   fmbm_rduc;      /**< Rx DMA Utilization Counter*/
-    volatile uint32_t   fmbm_rfuc;      /**< Rx FIFO Utilization Counter*/
-    volatile uint32_t   fmbm_rpac;      /**< Rx Pause Activation Counter*/
-    volatile uint32_t   reserved7[0x18];/**< (0x2A0-0x2FF) */
-    volatile uint32_t   fmbm_rdcfg[0x3];/**< Rx Debug-*/
-    volatile uint32_t   fmbm_rgpr;      /**< Rx General Purpose Register. */
-    volatile uint32_t   reserved8[0x3a];/**< (0x310-0x3FF) */
+	uint32_t fmbm_rcfg;      /**< Rx Configuration */
+	uint32_t fmbm_rst;       /**< Rx Status */
+	uint32_t fmbm_rda;       /**< Rx DMA attributes*/
+	uint32_t fmbm_rfp;       /**< Rx FIFO Parameters*/
+	uint32_t fmbm_rfed;      /**< Rx Frame End Data*/
+	uint32_t fmbm_ricp;      /**< Rx Internal Context Parameters*/
+	uint32_t fmbm_rim;       /**< Rx Internal Buffer Margins*/
+	uint32_t fmbm_rebm;      /**< Rx External Buffer Margins*/
+	uint32_t fmbm_rfne;      /**< Rx Frame Next Engine*/
+	uint32_t fmbm_rfca;      /**< Rx Frame Command Attributes.*/
+	uint32_t fmbm_rfpne;     /**< Rx Frame Parser Next Engine*/
+	uint32_t fmbm_rpso;      /**< Rx Parse Start Offset*/
+	uint32_t fmbm_rpp;       /**< Rx Policer Profile  */
+	uint32_t fmbm_rccb;      /**< Rx Coarse Classification Base */
+	uint32_t fmbm_reth;      /**< Rx Excessive Threshold */
+	uint32_t reserved1[0x01];/**< (0x03C) */
+	uint32_t fmbm_rprai[FM_PORT_PRS_RESULT_NUM_OF_WORDS];
+	                         /**< Rx Parse Results Array Initialization*/
+	uint32_t fmbm_rfqid;     /**< Rx Frame Queue ID*/
+	uint32_t fmbm_refqid;    /**< Rx Error Frame Queue ID*/
+	uint32_t fmbm_rfsdm;     /**< Rx Frame Status Discard Mask*/
+	uint32_t fmbm_rfsem;     /**< Rx Frame Status Error Mask*/
+	uint32_t fmbm_rfene;     /**< Rx Frame Enqueue Next Engine */
+	uint32_t reserved2[0x02];/**< (0x074-0x078) */
+	uint32_t fmbm_rcmne;     /**< Rx Frame Continuous Mode Next Engine */
+	uint32_t reserved3[0x20];/**< (0x080 0x0FF)  */
+	uint32_t fmbm_ebmpi[FM_PORT_MAX_NUM_OF_EXT_POOLS_ALL_INTEGRATIONS];
+	                         /**< Buffer Manager pool Information-*/
+	uint32_t fmbm_acnt[FM_PORT_MAX_NUM_OF_EXT_POOLS_ALL_INTEGRATIONS];
+	                         /**< Allocate Counter-*/
+	uint32_t reserved4[0x08];
+	                         /**< 0x130/0x140 - 0x15F reserved -*/
+	uint32_t fmbm_rcgm[FM_PORT_MAX_NUM_OF_CONGESTION_GRPS_ALL_INTEGRATIONS/32];
+	                         /**< Congestion Group Map*/
+	uint32_t fmbm_rmpd;      /**< BM Pool Depletion  */
+	uint32_t reserved5[0x1F];/**< (0x184 0x1FF) */
+	uint32_t fmbm_rstc;      /**< Rx Statistics Counters*/
+	uint32_t fmbm_rfrc;      /**< Rx Frame Counter*/
+	uint32_t fmbm_rfbc;      /**< Rx Bad Frames Counter*/
+	uint32_t fmbm_rlfc;      /**< Rx Large Frames Counter*/
+	uint32_t fmbm_rffc;      /**< Rx Filter Frames Counter*/
+	uint32_t fmbm_rfdc;      /**< Rx Frame Discard Counter*/
+	uint32_t fmbm_rfldec;    /**< Rx Frames List DMA Error Counter*/
+	uint32_t fmbm_rodc;      /**< Rx Out of Buffers Discard Counter-*/
+	uint32_t fmbm_rbdc;      /**< Rx Buffers Deallocate Counter-*/
+	uint32_t fmbm_rpec;      /**< Rx RX Prepare to enqueue Counter-*/
+	uint32_t reserved6[0x16];/**< (0x228 0x27F) */
+	uint32_t fmbm_rpc;       /**< Rx Performance Counters*/
+	uint32_t fmbm_rpcp;      /**< Rx Performance Count Parameters*/
+	uint32_t fmbm_rccn;      /**< Rx Cycle Counter*/
+	uint32_t fmbm_rtuc;      /**< Rx Tasks Utilization Counter*/
+	uint32_t fmbm_rrquc;     /**< Rx Receive Queue Utilization Counter*/
+	uint32_t fmbm_rduc;      /**< Rx DMA Utilization Counter*/
+	uint32_t fmbm_rfuc;      /**< Rx FIFO Utilization Counter*/
+	uint32_t fmbm_rpac;      /**< Rx Pause Activation Counter*/
+	uint32_t reserved7[0x18];/**< (0x2A0-0x2FF) */
+	uint32_t fmbm_rdcfg[0x3];/**< Rx Debug-*/
+	uint32_t fmbm_rgpr;      /**< Rx General Purpose Register. */
+	uint32_t reserved8[0x3a];/**< (0x310-0x3FF) */
 } t_FmPortRxBmiRegs;
 
 typedef struct
 {
-    volatile uint32_t   fmbm_tcfg;      /**< Tx Configuration */
-    volatile uint32_t   fmbm_tst;       /**< Tx Status */
-    volatile uint32_t   fmbm_tda;       /**< Tx DMA attributes */
-    volatile uint32_t   fmbm_tfp;       /**< Tx FIFO Parameters */
-    volatile uint32_t   fmbm_tfed;      /**< Tx Frame End Data */
-    volatile uint32_t   fmbm_ticp;      /**< Tx Internal Context Parameters */
-    volatile uint32_t   fmbm_tfdne;     /**< Tx Frame Dequeue Next Engine. */
-    volatile uint32_t   fmbm_tfca;      /**< Tx Frame Command attribute. */
-    volatile uint32_t   fmbm_tcfqid;    /**< Tx Confirmation Frame Queue ID. */
-    volatile uint32_t   fmbm_tfeqid;    /**< Tx Frame Error Queue ID */
-    volatile uint32_t   fmbm_tfene;     /**< Tx Frame Enqueue Next Engine */
-    volatile uint32_t   fmbm_trlmts;    /**< Tx Rate Limiter Scale */
-    volatile uint32_t   fmbm_trlmt;     /**< Tx Rate Limiter */
-    volatile uint32_t   fmbm_tccb;      /**< Tx Coarse Classification Base */
-    volatile uint32_t   reserved0[0x0e];/**< (0x038-0x070) */
-    volatile uint32_t   fmbm_tfne;      /**< Tx Frame Next Engine */
-    volatile uint32_t   fmbm_tpfcm[0x02];/**< Tx Priority based Flow Control (PFC) Mapping */
-    volatile uint32_t   fmbm_tcmne;     /**< Tx Frame Continuous Mode Next Engine */
-    volatile uint32_t   reserved2[0x60];/**< (0x080-0x200) */
-    volatile uint32_t   fmbm_tstc;      /**< Tx Statistics Counters */
-    volatile uint32_t   fmbm_tfrc;      /**< Tx Frame Counter */
-    volatile uint32_t   fmbm_tfdc;      /**< Tx Frames Discard Counter */
-    volatile uint32_t   fmbm_tfledc;    /**< Tx Frame Length error discard counter */
-    volatile uint32_t   fmbm_tfufdc;    /**< Tx Frame unsupported format discard Counter */
-    volatile uint32_t   fmbm_tbdc;      /**< Tx Buffers Deallocate Counter */
-    volatile uint32_t   reserved3[0x1A];/**< (0x218-0x280) */
-    volatile uint32_t   fmbm_tpc;       /**< Tx Performance Counters*/
-    volatile uint32_t   fmbm_tpcp;      /**< Tx Performance Count Parameters*/
-    volatile uint32_t   fmbm_tccn;      /**< Tx Cycle Counter*/
-    volatile uint32_t   fmbm_ttuc;      /**< Tx Tasks Utilization Counter*/
-    volatile uint32_t   fmbm_ttcquc;    /**< Tx Transmit Confirm Queue Utilization Counter*/
-    volatile uint32_t   fmbm_tduc;      /**< Tx DMA Utilization Counter*/
-    volatile uint32_t   fmbm_tfuc;      /**< Tx FIFO Utilization Counter*/
-    volatile uint32_t   reserved4[16];  /**< (0x29C-0x2FF) */
-    volatile uint32_t   fmbm_tdcfg[0x3];/**< Tx Debug-*/
-    volatile uint32_t   fmbm_tgpr;      /**< O/H General Purpose Register */
-    volatile uint32_t   reserved5[0x3a];/**< (0x310-0x3FF) */
+	uint32_t fmbm_tcfg;      /**< Tx Configuration */
+	uint32_t fmbm_tst;       /**< Tx Status */
+	uint32_t fmbm_tda;       /**< Tx DMA attributes */
+	uint32_t fmbm_tfp;       /**< Tx FIFO Parameters */
+	uint32_t fmbm_tfed;      /**< Tx Frame End Data */
+	uint32_t fmbm_ticp;      /**< Tx Internal Context Parameters */
+	uint32_t fmbm_tfdne;     /**< Tx Frame Dequeue Next Engine. */
+	uint32_t fmbm_tfca;      /**< Tx Frame Command attribute. */
+	uint32_t fmbm_tcfqid;    /**< Tx Confirmation Frame Queue ID. */
+	uint32_t fmbm_tfeqid;    /**< Tx Frame Error Queue ID */
+	uint32_t fmbm_tfene;     /**< Tx Frame Enqueue Next Engine */
+	uint32_t fmbm_trlmts;    /**< Tx Rate Limiter Scale */
+	uint32_t fmbm_trlmt;     /**< Tx Rate Limiter */
+	uint32_t fmbm_tccb;      /**< Tx Coarse Classification Base */
+	uint32_t reserved0[0x0e];/**< (0x038-0x070) */
+	uint32_t fmbm_tfne;      /**< Tx Frame Next Engine */
+	uint32_t fmbm_tpfcm[0x02];/**< Tx Priority based Flow Control (PFC) Mapping */
+	uint32_t fmbm_tcmne;     /**< Tx Frame Continuous Mode Next Engine */
+	uint32_t reserved2[0x60];/**< (0x080-0x200) */
+	uint32_t fmbm_tstc;      /**< Tx Statistics Counters */
+	uint32_t fmbm_tfrc;      /**< Tx Frame Counter */
+	uint32_t fmbm_tfdc;      /**< Tx Frames Discard Counter */
+	uint32_t fmbm_tfledc;    /**< Tx Frame Length error discard counter */
+	uint32_t fmbm_tfufdc;    /**< Tx Frame unsupported format discard Counter */
+	uint32_t fmbm_tbdc;      /**< Tx Buffers Deallocate Counter */
+	uint32_t reserved3[0x1A];/**< (0x218-0x280) */
+	uint32_t fmbm_tpc;       /**< Tx Performance Counters*/
+	uint32_t fmbm_tpcp;      /**< Tx Performance Count Parameters*/
+	uint32_t fmbm_tccn;      /**< Tx Cycle Counter*/
+	uint32_t fmbm_ttuc;      /**< Tx Tasks Utilization Counter*/
+	uint32_t fmbm_ttcquc;    /**< Tx Transmit Confirm Queue Utilization Counter*/
+	uint32_t fmbm_tduc;      /**< Tx DMA Utilization Counter*/
+	uint32_t fmbm_tfuc;      /**< Tx FIFO Utilization Counter*/
+	uint32_t reserved4[16];  /**< (0x29C-0x2FF) */
+	uint32_t fmbm_tdcfg[0x3];/**< Tx Debug-*/
+	uint32_t fmbm_tgpr;      /**< O/H General Purpose Register */
+	uint32_t reserved5[0x3a];/**< (0x310-0x3FF) */
 } t_FmPortTxBmiRegs;
 
 typedef struct
 {
-    volatile uint32_t   fmbm_ocfg;      /**< O/H Configuration  */
-    volatile uint32_t   fmbm_ost;       /**< O/H Status */
-    volatile uint32_t   fmbm_oda;       /**< O/H DMA attributes  */
-    volatile uint32_t   fmbm_oicp;      /**< O/H Internal Context Parameters  */
-    volatile uint32_t   fmbm_ofdne;     /**< O/H Frame Dequeue Next Engine  */
-    volatile uint32_t   fmbm_ofne;      /**< O/H Frame Next Engine  */
-    volatile uint32_t   fmbm_ofca;      /**< O/H Frame Command Attributes.  */
-    volatile uint32_t   fmbm_ofpne;     /**< O/H Frame Parser Next Engine  */
-    volatile uint32_t   fmbm_opso;      /**< O/H Parse Start Offset  */
-    volatile uint32_t   fmbm_opp;       /**< O/H Policer Profile */
-    volatile uint32_t   fmbm_occb;      /**< O/H Coarse Classification base */
-    volatile uint32_t   fmbm_oim;       /**< O/H Internal margins*/
-    volatile uint32_t   fmbm_ofp;       /**< O/H Fifo Parameters*/
-    volatile uint32_t   fmbm_ofed;      /**< O/H Frame End Data*/
-    volatile uint32_t   reserved0[2];   /**< (0x038 - 0x03F) */
-    volatile uint32_t   fmbm_oprai[FM_PORT_PRS_RESULT_NUM_OF_WORDS];
-                                        /**< O/H Parse Results Array Initialization  */
-    volatile uint32_t   fmbm_ofqid;     /**< O/H Frame Queue ID  */
-    volatile uint32_t   fmbm_oefqid;    /**< O/H Error Frame Queue ID  */
-    volatile uint32_t   fmbm_ofsdm;     /**< O/H Frame Status Discard Mask  */
-    volatile uint32_t   fmbm_ofsem;     /**< O/H Frame Status Error Mask  */
-    volatile uint32_t   fmbm_ofene;     /**< O/H Frame Enqueue Next Engine  */
-    volatile uint32_t   fmbm_orlmts;    /**< O/H Rate Limiter Scale  */
-    volatile uint32_t   fmbm_orlmt;     /**< O/H Rate Limiter  */
-    volatile uint32_t   fmbm_ocmne;     /**< O/H Continuous Mode Next Engine  */
-    volatile uint32_t   reserved1[0x20];/**< (0x080 - 0x0FF) */
-    volatile uint32_t   fmbm_oebmpi[2]; /**< Buffer Manager Observed Pool Information */
-    volatile uint32_t   reserved2[0x16];/**< (0x108 - 0x15F) */
-    volatile uint32_t   fmbm_ocgm;      /**< Observed Congestion Group Map */
-    volatile uint32_t   reserved3[0x7]; /**< (0x164 - 0x17F) */
-    volatile uint32_t   fmbm_ompd;      /**< Observed BMan Pool Depletion */
-    volatile uint32_t   reserved4[0x1F];/**< (0x184 - 0x1FF) */
-    volatile uint32_t   fmbm_ostc;      /**< O/H Statistics Counters  */
-    volatile uint32_t   fmbm_ofrc;      /**< O/H Frame Counter  */
-    volatile uint32_t   fmbm_ofdc;      /**< O/H Frames Discard Counter  */
-    volatile uint32_t   fmbm_ofledc;    /**< O/H Frames Length Error Discard Counter  */
-    volatile uint32_t   fmbm_ofufdc;    /**< O/H Frames Unsupported Format Discard Counter  */
-    volatile uint32_t   fmbm_offc;      /**< O/H Filter Frames Counter  */
-    volatile uint32_t   fmbm_ofwdc;     /**< - Rx Frames WRED Discard Counter  */
-    volatile uint32_t   fmbm_ofldec;    /**< O/H Frames List DMA Error Counter */
-    volatile uint32_t   fmbm_obdc;      /**< O/H Buffers Deallocate Counter */
-    volatile uint32_t   fmbm_oodc;      /**< O/H Out of Buffers Discard Counter */
-    volatile uint32_t   fmbm_opec;      /**< O/H Prepare to enqueue Counter */
-    volatile uint32_t   reserved5[0x15];/**< ( - 0x27F) */
-    volatile uint32_t   fmbm_opc;       /**< O/H Performance Counters  */
-    volatile uint32_t   fmbm_opcp;      /**< O/H Performance Count Parameters  */
-    volatile uint32_t   fmbm_occn;      /**< O/H Cycle Counter  */
-    volatile uint32_t   fmbm_otuc;      /**< O/H Tasks Utilization Counter  */
-    volatile uint32_t   fmbm_oduc;      /**< O/H DMA Utilization Counter */
-    volatile uint32_t   fmbm_ofuc;      /**< O/H FIFO Utilization Counter */
-    volatile uint32_t   reserved6[26];  /**< (0x298-0x2FF) */
-    volatile uint32_t   fmbm_odcfg[0x3];/**< O/H Debug (only 1 in P1023) */
-    volatile uint32_t   fmbm_ogpr;      /**< O/H General Purpose Register. */
-    volatile uint32_t   reserved7[0x3a];/**< (0x310 0x3FF) */
+	uint32_t fmbm_ocfg;      /**< O/H Configuration  */
+	uint32_t fmbm_ost;       /**< O/H Status */
+	uint32_t fmbm_oda;       /**< O/H DMA attributes  */
+	uint32_t fmbm_oicp;      /**< O/H Internal Context Parameters  */
+	uint32_t fmbm_ofdne;     /**< O/H Frame Dequeue Next Engine  */
+	uint32_t fmbm_ofne;      /**< O/H Frame Next Engine  */
+	uint32_t fmbm_ofca;      /**< O/H Frame Command Attributes.  */
+	uint32_t fmbm_ofpne;     /**< O/H Frame Parser Next Engine  */
+	uint32_t fmbm_opso;      /**< O/H Parse Start Offset  */
+	uint32_t fmbm_opp;       /**< O/H Policer Profile */
+	uint32_t fmbm_occb;      /**< O/H Coarse Classification base */
+	uint32_t fmbm_oim;       /**< O/H Internal margins*/
+	uint32_t fmbm_ofp;       /**< O/H Fifo Parameters*/
+	uint32_t fmbm_ofed;      /**< O/H Frame End Data*/
+	uint32_t reserved0[2];   /**< (0x038 - 0x03F) */
+	uint32_t fmbm_oprai[FM_PORT_PRS_RESULT_NUM_OF_WORDS];
+	                         /**< O/H Parse Results Array Initialization  */
+	uint32_t fmbm_ofqid;     /**< O/H Frame Queue ID  */
+	uint32_t fmbm_oefqid;    /**< O/H Error Frame Queue ID  */
+	uint32_t fmbm_ofsdm;     /**< O/H Frame Status Discard Mask  */
+	uint32_t fmbm_ofsem;     /**< O/H Frame Status Error Mask  */
+	uint32_t fmbm_ofene;     /**< O/H Frame Enqueue Next Engine  */
+	uint32_t fmbm_orlmts;    /**< O/H Rate Limiter Scale  */
+	uint32_t fmbm_orlmt;     /**< O/H Rate Limiter  */
+	uint32_t fmbm_ocmne;     /**< O/H Continuous Mode Next Engine  */
+	uint32_t reserved1[0x20];/**< (0x080 - 0x0FF) */
+	uint32_t fmbm_oebmpi[2]; /**< Buffer Manager Observed Pool Information */
+	uint32_t reserved2[0x16];/**< (0x108 - 0x15F) */
+	uint32_t fmbm_ocgm;      /**< Observed Congestion Group Map */
+	uint32_t reserved3[0x7]; /**< (0x164 - 0x17F) */
+	uint32_t fmbm_ompd;      /**< Observed BMan Pool Depletion */
+	uint32_t reserved4[0x1F];/**< (0x184 - 0x1FF) */
+	uint32_t fmbm_ostc;      /**< O/H Statistics Counters  */
+	uint32_t fmbm_ofrc;      /**< O/H Frame Counter  */
+	uint32_t fmbm_ofdc;      /**< O/H Frames Discard Counter  */
+	uint32_t fmbm_ofledc;    /**< O/H Frames Length Error Discard Counter  */
+	uint32_t fmbm_ofufdc;    /**< O/H Frames Unsupported Format Discard Counter  */
+	uint32_t fmbm_offc;      /**< O/H Filter Frames Counter  */
+	uint32_t fmbm_ofwdc;     /**< - Rx Frames WRED Discard Counter  */
+	uint32_t fmbm_ofldec;    /**< O/H Frames List DMA Error Counter */
+	uint32_t fmbm_obdc;      /**< O/H Buffers Deallocate Counter */
+	uint32_t fmbm_oodc;      /**< O/H Out of Buffers Discard Counter */
+	uint32_t fmbm_opec;      /**< O/H Prepare to enqueue Counter */
+	uint32_t reserved5[0x15];/**< ( - 0x27F) */
+	uint32_t fmbm_opc;       /**< O/H Performance Counters  */
+	uint32_t fmbm_opcp;      /**< O/H Performance Count Parameters  */
+	uint32_t fmbm_occn;      /**< O/H Cycle Counter  */
+	uint32_t fmbm_otuc;      /**< O/H Tasks Utilization Counter  */
+	uint32_t fmbm_oduc;      /**< O/H DMA Utilization Counter */
+	uint32_t fmbm_ofuc;      /**< O/H FIFO Utilization Counter */
+	uint32_t reserved6[26];  /**< (0x298-0x2FF) */
+	uint32_t fmbm_odcfg[0x3];/**< O/H Debug (only 1 in P1023) */
+	uint32_t fmbm_ogpr;      /**< O/H General Purpose Register. */
+	uint32_t reserved7[0x3a];/**< (0x310 0x3FF) */
 } t_FmPortOhBmiRegs;
 
 typedef union
@@ -416,35 +360,35 @@ typedef union
 
 typedef struct
 {
-    volatile uint32_t   reserved1[2];   /**<   0xn024 - 0x02B */
-    volatile uint32_t   fmqm_pndn;      /**<   PortID n Dequeue NIA Register */
-    volatile uint32_t   fmqm_pndc;      /**<   PortID n Dequeue Config Register */
-    volatile uint32_t   fmqm_pndtfc;    /**<   PortID n Dequeue Total Frame Counter */
-    volatile uint32_t   fmqm_pndfdc;    /**<   PortID n Dequeue FQID from Default Counter */
-    volatile uint32_t   fmqm_pndcc;     /**<   PortID n Dequeue Confirm Counter */
+	uint32_t reserved1[2];   /**<   0xn024 - 0x02B */
+	uint32_t fmqm_pndn;      /**<   PortID n Dequeue NIA Register */
+	uint32_t fmqm_pndc;      /**<   PortID n Dequeue Config Register */
+	uint32_t fmqm_pndtfc;    /**<   PortID n Dequeue Total Frame Counter */
+	uint32_t fmqm_pndfdc;    /**<   PortID n Dequeue FQID from Default Counter */
+	uint32_t fmqm_pndcc;     /**<   PortID n Dequeue Confirm Counter */
 } t_FmPortNonRxQmiRegs;
 
 typedef struct
 {
-    volatile uint32_t   fmqm_pnc;       /**<   PortID n Configuration Register */
-    volatile uint32_t   fmqm_pns;       /**<   PortID n Status Register */
-    volatile uint32_t   fmqm_pnts;      /**<   PortID n Task Status Register */
-    volatile uint32_t   reserved0[4];   /**<   0xn00C - 0xn01B */
-    volatile uint32_t   fmqm_pnen;      /**<   PortID n Enqueue NIA Register */
-    volatile uint32_t   fmqm_pnetfc;    /**<   PortID n Enqueue Total Frame Counter */
-    t_FmPortNonRxQmiRegs nonRxQmiRegs;  /**<   Registers for Tx Hc & Op ports */
+	uint32_t fmqm_pnc;       /**<   PortID n Configuration Register */
+	uint32_t fmqm_pns;       /**<   PortID n Status Register */
+	uint32_t fmqm_pnts;      /**<   PortID n Task Status Register */
+	uint32_t reserved0[4];   /**<   0xn00C - 0xn01B */
+	uint32_t fmqm_pnen;      /**<   PortID n Enqueue NIA Register */
+	uint32_t fmqm_pnetfc;    /**<   PortID n Enqueue Total Frame Counter */
+	t_FmPortNonRxQmiRegs nonRxQmiRegs;  /**<   Registers for Tx Hc & Op ports */
 } t_FmPortQmiRegs;
 
 typedef struct
 {
-     struct
-    {
-        volatile uint32_t   softSeqAttach;  /**<   Soft Sequence Attachment */
-        volatile uint32_t   lcv;            /**<   Line-up Enable Confirmation Mask */
-    } hdrs[FM_PCD_PRS_NUM_OF_HDRS];
-    volatile uint32_t   reserved0[0xde];
-    volatile uint32_t   pcac;               /**<   Parse Internal Memory Configuration Access Control Register */
-    volatile uint32_t   pctpid;             /**<   Parse Internal Memory Configured TPID Register */
+	struct
+	{
+		uint32_t softSeqAttach;  /**<   Soft Sequence Attachment */
+		uint32_t lcv;            /**<   Line-up Enable Confirmation Mask */
+	} hdrs[FM_PCD_PRS_NUM_OF_HDRS];
+	uint32_t reserved0[0xde];
+	uint32_t pcac;               /**<   Parse Internal Memory Configuration Access Control Register */
+	uint32_t pctpid;             /**<   Parse Internal Memory Configured TPID Register */
 } t_FmPortPrsRegs;
 
 /**************************************************************************//*
@@ -452,35 +396,35 @@ typedef struct
 *//***************************************************************************/
 typedef _Packed struct
 {
-    volatile uint16_t       status;
-    volatile uint16_t       length;
-    volatile uint8_t        reserved0[0x6];
-    volatile uint8_t        reserved1[0x1];
-    volatile t_FmPhysAddr   buff;
+	uint16_t status;
+	uint16_t length;
+	uint8_t reserved0[0x6];
+	uint8_t reserved1[0x1];
+	t_FmPhysAddr   buff;
 } _PackedType t_FmImBd;
 
 typedef _Packed struct
 {
-    volatile uint16_t       gen;                /**< tbd */
-    volatile uint8_t        reserved0[0x1];
-    volatile t_FmPhysAddr   bdRingBase;         /**< tbd */
-    volatile uint16_t       bdRingSize;         /**< tbd */
-    volatile uint16_t       offsetIn;           /**< tbd */
-    volatile uint16_t       offsetOut;          /**< tbd */
-    volatile uint8_t        reserved1[0x12];    /**< 0x0e - 0x1f */
+	uint16_t gen;                /**< tbd */
+	uint8_t reserved0[0x1];
+	t_FmPhysAddr bdRingBase;         /**< tbd */
+	uint16_t bdRingSize;         /**< tbd */
+	uint16_t offsetIn;           /**< tbd */
+	uint16_t offsetOut;          /**< tbd */
+	uint8_t reserved1[0x12];    /**< 0x0e - 0x1f */
 } _PackedType t_FmPortImQd;
 
 typedef _Packed struct
 {
-    volatile uint32_t   mode;               /**< Mode register */
-    volatile uint32_t   rxQdPtr;            /**< tbd */
-    volatile uint32_t   txQdPtr;            /**< tbd */
-    volatile uint16_t   mrblr;              /**< tbd */
-    volatile uint16_t   rxQdBsyCnt;         /**< tbd */
-    volatile uint8_t    reserved0[0x10];    /**< 0x10 - 0x1f */
-    t_FmPortImQd        rxQd;
-    t_FmPortImQd        txQd;
-    volatile uint8_t    reserved1[0xa0];    /**< 0x60 - 0xff */
+	uint32_t mode;               /**< Mode register */
+	uint32_t rxQdPtr;            /**< tbd */
+	uint32_t txQdPtr;            /**< tbd */
+	uint16_t mrblr;              /**< tbd */
+	uint16_t rxQdBsyCnt;         /**< tbd */
+	uint8_t reserved0[0x10];    /**< 0x10 - 0x1f */
+	t_FmPortImQd rxQd;
+	t_FmPortImQd txQd;
+	uint8_t reserved1[0xa0];    /**< 0x60 - 0xff */
 } _PackedType t_FmPortImPram;
 
 #if defined(__MWERKS__) && !defined(__GNUC__)
@@ -495,11 +439,9 @@ typedef _Packed struct
 /**************************************************************************//**
  @Description       BMI defines
 *//***************************************************************************/
-#if (DPAA_VERSION >= 11)
 #define BMI_SP_ID_MASK                          0xff000000
 #define BMI_SP_ID_SHIFT                         24
 #define BMI_SP_EN                               0x01000000
-#endif /* (DPAA_VERSION >= 11) */
 
 #define BMI_PORT_CFG_EN                         0x80000000
 #define BMI_PORT_CFG_EN_MACSEC                  0x00800000
@@ -848,10 +790,7 @@ typedef struct {
     bool                                setNumOfTasks;
     bool                                setNumOfOpenDmas;
     bool                                setSizeOfFifo;
-#if (DPAA_VERSION >= 11)
     bool                                noScatherGather;
-#endif /* (DPAA_VERSION >= 11) */
-
 #ifdef FM_HEAVY_TRAFFIC_HANG_ERRATA_FMAN_A005669
     bool                                bcbWorkaround;
 #endif /* FM_HEAVY_TRAFFIC_HANG_ERRATA_FMAN_A005669 */
@@ -865,16 +804,6 @@ typedef struct t_FmPortRxPoolsParams
     uint16_t    largestBufSize;
 } t_FmPortRxPoolsParams;
 
-typedef struct t_FmPortDsarVars {
-    t_Handle                    *autoResOffsets;
-    t_FmPortDsarTablesSizes     *autoResMaxSizes;
-    uint32_t                    fmbm_tcfg;
-    uint32_t                    fmbm_tcmne;
-    uint32_t                    fmbm_rfne;
-    uint32_t                    fmbm_rfpne;
-    uint32_t                    fmbm_rcfg;
-    bool                        dsarEnabledParser;
-} t_FmPortDsarVars;
 typedef struct {
     struct fman_port            port;
     t_Handle                    h_Fm;
@@ -936,13 +865,10 @@ typedef struct {
     t_Handle                    h_CapwapReassemblyManip;
     t_Handle                    h_ReassemblyTree;
     uint64_t                    fmMuramPhysBaseAddr;
-#if (DPAA_VERSION >= 11)
     bool                        vspe;
     uint8_t                     dfltRelativeId;
     e_FmPortGprFuncType         gprFunc;
     t_FmPcdCtrlParamsPage       *p_ParamsPage;
-#endif /* (DPAA_VERSION >= 11) */
-    t_FmPortDsarVars            deepSleepVars;
     t_FmPortDriverParam         *p_FmPortDriverParam;
 } t_FmPort;
 
@@ -992,8 +918,5 @@ static __inline__ uint16_t GetNextBdId(t_FmPort *p_FmPort, uint16_t id)
     else
         return 0;
 }
-
-void FM_PORT_Dsar_DumpRegs(void);
-
 
 #endif /* __FM_PORT_H */

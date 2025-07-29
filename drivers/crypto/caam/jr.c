@@ -219,7 +219,7 @@ static int caam_jr_shutdown(struct device *dev)
 	return ret;
 }
 
-static int caam_jr_remove(struct platform_device *pdev)
+static void caam_jr_remove(struct platform_device *pdev)
 {
 	int ret;
 	struct device *jrdev;
@@ -231,11 +231,14 @@ static int caam_jr_remove(struct platform_device *pdev)
 	exit_misc_func(jrpriv, jrdev->parent);
 
 	/*
-	 * Return EBUSY if job ring already allocated.
+	 * If a job ring is still allocated there is trouble ahead. Once
+	 * caam_jr_remove() returned, jrpriv will be freed and the registers
+	 * will get unmapped. So any user of such a job ring will probably
+	 * crash.
 	 */
 	if (atomic_read(&jrpriv->tfm_count)) {
-		dev_err(jrdev, "Device is busy\n");
-		return -EBUSY;
+		dev_alert(jrdev, "Device is busy; consumers might start to crash\n");
+		return;
 	}
 
 	/* Unregister JR-based RNG & crypto algorithms */
@@ -252,13 +255,6 @@ static int caam_jr_remove(struct platform_device *pdev)
 		dev_err(jrdev, "Failed to shut down job ring\n");
 
 	jr_driver_probed--;
-
-	return ret;
-}
-
-static void caam_jr_platform_shutdown(struct platform_device *pdev)
-{
-	caam_jr_remove(pdev);
 }
 
 /* Main per-ring interrupt handler */
@@ -946,8 +942,8 @@ static struct platform_driver caam_jr_driver = {
 		.pm = pm_ptr(&caam_jr_pm_ops),
 	},
 	.probe       = caam_jr_probe,
-	.remove      = caam_jr_remove,
-	.shutdown    = caam_jr_platform_shutdown,
+	.remove_new  = caam_jr_remove,
+	.shutdown    = caam_jr_remove,
 };
 
 static int __init jr_driver_init(void)

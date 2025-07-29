@@ -103,6 +103,10 @@ enum audit_type {
 #define OP_PROF_LOAD "profile_load"
 #define OP_PROF_RM "profile_remove"
 
+#define OP_USERNS_CREATE "userns_create"
+
+#define OP_URING_OVERRIDE "uring_override"
+#define OP_URING_SQPOLL "uring_sqpoll"
 
 struct apparmor_audit_data {
 	int error;
@@ -152,6 +156,9 @@ struct apparmor_audit_data {
 			const char *data;
 			unsigned long flags;
 		} mnt;
+		struct {
+			struct aa_label *target;
+		} uring;
 	};
 
 	struct common_audit_data common;
@@ -193,7 +200,7 @@ static inline int complain_error(int error)
 }
 
 void aa_audit_rule_free(void *vrule);
-int aa_audit_rule_init(u32 field, u32 op, char *rulestr, void **vrule);
+int aa_audit_rule_init(u32 field, u32 op, char *rulestr, void **vrule, gfp_t gfp);
 int aa_audit_rule_known(struct audit_krule *rule);
 int aa_audit_rule_match(u32 sid, u32 field, u32 op, void *vrule);
 

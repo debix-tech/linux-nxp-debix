@@ -241,7 +241,7 @@ static int i2c_rpmsg_read(struct i2c_msg *msg, struct i2c_rpmsg_info *info,
 	return msg->len;
 }
 
-int i2c_rpmsg_write(struct i2c_msg *msg, struct i2c_rpmsg_info *info,
+static int i2c_rpmsg_write(struct i2c_msg *msg, struct i2c_rpmsg_info *info,
 						int bus_id, bool is_last)
 {
 	int i, ret;
@@ -395,13 +395,11 @@ static int i2c_rpbus_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int i2c_rpbus_remove(struct platform_device *pdev)
+static void i2c_rpbus_remove(struct platform_device *pdev)
 {
 	struct imx_rpmsg_i2c_data *rdata = platform_get_drvdata(pdev);
 
 	i2c_del_adapter(&rdata->adapter);
-
-	return 0;
 }
 
 static struct i2c_rpmsg_devtype_data i2c_rpmsg_devtype_data = {

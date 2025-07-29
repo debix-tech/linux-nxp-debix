@@ -134,7 +134,7 @@ static const struct phy_ops ds125df111_ops = {
 };
 
 static struct phy *ds125df111_xlate(struct device *dev,
-				    struct of_phandle_args *args)
+				    const struct of_phandle_args *args)
 {
 	struct ds125df111_priv *priv = dev_get_drvdata(dev);
 	int idx = args->args[0];

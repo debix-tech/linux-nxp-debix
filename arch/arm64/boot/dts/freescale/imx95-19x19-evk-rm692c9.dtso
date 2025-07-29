@@ -6,8 +6,8 @@
 /dts-v1/;
 /plugin/;
 
-#include <dt-bindings/clock/fsl,imx95-clock.h>
 #include <dt-bindings/gpio/gpio.h>
+#include "imx95-clock.h"
 
 &display_pixel_link {
 	status = "okay";
@@ -29,7 +29,7 @@
 	panel@0 {
 		compatible = "raydium,rm692c9";
 		reg = <0>;
-		reset-gpios = <&adp5585gpio 4 GPIO_ACTIVE_LOW>;
+		reset-gpios = <&adp5585 4 GPIO_ACTIVE_LOW>;
 		dsi-lanes = <4>;
 		v3p3-supply = <&reg_3p3v>;
 		v1p8-supply = <&reg_1p8v>;
@@ -61,11 +61,11 @@
 	clock-frequency = <400000>;
 
 	focaltech_touch: touchscreen@38 {
-		compatible = "focaltech,fts";
+		compatible = "focaltech,ft3518u";
 		reg = <0x38>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_mipi_dsi_csi>;
-		reset-gpio = <&adp5585gpio 5 GPIO_ACTIVE_LOW>;
+		reset-gpio = <&adp5585 6 GPIO_ACTIVE_LOW>;
 		irq-gpio = <&gpio3 27 GPIO_ACTIVE_HIGH>;
 		touchscreen-size-x = <1080>;
 		touchscreen-size-y = <2340>;

@@ -29,6 +29,11 @@ EXPORT_SYMBOL_GPL(enetc_port_mac_wr);
 void enetc_change_preemptible_tcs(struct enetc_ndev_priv *priv,
 				  u8 preemptible_tcs)
 {
+	struct enetc_si *si = priv->si;
+
+	if (!(si->hw_features & ENETC_SI_F_QBU))
+		return;
+
 	priv->preemptible_tcs = preemptible_tcs;
 	enetc_mm_commit_preemptible_tcs(priv);
 }
@@ -2053,8 +2058,8 @@ static int enetc_clean_rx_ring_xdp(struct enetc_bdr *rx_ring,
 		case XDP_TX:
 			tx_ring = priv->xdp_tx_ring[rx_ring->index];
 			enetc_tx_queue_lock(tx_ring, cpu);
-
-			if (unlikely(enetc_xdp_num_bd(rx_ring, orig_i, i) >
+			if (unlikely(test_bit(ENETC_TX_DOWN, &priv->flags) ||
+				     enetc_xdp_num_bd(rx_ring, orig_i, i) >
 				     max_txbd_num)) {
 				enetc_xdp_drop(rx_ring, orig_i, i);
 				tx_ring->stats.xdp_tx_drops++;
@@ -2116,7 +2121,7 @@ out:
 	rx_ring->stats.bytes += rx_byte_cnt;
 
 	if (xdp_redirect_frm_cnt)
-		xdp_do_flush_map();
+		xdp_do_flush();
 
 	if (xdp_tx_frm_cnt) {
 		enetc_tx_queue_lock(tx_ring, cpu);
@@ -2217,18 +2222,6 @@ void enetc_get_si_caps(struct enetc_si *si)
 
 	if (val & ENETC_SIPCAPR0_LSO)
 		si->hw_features |= ENETC_SI_F_LSO;
-
-	if (val & ENETC_SIPCAPR0_QBV)
-		si->hw_features |= ENETC_SI_F_QBV;
-
-	if (val & ENETC_SIPCAPR0_QBU) {
-		si->hw_features |= ENETC_SI_F_QBU;
-		si->pmac_offset = is_enetc_rev1(si) ? ENETC_PMAC_OFFSET :
-						      ENETC4_PMAC_OFFSET;
-	}
-
-	if (val & ENETC_SIPCAPR0_PSFP)
-		si->hw_features |= ENETC_SI_F_PSFP;
 }
 EXPORT_SYMBOL_GPL(enetc_get_si_caps);
 
@@ -2528,12 +2521,13 @@ static int enetc_setup_default_rss_table(struct enetc_si *si, int num_groups)
 
 static int enetc4_get_rss_table(struct enetc_si *si, u32 *table, int count)
 {
-	return ntmp_rsst_query_or_update_entry(&si->cbdr, table, count, true);
+	return ntmp_rsst_query_or_update_entry(&si->ntmp.cbdrs, table, count, true);
 }
 
 static int enetc4_set_rss_table(struct enetc_si *si, const u32 *table, int count)
 {
-	return ntmp_rsst_query_or_update_entry(&si->cbdr, (u32 *)table, count, false);
+	return ntmp_rsst_query_or_update_entry(&si->ntmp.cbdrs,
+					       (u32 *)table, count, false);
 }
 
 static void enetc4_set_lso_flags_mask(struct enetc_hw *hw)
@@ -2823,7 +2817,6 @@ static void enetc_disable_tx_bdrs(struct enetc_ndev_priv *priv)
 
 	for (i = 0; i < priv->num_tx_rings; i++)
 		enetc_disable_txbdr(hw, priv->tx_ring[i]);
-
 }
 
 static void enetc_wait_txbdr(struct enetc_hw *hw, struct enetc_bdr *tx_ring)
@@ -2877,12 +2870,11 @@ static int enetc_setup_irqs(struct enetc_ndev_priv *priv)
 
 		snprintf(v->name, sizeof(v->name), "%s-rxtx%d",
 			 priv->ndev->name, i);
-		err = request_irq(irq, enetc_msix, 0, v->name, v);
+		err = request_irq(irq, enetc_msix, IRQF_NO_AUTOEN, v->name, v);
 		if (err) {
 			dev_err(priv->dev, "request_irq() failed!\n");
 			goto irq_err;
 		}
-		disable_irq(irq);
 
 		v->tbier_base = hw->reg + ENETC_BDR(TX, 0, ENETC_TBIER);
 		v->rbier = hw->reg + ENETC_BDR(RX, i, ENETC_RBIER);
@@ -2974,8 +2966,8 @@ static void enetc_clear_interrupts(struct enetc_ndev_priv *priv)
 static int enetc_phylink_connect(struct net_device *ndev)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	struct ethtool_keee *edata = &priv->eee;
 	struct enetc_si *si = priv->si;
-	struct ethtool_eee edata;
 	int err;
 
 	if (!priv->phylink) {
@@ -3001,9 +2993,8 @@ static int enetc_phylink_connect(struct net_device *ndev)
 		return err;
 	}
 
-	/* disable EEE autoneg, until ENETC driver supports it */
-	memset(&edata, 0, sizeof(struct ethtool_eee));
-	phylink_ethtool_set_eee(priv->phylink, &edata);
+	/* disable EEE autoneg when boot, can enable it by ethtool */
+	phylink_ethtool_set_eee(priv->phylink, edata);
 
 	phylink_start(priv->phylink);
 
@@ -3040,8 +3031,6 @@ void enetc_start(struct net_device *ndev)
 
 	enetc_setup_interrupts(priv);
 
-	enetc_enable_tx_bdrs(priv);
-
 	for (i = 0; i < priv->bdr_int_num; i++) {
 		int irq = pci_irq_vector(priv->si->pdev,
 					 ENETC_BDR_INT_BASE_IDX + i);
@@ -3050,6 +3039,8 @@ void enetc_start(struct net_device *ndev)
 		enable_irq(irq);
 	}
 
+	enetc_enable_tx_bdrs(priv);
+
 	enetc_enable_rx_bdrs(priv);
 
 	netif_tx_start_all_queues(ndev);
@@ -3057,6 +3048,20 @@ void enetc_start(struct net_device *ndev)
 	clear_bit(ENETC_TX_DOWN, &priv->flags);
 }
 EXPORT_SYMBOL_GPL(enetc_start);
+
+static void enetc_set_eee(struct net_device *ndev)
+{
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	struct ethtool_keee *eee = &priv->eee;
+
+	if (is_enetc_rev1(priv->si) || !enetc_si_is_pf(priv->si))
+		return;
+
+	if (eee->eee_enabled && eee->tx_lpi_enabled && eee->tx_lpi_timer)
+		enetc_eee_mode_set(ndev, true);
+	else
+		enetc_eee_mode_set(ndev, false);
+}
 
 int enetc_open(struct net_device *ndev)
 {
@@ -3099,6 +3104,8 @@ int enetc_open(struct net_device *ndev)
 	enetc_setup_bdrs(priv, extended);
 	enetc_start(ndev);
 
+	enetc_set_eee(ndev);
+
 	return 0;
 
 err_alloc_rx:
@@ -3136,6 +3143,10 @@ void enetc_stop(struct net_device *ndev)
 
 	enetc_disable_rx_bdrs(priv);
 
+	enetc_wait_bdrs(priv);
+
+	enetc_disable_tx_bdrs(priv);
+
 	for (i = 0; i < priv->bdr_int_num; i++) {
 		int irq = pci_irq_vector(priv->si->pdev,
 					 ENETC_BDR_INT_BASE_IDX + i);
@@ -3144,10 +3155,6 @@ void enetc_stop(struct net_device *ndev)
 		napi_synchronize(&priv->int_vector[i]->napi);
 		napi_disable(&priv->int_vector[i]->napi);
 	}
-
-	enetc_wait_bdrs(priv);
-
-	enetc_disable_tx_bdrs(priv);
 
 	enetc_clear_interrupts(priv);
 }
@@ -3181,7 +3188,6 @@ int enetc_close(struct net_device *ndev)
 	enetc_assign_tx_resources(priv, NULL);
 
 	enetc_free_irqs(priv);
-
 	clk_disable_unprepare(priv->ref_clk);
 
 	return 0;
@@ -3339,6 +3345,8 @@ int enetc_resume(struct net_device *ndev, bool wol)
 	enetc_setup_bdrs(priv, extended);
 	enetc_start(priv->ndev);
 
+	enetc_set_eee(ndev);
+
 	return 0;
 
 out_free_tx_res:
@@ -3476,7 +3484,6 @@ static int enetc_reconfigure_xdp_cb(struct enetc_ndev_priv *priv, void *ctx)
 	for (i = 0; i < priv->num_rx_rings; i++) {
 		struct enetc_bdr *rx_ring = priv->rx_ring[i];
 
-		rx_ring->xdp.xdp_tx_in_flight = 0;
 		rx_ring->xdp.prog = prog;
 
 		if (prog)
@@ -3724,8 +3731,6 @@ static int enetc_bdr_init(struct enetc_ndev_priv *priv, int i, int v_tx_rings)
 	if (!v)
 		return -ENOMEM;
 
-	priv->int_vector[i] = v;
-
 	bdr = &v->rx_ring;
 	bdr->index = i;
 	bdr->ndev = priv->ndev;
@@ -3768,7 +3773,7 @@ static int enetc_bdr_init(struct enetc_ndev_priv *priv, int i, int v_tx_rings)
 		priv->tx_ring[idx] = bdr;
 	}
 
-	no_free_ptr(v);
+	priv->int_vector[i] = no_free_ptr(v);
 	return 0;
 }
 
@@ -3967,4 +3972,5 @@ void enetc_pci_remove(struct pci_dev *pdev)
 }
 EXPORT_SYMBOL_GPL(enetc_pci_remove);
 
+MODULE_DESCRIPTION("NXP ENETC Ethernet driver");
 MODULE_LICENSE("Dual BSD/GPL");

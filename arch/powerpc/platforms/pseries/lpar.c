@@ -169,7 +169,7 @@ struct vcpu_dispatch_data {
  */
 #define NR_CPUS_H	NR_CPUS
 
-DEFINE_RWLOCK(dtl_access_lock);
+DECLARE_RWSEM(dtl_access_lock);
 static DEFINE_PER_CPU(struct vcpu_dispatch_data, vcpu_disp_data);
 static DEFINE_PER_CPU(u64, dtl_entry_ridx);
 static DEFINE_PER_CPU(struct dtl_worker, dtl_workers);
@@ -192,9 +192,9 @@ static void free_dtl_buffers(unsigned long *time_limit)
 			continue;
 		kmem_cache_free(dtl_cache, pp->dispatch_log);
 		pp->dtl_ridx = 0;
-		pp->dispatch_log = 0;
-		pp->dispatch_log_end = 0;
-		pp->dtl_curr = 0;
+		pp->dispatch_log = NULL;
+		pp->dispatch_log_end = NULL;
+		pp->dtl_curr = NULL;
 
 		if (time_limit && time_after(jiffies, *time_limit)) {
 			cond_resched();
@@ -223,7 +223,7 @@ static void destroy_cpu_associativity(void)
 {
 	kfree(vcpu_associativity);
 	kfree(pcpu_associativity);
-	vcpu_associativity = pcpu_associativity = 0;
+	vcpu_associativity = pcpu_associativity = NULL;
 }
 
 static __be32 *__get_cpu_associativity(int cpu, __be32 *cpu_assoc, int flag)
@@ -463,7 +463,7 @@ static int dtl_worker_enable(unsigned long *time_limit)
 {
 	int rc = 0, state;
 
-	if (!write_trylock(&dtl_access_lock)) {
+	if (!down_write_trylock(&dtl_access_lock)) {
 		rc = -EBUSY;
 		goto out;
 	}
@@ -479,7 +479,7 @@ static int dtl_worker_enable(unsigned long *time_limit)
 		pr_err("vcpudispatch_stats: unable to setup workqueue for DTL processing\n");
 		free_dtl_buffers(time_limit);
 		reset_global_dtl_mask();
-		write_unlock(&dtl_access_lock);
+		up_write(&dtl_access_lock);
 		rc = -EINVAL;
 		goto out;
 	}
@@ -494,7 +494,7 @@ static void dtl_worker_disable(unsigned long *time_limit)
 	cpuhp_remove_state(dtl_worker_state);
 	free_dtl_buffers(time_limit);
 	reset_global_dtl_mask();
-	write_unlock(&dtl_access_lock);
+	up_write(&dtl_access_lock);
 }
 
 static ssize_t vcpudispatch_stats_write(struct file *file, const char __user *p,

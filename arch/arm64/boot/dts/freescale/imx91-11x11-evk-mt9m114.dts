@@ -1,4 +1,5 @@
 #include "imx91-11x11-evk.dts"
+#include <dt-bindings/media/video-interfaces.h>
 
 / {
 	reg_vrpi_3v3: regulator-vrpi-3v3 {
@@ -116,31 +117,39 @@
 	};
 };
 
-&cameradev {
-	parallel_csi;
-	status = "okay";
-};
-
-&isi_0 {
-	interface = <6 0 2>;
+&isi{
 	status = "okay";
 
-	cap_device {
-		status = "okay";
+	port {
+		isi_in: endpoint {
+			remote-endpoint = <&parallel_csi_out>;
+		};
 	};
 };
 
 &parallel_csi {
 	status = "okay";
 
-	port {
-		parallel_csi_ep: endpoint {
-			remote-endpoint = <&mt9m114_ep>;
+	ports {
+		port@0 {
+			reg = <0>;
+
+			parallel_csi_in: endpoint {
+				remote-endpoint = <&mt9m114_ep>;
+			};
+		};
+
+		port@1 {
+			reg = <1>;
+
+			parallel_csi_out: endpoint {
+				remote-endpoint = <&isi_in>;
+			};
 		};
 	};
 };
 
-&adp5585gpio {
+&adp5585 {
 	/* EXP_SEL RPi */
 	exp-sel-hog {
 		/delete-property/ output-low;
@@ -149,13 +158,10 @@
 };
 
 &lpi2c8 {
-	#address-cells = <1>;
-	#size-cells = <0>;
 	clock-frequency = <400000>;
-	pinctrl-names = "default", "sleep";
+	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpi2c8>;
-	pinctrl-1 = <&pinctrl_lpi2c8>;
-	pinctrl-assert-gpios = <&adp5585gpio 4 GPIO_ACTIVE_HIGH>;
+	pinctrl-assert-gpios = <&adp5585 4 GPIO_ACTIVE_HIGH>;
 	status = "okay";
 
 	pca9538: gpio@70 {
@@ -184,8 +190,8 @@
 
 		port {
 			mt9m114_ep: endpoint {
-				remote-endpoint = <&parallel_csi_ep>;
-				bus-type = <5>; /* V4L2_FWNODE_BUS_TYPE_PARALLEL */
+				remote-endpoint = <&parallel_csi_in>;
+				bus-type = <MEDIA_BUS_TYPE_PARALLEL>;
 				bus-width = <8>;
 				vsync-active = <1>;
 				hsync-active = <1>;

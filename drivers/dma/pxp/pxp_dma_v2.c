@@ -359,8 +359,6 @@ static void pxp_set_ctrl(struct pxps *pxp)
 	__raw_writel(ctrl, pxp->base + HW_PXP_OUT_CTRL);
 
 	ctrl = 0;
-	if (proc_data->scaling)
-		;
 	if (proc_data->vflip)
 		ctrl |= BM_PXP_CTRL_VFLIP;
 	if (proc_data->hflip)
@@ -1759,7 +1757,7 @@ exit:
 	return err;
 }
 
-static int pxp_remove(struct platform_device *pdev)
+static void pxp_remove(struct platform_device *pdev)
 {
 	struct pxps *pxp = platform_get_drvdata(pdev);
 
@@ -1774,8 +1772,6 @@ static int pxp_remove(struct platform_device *pdev)
 	device_remove_file(&pdev->dev, &dev_attr_clk_off_timeout);
 	device_remove_file(&pdev->dev, &dev_attr_block_size);
 	dma_async_device_unregister(&(pxp->pxp_dma.dma));
-
-	return 0;
 }
 
 #ifdef CONFIG_PM_SLEEP

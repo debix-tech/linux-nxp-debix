@@ -39,7 +39,7 @@ struct cdn_dp_device {
 	struct drm_device *drm_dev;
 	struct rockchip_encoder encoder;
 	struct work_struct event_work;
-	struct edid *edid;
+	const struct drm_edid *drm_edid;
 
 	struct mutex lock;
 	bool connected;

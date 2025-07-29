@@ -26,7 +26,7 @@
 #include <video/dpu.h>
 #include <video/imx8-prefetch.h>
 #include "dpu-plane.h"
-#include "../imx-drm.h"
+#include "imx-drm.h"
 
 #define FRAC_16_16(mult, div)    (((mult) << 16) / (div))
 

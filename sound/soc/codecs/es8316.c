@@ -27,7 +27,6 @@
  * MCLK/LRCK ratios, but we also add ratio 400, which is commonly used on
  * Intel Cherry Trail platforms (19.2MHz MCLK, 48kHz LRCK).
  */
-#define NR_SUPPORTED_MCLK_LRCK_RATIOS ARRAY_SIZE(supported_mclk_lrck_ratios)
 static const unsigned int supported_mclk_lrck_ratios[] = {
 	256, 384, 400, 500, 512, 768, 1024
 };
@@ -40,7 +39,7 @@ struct es8316_priv {
 	struct snd_soc_jack *jack;
 	int irq;
 	unsigned int sysclk;
-	unsigned int allowed_rates[NR_SUPPORTED_MCLK_LRCK_RATIOS];
+	unsigned int allowed_rates[ARRAY_SIZE(supported_mclk_lrck_ratios)];
 	struct snd_pcm_hw_constraint_list sysclk_constraints;
 	bool jd_inverted;
 };
@@ -382,7 +381,7 @@ static int es8316_set_dai_sysclk(struct snd_soc_dai *codec_dai,
 	/* Limit supported sample rates to ones that can be autodetected
 	 * by the codec running in slave mode.
 	 */
-	for (i = 0; i < NR_SUPPORTED_MCLK_LRCK_RATIOS; i++) {
+	for (i = 0; i < ARRAY_SIZE(supported_mclk_lrck_ratios); i++) {
 		const unsigned int ratio = supported_mclk_lrck_ratios[i];
 
 		if (freq % ratio == 0)
@@ -470,19 +469,42 @@ static int es8316_pcm_hw_params(struct snd_pcm_substream *substream,
 	u8 bclk_divider;
 	u16 lrck_divider;
 	int i;
+	unsigned int clk = es8316->sysclk / 2;
+	bool clk_valid = false;
 
-	/* Validate supported sample rates that are autodetected from MCLK */
-	for (i = 0; i < NR_SUPPORTED_MCLK_LRCK_RATIOS; i++) {
-		const unsigned int ratio = supported_mclk_lrck_ratios[i];
+	/* We will start with halved sysclk and see if we can use it
+	 * for proper clocking. This is to minimise the risk of running
+	 * the CODEC with a too high frequency. We have an SKU where
+	 * the sysclk frequency is 48Mhz and this causes the sound to be
+	 * sped up. If we can run with a halved sysclk, we will use it,
+	 * if we can't use it, then full sysclk will be used.
+	 */
+	do {
+		/* Validate supported sample rates that are autodetected from MCLK */
+		for (i = 0; i < ARRAY_SIZE(supported_mclk_lrck_ratios); i++) {
+			const unsigned int ratio = supported_mclk_lrck_ratios[i];
 
-		if (es8316->sysclk % ratio != 0)
-			continue;
-		if (es8316->sysclk / ratio == params_rate(params))
-			break;
+			if (clk % ratio != 0)
+				continue;
+			if (clk / ratio == params_rate(params))
+				break;
+		}
+		if (i == ARRAY_SIZE(supported_mclk_lrck_ratios)) {
+			if (clk == es8316->sysclk)
+				return -EINVAL;
+			clk = es8316->sysclk;
+		} else {
+			clk_valid = true;
+		}
+	} while (!clk_valid);
+
+	if (clk != es8316->sysclk) {
+		snd_soc_component_update_bits(component, ES8316_CLKMGR_CLKSW,
+					      ES8316_CLKMGR_CLKSW_MCLK_DIV,
+					      ES8316_CLKMGR_CLKSW_MCLK_DIV);
 	}
-	if (i == NR_SUPPORTED_MCLK_LRCK_RATIOS)
-		return -EINVAL;
-	lrck_divider = es8316->sysclk / params_rate(params);
+
+	lrck_divider = clk / params_rate(params);
 	bclk_divider = lrck_divider / 4;
 	switch (params_format(params)) {
 	case SNDRV_PCM_FORMAT_S16_LE:
@@ -526,7 +548,7 @@ static int es8316_mute(struct snd_soc_dai *dai, int mute, int direction)
 }
 
 #define ES8316_FORMATS (SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_S20_3LE | \
-			SNDRV_PCM_FMTBIT_S24_LE)
+			SNDRV_PCM_FMTBIT_S24_LE | SNDRV_PCM_FMTBIT_S32_LE)
 
 static const struct snd_soc_dai_ops es8316_ops = {
 	.startup = es8316_pcm_startup,
@@ -722,52 +744,7 @@ static int es8316_set_jack(struct snd_soc_component *component,
 
 	return 0;
 }
-static ssize_t es8316_reg_show(struct device *dev, struct device_attribute *attr, char *buf)
-{
-        int i = 0;
-	u8 reg = 0;
-	struct es8316_priv *es8316 = dev_get_drvdata(dev);
 
-	printk("================ \n\n\n");
-	printk("================ \n\n\n");
-	printk("================ \n\n\n");
-	printk("================ \n\n\n");
-	printk("================ \n\n\n");
-	printk("================ \n\n\n");
-	for (i = 0 ; i < 0x53; i++){
-		reg = snd_soc_component_read(es8316->component, i);
-		printk("%02x: %02x \n", i , reg);
-	}
-
-
-        return scnprintf(buf, PAGE_SIZE, "es8316 reg \n");
-
-        //return strlen(buf);
-}
-static ssize_t
-es8316_reg_store(struct device *d, struct device_attribute *attr,
-                         const char *buf, size_t count)
-{
-        //struct il_priv *il = dev_get_drvdata(d);
-	struct es8316_priv *es8316 = dev_get_drvdata(d);
-        //unsigned long val;
-        //int ret;
-	int reg,value;
-	sscanf(buf, "%x,%x", &reg,&value);
-	printk("set ret:0x%x value:0x%x\n", reg, value);
-	snd_soc_component_write(es8316->component, reg, value);
-
-        //ret = kstrtoul(buf, 0, &val);
-        //if (ret)
-        //        IL_INFO("%s is not in hex or decimal form.\n", buf);
-        //else
-        //        il->debug_level = val;
-
-        return strnlen(buf, count);
-}
-
-static DEVICE_ATTR(es8316_reg, 0644, es8316_reg_show,
-                   es8316_reg_store);
 static int es8316_probe(struct snd_soc_component *component)
 {
 	struct es8316_priv *es8316 = snd_soc_component_get_drvdata(component);
@@ -775,7 +752,6 @@ static int es8316_probe(struct snd_soc_component *component)
 
 	es8316->component = component;
 
-	printk("es8316 %s 001 attr\n", __func__);
 	es8316->mclk = devm_clk_get_optional(component->dev, "mclk");
 	if (IS_ERR(es8316->mclk)) {
 		dev_err(component->dev, "unable to get mclk\n");
@@ -808,17 +784,6 @@ static int es8316_probe(struct snd_soc_component *component)
 	 * and quality for Intel CHT platforms.
 	 */
 	snd_soc_component_write(component, ES8316_CLKMGR_ADCOSR, 0x32);
-//add attr
-	{
-	int err ;
-
-	printk("es8316 %s 003 attr\n", __func__);
-        err = device_create_file(component->dev, &dev_attr_es8316_reg);
-        if (err){
-                printk("%s create attr es8316_reg err!!!\n",__func__);
-                //goto exit;
-        }
-	}
 
 	return 0;
 }
@@ -922,7 +887,7 @@ static int es8316_i2c_probe(struct i2c_client *i2c_client)
 }
 
 static const struct i2c_device_id es8316_i2c_id[] = {
-	{"es8316", 0 },
+	{"es8316" },
 	{}
 };
 MODULE_DEVICE_TABLE(i2c, es8316_i2c_id);

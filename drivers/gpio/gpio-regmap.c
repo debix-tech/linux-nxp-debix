@@ -134,7 +134,7 @@ static int gpio_regmap_get_direction(struct gpio_chip *chip,
 		base = gpio_regmap_addr(gpio->reg_dir_in_base);
 		invert = 1;
 	} else {
-		return -EOPNOTSUPP;
+		return -ENOTSUPP;
 	}
 
 	ret = gpio->reg_mask_xlate(gpio, base, offset, &reg, &mask);
@@ -174,7 +174,7 @@ static int gpio_regmap_set_direction(struct gpio_chip *chip,
 		base = gpio_regmap_addr(gpio->reg_dir_in_base);
 		invert = 1;
 	} else {
-		return -EOPNOTSUPP;
+		return -ENOTSUPP;
 	}
 
 	ret = gpio->reg_mask_xlate(gpio, base, offset, &reg, &mask);

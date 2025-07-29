@@ -1,12 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (C) 2022 NXP
+ * Copyright (C) 2021 sigma star gmbh
  */
 
-#ifndef __DCP_TRUSTED_KEY_H__
-#define __DCP_TRUSTED_KEY_H__
+#ifndef TRUSTED_DCP_H
+#define TRUSTED_DCP_H
 
-
-extern struct trusted_key_ops trusted_key_dcp_ops;
+extern struct trusted_key_ops dcp_trusted_key_ops;
 
 #endif

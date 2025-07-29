@@ -51,14 +51,10 @@
 #include <linux/of_platform.h>
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
+#include <linux/platform_device.h>
 #include <linux/clk.h>
 #include <asm/uaccess.h>
 #include <asm/errno.h>
-#ifndef CONFIG_FMAN_ARM
-#include <sysdev/fsl_soc.h>
-#include <linux/fsl/guts.h>
-#include <linux/fsl/svr.h>
-#endif
 #include <linux/stat.h>	   /* For file access mask */
 #include <linux/skbuff.h>
 #include <linux/proc_fs.h>
@@ -73,6 +69,7 @@
 #include "fm_ioctls.h"
 
 #include "lnxwrp_fm.h"
+#include "lnxwrp_fm_port.h"
 #include "lnxwrp_resources.h"
 #include "lnxwrp_sysfs_fm.h"
 #include "lnxwrp_sysfs_fm_port.h"
@@ -80,10 +77,6 @@
 #include "fm_common.h"
 #include "../../sdk_fman/Peripherals/FM/fm.h"
 #define __ERR_MODULE__  MODULE_FM
-
-extern struct device_node *GetFmPortAdvArgsDevTreeNode (struct device_node *fm_node,
-                                                         e_FmPortType       portType,
-                                                         uint8_t            portId);
 
 #define PROC_PRINT(args...) offset += sprintf(buf+offset,args)
 
@@ -362,20 +355,12 @@ typedef _Packed struct {
     t_Plr       *p_Plr;
     t_Ppids     *p_Ppids;
     int         i,j;
-    uint32_t    fmRev;
 
     static const uint8_t     phys1GRxPortId[] = {0x8,0x9,0xa,0xb,0xc,0xd,0xe,0xf};
     static const uint8_t     phys10GRxPortId[] = {0x10,0x11};
-#if (DPAA_VERSION >= 11)
     static const uint8_t     physOhPortId[] = {/* 0x1, */0x2,0x3,0x4,0x5,0x6,0x7};
-#else
-    static const uint8_t     physOhPortId[] = {0x1,0x2,0x3,0x4,0x5,0x6,0x7};
-#endif
     static const uint8_t     phys1GTxPortId[] = {0x28,0x29,0x2a,0x2b,0x2c,0x2d,0x2e,0x2f};
     static const uint8_t     phys10GTxPortId[] = {0x30,0x31};
-
-    fmRev = (uint32_t)(*((volatile uint32_t *)UINT_TO_PTR(p_LnxWrpFmDev->fmBaseAddr+FM_FPM_IP_REV_1_OFFSET)));
-    fmRev &= 0xffff;
 
     p_Plr = (t_Plr *)UINT_TO_PTR(p_LnxWrpFmDev->fmBaseAddr+FM_DMA_PLR_OFFSET);
 #ifdef MODULE
@@ -676,16 +661,6 @@ static t_LnxWrpFmDev * ReadFmDevTreeNode (struct platform_device *of_dev)
             p_LnxWrpFmDev->fmMuramBaseAddr = 0;
             p_LnxWrpFmDev->fmMuramPhysBaseAddr = res.start;
             p_LnxWrpFmDev->fmMuramMemSize = res.end + 1 - res.start;
-
-#ifndef CONFIG_FMAN_ARM
-            {
-               uint32_t svr;
-                svr = mfspr(SPRN_SVR);
-
-                if ((svr & ~SVR_VER_IGNORE_MASK) >= SVR_B4860_REV2_VALUE)
-                    p_LnxWrpFmDev->fmMuramMemSize = 0x80000;
-            }
-#endif
         }
     }
 
@@ -714,7 +689,6 @@ static t_LnxWrpFmDev * ReadFmDevTreeNode (struct platform_device *of_dev)
     }
 #endif
 
-#if (DPAA_VERSION >= 11)
     /* Get the VSP base address */
     for_each_child_of_node(fm_node, dev_node) {
         if (of_device_is_compatible(dev_node, "fsl,fman-vsps")) {
@@ -729,7 +703,6 @@ static t_LnxWrpFmDev * ReadFmDevTreeNode (struct platform_device *of_dev)
             p_LnxWrpFmDev->fmVspMemSize = res.end + 1 - res.start;
         }
     }
-#endif
 
     /* Get all PCD nodes */
     p_LnxWrpFmDev->prsActive = HasFmPcdOfNode(fm_node, ids, "parser", "fsl,fman-parser");
@@ -811,9 +784,9 @@ static t_Error CheckNConfigFmAdvArgs (t_LnxWrpFmDev *p_LnxWrpFmDev)
     str_prop = (char *)of_get_property(dev_node, "dma-aid-mode", &lenp);
     if (str_prop) {
         if (strcmp(str_prop, "port") == 0)
-            err = FM_ConfigDmaAidMode(p_LnxWrpFmDev->h_Dev, e_FM_DMA_AID_OUT_PORT_ID);
+            err = FM_ConfigDmaAidMode(p_LnxWrpFmDev->h_Dev, E_FMAN_DMA_AID_OUT_PORT_ID);
         else if (strcmp(str_prop, "tnum") == 0)
-            err = FM_ConfigDmaAidMode(p_LnxWrpFmDev->h_Dev, e_FM_DMA_AID_OUT_TNUM);
+            err = FM_ConfigDmaAidMode(p_LnxWrpFmDev->h_Dev, E_FMAN_DMA_AID_OUT_TNUM);
 
         if (err != E_OK)
             RETURN_ERROR(MINOR, err, NO_MSG);
@@ -947,7 +920,6 @@ static t_Error ConfigureFmDev(t_LnxWrpFmDev  *p_LnxWrpFmDev)
     }
 #endif
 
-#if (DPAA_VERSION >= 11)
     if (p_LnxWrpFmDev->fmVspPhysBaseAddr) {
         dev_res = __devm_request_region(p_LnxWrpFmDev->dev, p_LnxWrpFmDev->res, p_LnxWrpFmDev->fmVspPhysBaseAddr, p_LnxWrpFmDev->fmVspMemSize, "fman-vsp");
         if (unlikely(dev_res == NULL))
@@ -957,7 +929,6 @@ static t_Error ConfigureFmDev(t_LnxWrpFmDev  *p_LnxWrpFmDev)
         if (unlikely(p_LnxWrpFmDev->fmVspBaseAddr == 0))
 	    RETURN_ERROR(MAJOR, E_INVALID_STATE, ("devm_ioremap() failed"));
     }
-#endif
 
     p_LnxWrpFmDev->fmDevSettings.param.baseAddr     = p_LnxWrpFmDev->fmBaseAddr;
     p_LnxWrpFmDev->fmDevSettings.param.fmId         = p_LnxWrpFmDev->id;
@@ -969,95 +940,6 @@ static t_Error ConfigureFmDev(t_LnxWrpFmDev  *p_LnxWrpFmDev)
 
     return FillRestFmInfo(p_LnxWrpFmDev);
 }
-
-#ifndef CONFIG_FMAN_ARM
-/*
- * Table for matching compatible strings, for device tree
- * guts node, for QorIQ SOCs.
- * "fsl,qoriq-device-config-2.0" corresponds to T4 & B4
- * SOCs. For the older SOCs "fsl,qoriq-device-config-1.0"
- * string would be used.
-*/
-static const struct of_device_id guts_device_ids[] = {
-        { .compatible = "fsl,qoriq-device-config-1.0", },
-        { .compatible = "fsl,qoriq-device-config-2.0", },
-        {}
-};
-
-static unsigned int get_rcwsr(int regnum)
-{
-	struct ccsr_guts __iomem *guts_regs = NULL;
-	struct device_node *guts_node;
-
-	guts_node = of_find_matching_node(NULL, guts_device_ids);
-	if (!guts_node) {
-		pr_err("could not find GUTS node\n");
-		return 0;
-	}
-	guts_regs = of_iomap(guts_node, 0);
-	of_node_put(guts_node);
-	if (!guts_regs) {
-		pr_err("ioremap of GUTS node failed\n");
-		return 0;
-	}
-
-	return ioread32be(&guts_regs->rcwsr[regnum]);
-}
-
-#define FMAN1_ALL_MACS_MASK	0xFCC00000
-#define FMAN2_ALL_MACS_MASK	0x000FCC00
-
-/**
- * @Function      	ResetOnInitErrata_A007273
- *
- * @Description		Workaround for Errata A-007273
- * 					This workaround is required to avoid a FMan hang during reset on initialization.
- * 					Enable all MACs in guts.devdisr2 register,
- * 					then perform a regular FMan reset and then restore MACs to their original state.
- *
- * @Param[in]     h_Fm - FM module descriptor
- *
- * @Return        None.
- */
-void ResetOnInitErrata_A007273(t_Handle h_Fm)
-{
-	struct ccsr_guts __iomem *guts_regs = NULL;
-	struct device_node *guts_node;
-	u32 devdisr2, enableMacs;
-
-	/* Get guts registers */
-	guts_node = of_find_matching_node(NULL, guts_device_ids);
-	if (!guts_node) {
-		pr_err("could not find GUTS node\n");
-		return;
-	}
-	guts_regs = of_iomap(guts_node, 0);
-	of_node_put(guts_node);
-	if (!guts_regs) {
-		pr_err("ioremap of GUTS node failed\n");
-		return;
-	}
-
-	/* Read current state */
-	devdisr2 = ioread32be(&guts_regs->devdisr2);
-
-	if (FmGetId(h_Fm) == 0)
-		enableMacs = devdisr2 & ~FMAN1_ALL_MACS_MASK;
-	else
-		enableMacs = devdisr2 & ~FMAN2_ALL_MACS_MASK;
-
-	/* Enable all MACs */
-	iowrite32be(enableMacs, &guts_regs->devdisr2);
-
-	/* Perform standard FMan reset */
-	FmReset(h_Fm);
-
-	/* Restore devdisr2 value */
-	iowrite32be(devdisr2, &guts_regs->devdisr2);
-
-	iounmap(guts_regs);
-}
-#endif
 
 static t_Error InitFmDev(t_LnxWrpFmDev  *p_LnxWrpFmDev)
 {
@@ -1087,7 +969,6 @@ static t_Error InitFmDev(t_LnxWrpFmDev  *p_LnxWrpFmDev)
                    fw->microcode[0].revision));
     }
 
-#ifdef CONFIG_FMAN_ARM
 	{ /* endianness adjustments: byteswap the ucode retrieved from the f/w blob */
 		int i;
 		int usz = p_LnxWrpFmDev->fmDevSettings.param.firmware.size;
@@ -1100,37 +981,16 @@ static t_Error InitFmDev(t_LnxWrpFmDev  *p_LnxWrpFmDev)
 
 		p_LnxWrpFmDev->fmDevSettings.param.firmware.p_Code = dest;
 	}
-#endif
 
     p_LnxWrpFmDev->fmDevSettings.param.h_FmMuram = p_LnxWrpFmDev->h_MuramDev;
 
-#if (DPAA_VERSION >= 11)
     if (p_LnxWrpFmDev->fmVspBaseAddr) {
         p_LnxWrpFmDev->fmDevSettings.param.vspBaseAddr = p_LnxWrpFmDev->fmVspBaseAddr;
         p_LnxWrpFmDev->fmDevSettings.param.partVSPBase = 0;
         p_LnxWrpFmDev->fmDevSettings.param.partNumOfVSPs = FM_VSP_MAX_NUM_OF_ENTRIES;
     }
-#endif
 
-#ifdef CONFIG_FMAN_ARM
     p_LnxWrpFmDev->fmDevSettings.param.fmMacClkRatio = 1;
-#else
-    if(p_LnxWrpFmDev->fmDevSettings.param.fmId == 0)
-        p_LnxWrpFmDev->fmDevSettings.param.fmMacClkRatio =
-            !!(get_rcwsr(4) & 0x2); /* RCW[FM_MAC_RAT0] */
-    else
-        p_LnxWrpFmDev->fmDevSettings.param.fmMacClkRatio =
-            !!(get_rcwsr(4) & 0x1); /* RCW[FM_MAC_RAT1] */
-
-    {
-    /* T4 Devices ClkRatio is always 1 regardless of RCW[FM_MAC_RAT1] */
-        uint32_t svr;
-        svr = mfspr(SPRN_SVR);
-
-        if ((svr & SVR_DEVICE_ID_MASK) == SVR_T4_DEVICE_ID)
-            p_LnxWrpFmDev->fmDevSettings.param.fmMacClkRatio = 1;
-    }
-#endif /* CONFIG_FMAN_ARM */
 
     if ((p_LnxWrpFmDev->h_Dev = FM_Config(&p_LnxWrpFmDev->fmDevSettings.param)) == NULL)
         RETURN_ERROR(MAJOR, E_INVALID_HANDLE, ("FM"));
@@ -1138,19 +998,6 @@ static t_Error InitFmDev(t_LnxWrpFmDev  *p_LnxWrpFmDev)
 
     if (FM_ConfigResetOnInit(p_LnxWrpFmDev->h_Dev, TRUE) != E_OK)
         RETURN_ERROR(MAJOR, E_INVALID_STATE, ("FM"));
-
-#ifndef CONFIG_FMAN_ARM
-#ifdef FM_HANG_AT_RESET_MAC_CLK_DISABLED_ERRATA_FMAN_A007273
-	if (FM_ConfigResetOnInitOverrideCallback(p_LnxWrpFmDev->h_Dev, ResetOnInitErrata_A007273) != E_OK)
-		RETURN_ERROR(MAJOR, E_INVALID_STATE, ("FM"));
-#endif /* FM_HANG_AT_RESET_MAC_CLK_DISABLED_ERRATA_FMAN_A007273 */
-#endif /* CONFIG_FMAN_ARM */
-
-#ifdef CONFIG_FMAN_P1023
-    if (FM_ConfigDmaAidOverride(p_LnxWrpFmDev->h_Dev, TRUE) != E_OK)
-        RETURN_ERROR(MAJOR, E_INVALID_STATE, ("FM"));
-#endif
-
 
     CheckNConfigFmAdvArgs(p_LnxWrpFmDev);
 
@@ -1203,8 +1050,36 @@ static t_Error InitFmDev(t_LnxWrpFmDev  *p_LnxWrpFmDev)
     return E_OK;
 }
 
-/* TODO: to be moved back here */
-extern void FreeFmPcdDev(t_LnxWrpFmDev  *p_LnxWrpFmDev);
+static void FqFree(struct qman_fq *fq)
+{
+	int _errno;
+
+	_errno = qman_retire_fq(fq, NULL);
+	if (unlikely(_errno < 0))
+		printk(KERN_WARNING "qman_retire_fq(%u) = %d\n", qman_fq_fqid(fq), _errno);
+
+	_errno = qman_oos_fq(fq);
+	if (unlikely(_errno < 0))
+		printk(KERN_WARNING "qman_oos_fq(%u) = %d\n", qman_fq_fqid(fq), _errno);
+
+	qman_destroy_fq(fq, 0);
+	XX_Free((t_FmTestFq *) fq);
+}
+
+static void FreeFmPcdDev(t_LnxWrpFmDev *p_LnxWrpFmDev)
+{
+	if (p_LnxWrpFmDev->h_PcdDev)
+		FM_PCD_Free(p_LnxWrpFmDev->h_PcdDev);
+
+	if (p_LnxWrpFmDev->hc_tx_err_fq)
+		FqFree(p_LnxWrpFmDev->hc_tx_err_fq);
+
+	if (p_LnxWrpFmDev->hc_tx_conf_fq)
+		FqFree(p_LnxWrpFmDev->hc_tx_conf_fq);
+
+	if (p_LnxWrpFmDev->hc_tx_fq)
+		FqFree(p_LnxWrpFmDev->hc_tx_fq);
+}
 
 static void FreeFmDev(t_LnxWrpFmDev  *p_LnxWrpFmDev)
 {
@@ -1317,7 +1192,7 @@ static int /*__devinit*/ fm_probe(struct platform_device *of_dev)
     return 0;
 }
 
-static int fm_remove(struct platform_device *of_dev)
+static void fm_remove(struct platform_device *of_dev)
 {
     t_LnxWrpFmDev   *p_LnxWrpFmDev;
     struct device   *dev;
@@ -1340,8 +1215,6 @@ static int fm_remove(struct platform_device *of_dev)
     DestroyFmDev(p_LnxWrpFmDev);
 
     dev_set_drvdata(dev, NULL);
-
-    return 0;
 }
 
 static const struct of_device_id fm_match[] = {
@@ -1354,71 +1227,11 @@ static const struct of_device_id fm_match[] = {
 MODULE_DEVICE_TABLE(of, fm_match);
 #endif /* !MODULE */
 
-#if defined CONFIG_PM && (defined CONFIG_PPC || defined CONFIG_PPC64)
-
-#define SCFG_FMCLKDPSLPCR_ADDR 0xFFE0FC00C
-#define SCFG_FMCLKDPSLPCR_DS_VAL 0x48402000
-#define SCFG_FMCLKDPSLPCR_NORMAL_VAL 0x00402000
-
-struct device *g_fm_dev;
-
-static int fm_soc_suspend(struct device *dev)
-{
-	int err = 0;
-	uint32_t *fmclk;
-	t_LnxWrpFmDev *p_LnxWrpFmDev = dev_get_drvdata(get_device(dev));
-	g_fm_dev = dev;
-	fmclk = ioremap(SCFG_FMCLKDPSLPCR_ADDR, 4);
-	WRITE_UINT32(*fmclk, SCFG_FMCLKDPSLPCR_DS_VAL);
-	if (p_LnxWrpFmDev->h_DsarRxPort)
-	{
-#ifdef CONFIG_FSL_QORIQ_PM
-		device_set_wakeup_enable(p_LnxWrpFmDev->dev, 1);
-#endif
-		err = FM_PORT_EnterDsarFinal(p_LnxWrpFmDev->h_DsarRxPort,
-			p_LnxWrpFmDev->h_DsarTxPort);
-	}
-	return err;
-}
-
-static int fm_soc_resume(struct device *dev)
-{
-	t_LnxWrpFmDev *p_LnxWrpFmDev = dev_get_drvdata(get_device(dev));
-	uint32_t *fmclk;
-	fmclk = ioremap(SCFG_FMCLKDPSLPCR_ADDR, 4);
-	WRITE_UINT32(*fmclk, SCFG_FMCLKDPSLPCR_NORMAL_VAL);
-	if (p_LnxWrpFmDev->h_DsarRxPort)
-	{
-#ifdef CONFIG_FSL_QORIQ_PM
-		device_set_wakeup_enable(p_LnxWrpFmDev->dev, 0);
-#endif
-		FM_PORT_ExitDsar(p_LnxWrpFmDev->h_DsarRxPort,
-			p_LnxWrpFmDev->h_DsarTxPort);
-		p_LnxWrpFmDev->h_DsarRxPort = 0;
-		p_LnxWrpFmDev->h_DsarTxPort = 0;
-	}
-	return 0;
-}
-
-static const struct dev_pm_ops fm_pm_ops = {
-	.suspend = fm_soc_suspend,
-	.resume = fm_soc_resume,
-};
-
-#define FM_PM_OPS (&fm_pm_ops)
-
-#else /* CONFIG_PM && (CONFIG_PPC || CONFIG_PPC64) */
-
-#define FM_PM_OPS NULL
-
-#endif /* CONFIG_PM && (CONFIG_PPC || CONFIG_PPC64) */
-
 static struct platform_driver fm_driver = {
     .driver = {
         .name           = "fsl-fman",
         .of_match_table    = fm_match,
         .owner          = THIS_MODULE,
-	.pm		= FM_PM_OPS,
     },
     .probe          = fm_probe,
     .remove         = fm_remove
@@ -1514,14 +1327,6 @@ u64 *fm_port_get_buffer_time_stamp(const struct fm_port *port,
 }
 EXPORT_SYMBOL(fm_port_get_buffer_time_stamp);
 
-void fm_port_get_base_addr(const struct fm_port *port, uint64_t *base_addr)
-{
-    t_LnxWrpFmPortDev   *p_LnxWrpFmPortDev = (t_LnxWrpFmPortDev *)port;
-
-    *base_addr = p_LnxWrpFmPortDev->settings.param.baseAddr;
-}
-EXPORT_SYMBOL(fm_port_get_base_addr);
-
 void fm_port_pcd_bind (struct fm_port *port, struct fm_port_pcd_param *params)
 {
     t_LnxWrpFmPortDev   *p_LnxWrpFmPortDev = (t_LnxWrpFmPortDev*)port;
@@ -1592,32 +1397,6 @@ int fm_port_disable(struct fm_port *port)
 }
 EXPORT_SYMBOL(fm_port_disable);
 
-int fm_port_set_rate_limit(struct fm_port *port,
-			uint16_t	max_burst_size,
-			uint32_t	rate_limit)
-{
-	t_FmPortRateLimit param;
-	t_LnxWrpFmPortDev   *p_LnxWrpFmPortDev = (t_LnxWrpFmPortDev *)port;
-	int err = 0;
-
-	param.maxBurstSize = max_burst_size;
-	param.rateLimit = rate_limit;
-	param.rateLimitDivider = 0;
-
-	err = FM_PORT_SetRateLimit(p_LnxWrpFmPortDev->h_Dev, &param);
-	return err;
-}
-EXPORT_SYMBOL(fm_port_set_rate_limit);
-
-int fm_port_del_rate_limit(struct fm_port *port)
-{
-	t_LnxWrpFmPortDev   *p_LnxWrpFmPortDev = (t_LnxWrpFmPortDev *)port;
-
-	FM_PORT_DeleteRateLimit(p_LnxWrpFmPortDev->h_Dev);
-	return 0;
-}
-EXPORT_SYMBOL(fm_port_del_rate_limit);
-
 int fm_port_enable_rx_l4csum(struct fm_port *port, bool enable)
 {
 	t_LnxWrpFmPortDev *p_LnxWrpFmPortDev = (t_LnxWrpFmPortDev *)port;
@@ -1626,80 +1405,21 @@ int fm_port_enable_rx_l4csum(struct fm_port *port, bool enable)
 }
 EXPORT_SYMBOL(fm_port_enable_rx_l4csum);
 
-void FM_PORT_Dsar_DumpRegs(void);
-int ar_showmem(struct file *file, const char __user *buffer,
-		unsigned long count, void *data)
-{
-	FM_PORT_Dsar_DumpRegs();
-	return 2;
-}
-
-struct auto_res_tables_sizes *fm_port_get_autores_maxsize(
-	struct fm_port *port)
-{
-	t_LnxWrpFmPortDev   *p_LnxWrpFmPortDev = (t_LnxWrpFmPortDev *)port;
-	return &p_LnxWrpFmPortDev->dsar_table_sizes;
-}
-EXPORT_SYMBOL(fm_port_get_autores_maxsize);
-
-int fm_port_enter_autores_for_deepsleep(struct fm_port *port,
-	struct auto_res_port_params *params)
-{
-	t_LnxWrpFmPortDev   *p_LnxWrpFmPortDev = (t_LnxWrpFmPortDev *)port;
-	t_LnxWrpFmDev* p_LnxWrpFmDev = (t_LnxWrpFmDev*)p_LnxWrpFmPortDev->h_LnxWrpFmDev;
-	p_LnxWrpFmDev->h_DsarRxPort = p_LnxWrpFmPortDev->h_Dev;
-	p_LnxWrpFmDev->h_DsarTxPort = params->h_FmPortTx;
-
-		/*Register other under /proc/autoresponse */
-    	if (WARN_ON(sizeof(t_FmPortDsarParams) != sizeof(struct auto_res_port_params)))
-            return -EFAULT;
-
-	FM_PORT_EnterDsar(p_LnxWrpFmPortDev->h_Dev, (t_FmPortDsarParams*)params);
-	return 0;
-}
-EXPORT_SYMBOL(fm_port_enter_autores_for_deepsleep);
-
-void fm_port_exit_auto_res_for_deep_sleep(struct fm_port *port_rx,
-	struct fm_port *port_tx)
-{
-}
-EXPORT_SYMBOL(fm_port_exit_auto_res_for_deep_sleep);
-
-int fm_port_get_autores_stats(struct fm_port *port,
-	struct auto_res_port_stats *stats)
-{
-	t_LnxWrpFmPortDev *p_LnxWrpFmPortDev = (t_LnxWrpFmPortDev *)port;
-    	if (WARN_ON(sizeof(t_FmPortDsarStats) != sizeof(struct auto_res_port_stats)))
-            return -EFAULT;
-	return FM_PORT_GetDsarStats(p_LnxWrpFmPortDev->h_Dev, (t_FmPortDsarStats*)stats);
-}
-EXPORT_SYMBOL(fm_port_get_autores_stats);
-
 int fm_port_suspend(struct fm_port *port)
 {
 	t_LnxWrpFmPortDev *p_LnxWrpFmPortDev = (t_LnxWrpFmPortDev *)port;
-	if (!FM_PORT_IsInDsar(p_LnxWrpFmPortDev->h_Dev))
-		return FM_PORT_Disable(p_LnxWrpFmPortDev->h_Dev);
-	else
-		return 0;
+
+	return FM_PORT_Disable(p_LnxWrpFmPortDev->h_Dev);
 }
 EXPORT_SYMBOL(fm_port_suspend);
 
 int fm_port_resume(struct fm_port *port)
 {
 	t_LnxWrpFmPortDev *p_LnxWrpFmPortDev = (t_LnxWrpFmPortDev *)port;
-	if (!FM_PORT_IsInDsar(p_LnxWrpFmPortDev->h_Dev))
-		return FM_PORT_Enable(p_LnxWrpFmPortDev->h_Dev);
-	else
-		return 0;
+
+	return FM_PORT_Enable(p_LnxWrpFmPortDev->h_Dev);
 }
 EXPORT_SYMBOL(fm_port_resume);
-
-bool fm_port_is_in_auto_res_mode(struct fm_port *port)
-{
-	return FM_PORT_IsInDsar(port);
-}
-EXPORT_SYMBOL(fm_port_is_in_auto_res_mode);
 
 #ifdef CONFIG_FMAN_PFC
 int fm_port_set_pfc_priorities_mapping_to_qman_wq(struct fm_port *port,
@@ -1961,9 +1681,6 @@ int fm_mac_adjust_link(struct fm_mac_dev *fm_mac_dev,
 	t_Error	 err;
 
 	if (!link) {
-#if (DPAA_VERSION < 11)
-		FM_MAC_RestartAutoneg(fm_mac_dev);
-#endif
 		return 0;
 	}
 
@@ -2237,13 +1954,6 @@ int fm_mac_set_wol(struct fm_port *port, struct fm_mac_dev *fm_mac_dev, bool en)
 {
 	int _errno;
 	t_Error err;
-	t_LnxWrpFmPortDev *p_LnxWrpFmPortDev = (t_LnxWrpFmPortDev *)port;
-
-	/* Do not set WoL on AR ports */
-	if (FM_PORT_IsInDsar(p_LnxWrpFmPortDev->h_Dev)) {
-		printk(KERN_WARNING "Port is AutoResponse enabled! WoL will not be set on this port!\n");
-		return 0;
-	}
 
 	err = FM_MAC_SetWakeOnLan(fm_mac_dev, en);
 
@@ -2266,669 +1976,6 @@ void fm_mutex_unlock(void)
     mutex_unlock(&lnxwrp_mutex);
 }
 EXPORT_SYMBOL(fm_mutex_unlock);
-
-/*Macsec wrapper functions*/
-struct fm_macsec_dev *fm_macsec_config(struct fm_macsec_params *fm_params)
-{
-	struct fm_macsec_dev *fm_macsec_dev;
-
-	fm_macsec_dev = FM_MACSEC_Config((t_FmMacsecParams *)fm_params);
-	if (unlikely(fm_macsec_dev == NULL))
-		pr_err("FM_MACSEC_Config() failed\n");
-
-	return fm_macsec_dev;
-}
-EXPORT_SYMBOL(fm_macsec_config);
-
-int fm_macsec_init(struct fm_macsec_dev *fm_macsec_dev)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_Init(fm_macsec_dev);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_Init() = 0x%08x\n", err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_init);
-
-int fm_macsec_free(struct fm_macsec_dev *fm_macsec_dev)
-{
-	int err;
-	int _error;
-
-	err = FM_MACSEC_Free(fm_macsec_dev);
-	_error = -GET_ERROR_TYPE(err);
-
-	if (unlikely(_error < 0))
-		pr_err("FM_MACSEC_Free() = 0x%08x\n", err);
-
-	return _error;
-}
-EXPORT_SYMBOL(fm_macsec_free);
-
-int fm_macsec_config_unknown_sci_frame_treatment(struct fm_macsec_dev
-				*fm_macsec_dev,
-				fm_macsec_unknown_sci_frame_treatment treat_mode)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_ConfigUnknownSciFrameTreatment(fm_macsec_dev,
-		(e_FmMacsecUnknownSciFrameTreatment)treat_mode);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_ConfigUnknownSciFrameTreatmen() = 0x%08x\n", err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_config_unknown_sci_frame_treatment);
-
-int fm_macsec_config_invalid_tags_frame_treatment(struct fm_macsec_dev *fm_macsec_dev,
-				bool deliver_uncontrolled)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_ConfigInvalidTagsFrameTreatment(fm_macsec_dev,
-						deliver_uncontrolled);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MAC_ConfigMaxFrameLength() = 0x%08x\n", err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_config_invalid_tags_frame_treatment);
-
-int fm_macsec_config_kay_frame_treatment(struct fm_macsec_dev *fm_macsec_dev,
-				bool discard_uncontrolled)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_ConfigEncryptWithNoChangedTextFrameTreatment(fm_macsec_dev,
-						discard_uncontrolled);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_ConfigEncryptWithNoChangedTextFrameTreatmen() = 0x%08x\n", err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_config_kay_frame_treatment);
-
-int fm_macsec_config_untag_frame_treatment(struct fm_macsec_dev *fm_macsec_dev,
-				    fm_macsec_untag_frame_treatment treat_mode)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_ConfigUntagFrameTreatment(fm_macsec_dev,
-				(e_FmMacsecUntagFrameTreatment)treat_mode);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_ConfigUntagFrameTreatment() = 0x%08x\n", err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_config_untag_frame_treatment);
-
-int fm_macsec_config_pn_exhaustion_threshold(struct fm_macsec_dev *fm_macsec_dev,
-					uint32_t pn_exh_thr)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_ConfigPnExhaustionThreshold(fm_macsec_dev, pn_exh_thr);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_ConfigPnExhaustionThreshold() = 0x%08x\n", err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_config_pn_exhaustion_threshold);
-
-int fm_macsec_config_keys_unreadable(struct fm_macsec_dev *fm_macsec_dev)
-{
-	int err;
-	int _errno;
-
-	err =  FM_MACSEC_ConfigKeysUnreadable(fm_macsec_dev);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_ConfigKeysUnreadable() = 0x%08x\n", err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_config_keys_unreadable);
-
-int fm_macsec_config_sectag_without_sci(struct fm_macsec_dev *fm_macsec_dev)
-{
-	int err;
-	int _errno;
-
-	err =  FM_MACSEC_ConfigSectagWithoutSCI(fm_macsec_dev);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_ConfigSectagWithoutSCI() = 0x%08x\n", err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_config_sectag_without_sci);
-
-int fm_macsec_config_exception(struct fm_macsec_dev *fm_macsec_dev,
-			    fm_macsec_exception exception, bool enable)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_ConfigException(fm_macsec_dev,
-				(e_FmMacsecExceptions)exception, enable);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_ConfigException() = 0x%08x\n", err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_config_exception);
-
-int fm_macsec_get_revision(struct fm_macsec_dev *fm_macsec_dev,
-			    int *macsec_revision)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_GetRevision(fm_macsec_dev, macsec_revision);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_GetRevision() = 0x%08x\n", err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_get_revision);
-
-int fm_macsec_enable(struct fm_macsec_dev *fm_macsec_dev)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_Enable(fm_macsec_dev);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_Enable() = 0x%08x\n", err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_enable);
-
-int fm_macsec_disable(struct fm_macsec_dev *fm_macsec_dev)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_Disable(fm_macsec_dev);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_Disable() = 0x%08x\n", err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_disable);
-
-int fm_macsec_set_exception(struct fm_macsec_dev *fm_macsec_dev,
-			fm_macsec_exception exception, bool enable)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_SetException(fm_macsec_dev,
-			(e_FmMacsecExceptions)exception, enable);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_SetException() = 0x%08x\n", err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_set_exception);
-
-/* Macsec SECY wrapper API */
-struct fm_macsec_secy_dev *fm_macsec_secy_config(struct fm_macsec_secy_params *secy_params)
-{
-	struct fm_macsec_secy_dev *fm_macsec_secy;
-
-	fm_macsec_secy = FM_MACSEC_SECY_Config((t_FmMacsecSecYParams *)secy_params);
-	if (unlikely(fm_macsec_secy < 0))
-		pr_err("FM_MACSEC_SECY_Config() failed\n");
-
-	return fm_macsec_secy;
-}
-EXPORT_SYMBOL(fm_macsec_secy_config);
-
-int fm_macsec_secy_init(struct fm_macsec_secy_dev *fm_macsec_secy_dev)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_SECY_Init(fm_macsec_secy_dev);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_SECY_Init() = 0x%08x\n", err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_secy_init);
-
-int fm_macsec_secy_free(struct fm_macsec_secy_dev *fm_macsec_secy_dev)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_SECY_Free(fm_macsec_secy_dev);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_SECY_Free() = 0x%08x\n", err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_secy_free);
-
-int fm_macsec_secy_config_sci_insertion_mode(struct fm_macsec_secy_dev *fm_macsec_secy_dev,
-				fm_macsec_sci_insertion_mode sci_insertion_mode)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_SECY_ConfigSciInsertionMode(fm_macsec_secy_dev,
-			    (e_FmMacsecSciInsertionMode)sci_insertion_mode);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_SECY_ConfigSciInsertionMode() = 0x%08x\n", err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_secy_config_sci_insertion_mode);
-
-int fm_macsec_secy_config_protect_frames(struct fm_macsec_secy_dev *fm_macsec_secy_dev,
-				bool protect_frames)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_SECY_ConfigProtectFrames(fm_macsec_secy_dev,
-						protect_frames);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_SECY_ConfigProtectFrames() = 0x%08x\n", err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_secy_config_protect_frames);
-
-int fm_macsec_secy_config_replay_window(struct fm_macsec_secy_dev *fm_macsec_secy_dev,
-				bool replay_protect, uint32_t replay_window)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_SECY_ConfigReplayWindow(fm_macsec_secy_dev,
-						replay_protect, replay_window);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_SECY_ConfigReplayWindow() = 0x%08x\n", err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_secy_config_replay_window);
-
-int fm_macsec_secy_config_validation_mode(struct fm_macsec_secy_dev *fm_macsec_secy_dev,
-				fm_macsec_valid_frame_behavior validate_frames)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_SECY_ConfigValidationMode(fm_macsec_secy_dev,
-				(e_FmMacsecValidFrameBehavior)validate_frames);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_SECY_ConfigValidationMode() = 0x%08x\n", err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_secy_config_validation_mode);
-
-int fm_macsec_secy_config_confidentiality(struct fm_macsec_secy_dev *fm_macsec_secy_dev,
-				bool confidentiality_enable,
-				uint32_t confidentiality_offset)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_SECY_ConfigConfidentiality(fm_macsec_secy_dev,
-						    confidentiality_enable,
-						    confidentiality_offset);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_SECY_ConfigConfidentiality() = 0x%08x\n",
-			err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_secy_config_confidentiality);
-
-int fm_macsec_secy_config_point_to_point(struct fm_macsec_secy_dev *fm_macsec_secy_dev)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_SECY_ConfigPointToPoint(fm_macsec_secy_dev);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_SECY_ConfigPointToPoint() = 0x%08x\n",
-			err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_secy_config_point_to_point);
-
-int fm_macsec_secy_config_exception(struct fm_macsec_secy_dev *fm_macsec_secy_dev,
-				    fm_macsec_secy_exception exception,
-				    bool enable)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_SECY_ConfigException(fm_macsec_secy_dev,
-				(e_FmMacsecSecYExceptions)exception, enable);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_SECY_ConfigException() = 0x%08x\n",
-			err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_secy_config_exception);
-
-int fm_macsec_secy_config_event(struct fm_macsec_secy_dev *fm_macsec_secy_dev,
-				    fm_macsec_secy_event event,
-				    bool enable)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_SECY_ConfigEvent(fm_macsec_secy_dev,
-					 (e_FmMacsecSecYEvents)event, enable);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_SECY_ConfigEvent() = 0x%08x\n",
-			err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_secy_config_event);
-
-struct rx_sc_dev *fm_macsec_secy_create_rxsc(struct fm_macsec_secy_dev *fm_macsec_secy_dev,
-				struct fm_macsec_secy_sc_params  *params)
-{
-	struct rx_sc_dev *rx_sc_dev;
-
-	rx_sc_dev = FM_MACSEC_SECY_CreateRxSc(fm_macsec_secy_dev, (t_FmMacsecSecYSCParams *)params);
-	if (unlikely(rx_sc_dev == NULL))
-		pr_err("FM_MACSEC_SECY_CreateRxSc() failed\n");
-
-	return rx_sc_dev;
-}
-EXPORT_SYMBOL(fm_macsec_secy_create_rxsc);
-
-int fm_macsec_secy_delete_rxsc(struct fm_macsec_secy_dev *fm_macsec_secy_dev,
-				struct rx_sc_dev *sc)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_SECY_DeleteRxSc(fm_macsec_secy_dev, sc);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_SECY_DeleteRxSc() = 0x%08x\n",
-			err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_secy_delete_rxsc);
-
-int fm_macsec_secy_create_rx_sa(struct fm_macsec_secy_dev *fm_macsec_secy_dev,
-				struct rx_sc_dev *sc, macsec_an_t an,
-				uint32_t lowest_pn, macsec_sa_key_t key)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_SECY_CreateRxSa(fm_macsec_secy_dev, sc, an,
-					lowest_pn, key);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_SECY_CreateRxSa() = 0x%08x\n",
-			err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_secy_create_rx_sa);
-
-int fm_macsec_secy_delete_rx_sa(struct fm_macsec_secy_dev *fm_macsec_secy_dev,
-				struct rx_sc_dev *sc, macsec_an_t an)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_SECY_DeleteRxSa(fm_macsec_secy_dev, sc, an);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_SECY_DeleteRxSa() = 0x%08x\n",
-			err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_secy_delete_rx_sa);
-
-int fm_macsec_secy_rxsa_enable_receive(struct fm_macsec_secy_dev *fm_macsec_secy_dev,
-					struct rx_sc_dev *sc,
-					macsec_an_t an)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_SECY_RxSaEnableReceive(fm_macsec_secy_dev, sc, an);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_SECY_RxSaEnableReceive() = 0x%08x\n",
-			err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_secy_rxsa_enable_receive);
-
-int fm_macsec_secy_rxsa_disable_receive(struct fm_macsec_secy_dev *fm_macsec_secy_dev,
-					struct rx_sc_dev *sc,
-					macsec_an_t an)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_SECY_RxSaDisableReceive(fm_macsec_secy_dev, sc, an);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_SECY_RxSaDisableReceive() = 0x%08x\n",
-			err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_secy_rxsa_disable_receive);
-
-int fm_macsec_secy_rxsa_update_next_pn(struct fm_macsec_secy_dev *fm_macsec_secy_dev,
-					struct rx_sc_dev *sc,
-					macsec_an_t an, uint32_t updt_next_pn)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_SECY_RxSaUpdateNextPn(fm_macsec_secy_dev, sc, an,
-						updt_next_pn);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_SECY_RxSaUpdateNextPn() = 0x%08x\n", err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_secy_rxsa_update_next_pn);
-
-int fm_macsec_secy_rxsa_update_lowest_pn(struct fm_macsec_secy_dev *fm_macsec_secy_dev,
-					struct rx_sc_dev *sc,
-					macsec_an_t an, uint32_t updt_lowest_pn)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_SECY_RxSaUpdateLowestPn(fm_macsec_secy_dev, sc, an,
-						updt_lowest_pn);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_SECY_RxSaUpdateLowestPn() = 0x%08x\n",
-			err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_secy_rxsa_update_lowest_pn);
-
-int fm_macsec_secy_rxsa_modify_key(struct fm_macsec_secy_dev *fm_macsec_secy_dev,
-					struct rx_sc_dev *sc,
-					macsec_an_t an, macsec_sa_key_t key)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_SECY_RxSaModifyKey(fm_macsec_secy_dev, sc, an, key);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_SECY_RxSaModifyKey() = 0x%08x\n",
-			err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_secy_rxsa_modify_key);
-
-int fm_macsec_secy_create_tx_sa(struct fm_macsec_secy_dev *fm_macsec_secy_dev,
-				macsec_an_t an, macsec_sa_key_t key)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_SECY_CreateTxSa(fm_macsec_secy_dev, an, key);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_SECY_CreateTxSa() = 0x%08x\n",
-			err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_secy_create_tx_sa);
-
-int fm_macsec_secy_delete_tx_sa(struct fm_macsec_secy_dev *fm_macsec_secy_dev,
-				macsec_an_t an)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_SECY_DeleteTxSa(fm_macsec_secy_dev, an);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_SECY_DeleteTxSa() = 0x%08x\n",
-			err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_secy_delete_tx_sa);
-
-int fm_macsec_secy_txsa_modify_key(struct fm_macsec_secy_dev *fm_macsec_secy_dev,
-					macsec_an_t next_active_an,
-					macsec_sa_key_t key)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_SECY_TxSaModifyKey(fm_macsec_secy_dev, next_active_an,
-					    key);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_SECY_TxSaModifyKey() = 0x%08x\n",
-			err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_secy_txsa_modify_key);
-
-int fm_macsec_secy_txsa_set_active(struct fm_macsec_secy_dev *fm_macsec_secy_dev,
-					macsec_an_t an)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_SECY_TxSaSetActive(fm_macsec_secy_dev, an);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_SECY_TxSaSetActive() = 0x%08x\n",
-			err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_secy_txsa_set_active);
-
-int fm_macsec_secy_txsa_get_active(struct fm_macsec_secy_dev *fm_macsec_secy_dev,
-					macsec_an_t *p_an)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_SECY_TxSaGetActive(fm_macsec_secy_dev, p_an);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_SECY_TxSaGetActive() = 0x%08x\n",
-			err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_secy_txsa_get_active);
-
-int fm_macsec_secy_get_rxsc_phys_id(struct fm_macsec_secy_dev *fm_macsec_secy_dev,
-				struct rx_sc_dev *sc, uint32_t *sc_phys_id)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_SECY_GetRxScPhysId(fm_macsec_secy_dev, sc, sc_phys_id);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_SECY_GetRxScPhysId() = 0x%08x\n",
-			err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_secy_get_rxsc_phys_id);
-
-int fm_macsec_secy_get_txsc_phys_id(struct fm_macsec_secy_dev *fm_macsec_secy_dev,
-				    uint32_t *sc_phys_id)
-{
-	int err;
-	int _errno;
-
-	err = FM_MACSEC_SECY_GetTxScPhysId(fm_macsec_secy_dev, sc_phys_id);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MACSEC_SECY_GetTxScPhysId() = 0x%08x\n",
-			err);
-
-	return _errno;
-}
-EXPORT_SYMBOL(fm_macsec_secy_get_txsc_phys_id);
 
 static t_Handle h_FmLnxWrp;
 

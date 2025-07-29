@@ -764,8 +764,8 @@ static int evb_dellink(struct net_device *netdev,
 	return 0;
 }
 
-void evb_port_get_stats(struct net_device *netdev,
-			struct rtnl_link_stats64 *storage)
+static void evb_port_get_stats(struct net_device *netdev,
+			       struct rtnl_link_stats64 *storage)
 {
 	struct evb_port_priv	*port_priv = netdev_priv(netdev);
 	u64			tmp;
@@ -866,20 +866,20 @@ static void evb_get_drvinfo(struct net_device *netdev,
 	u16 version_major, version_minor;
 	int err;
 
-	strlcpy(drvinfo->driver, KBUILD_MODNAME, sizeof(drvinfo->driver));
-	strlcpy(drvinfo->version, evb_drv_version, sizeof(drvinfo->version));
+	strscpy(drvinfo->driver, KBUILD_MODNAME, sizeof(drvinfo->driver));
+	strscpy(drvinfo->version, evb_drv_version, sizeof(drvinfo->version));
 
 	err = dpdmux_get_api_version(port_priv->evb_priv->mc_io, 0,
 				     &version_major,
 				     &version_minor);
 	if (err)
-		strlcpy(drvinfo->fw_version, "N/A",
+		strscpy(drvinfo->fw_version, "N/A",
 			sizeof(drvinfo->fw_version));
 	else
 		snprintf(drvinfo->fw_version, sizeof(drvinfo->fw_version),
 			 "%u.%u", version_major, version_minor);
 
-	strlcpy(drvinfo->bus_info, dev_name(netdev->dev.parent->parent),
+	strscpy(drvinfo->bus_info, dev_name(netdev->dev.parent->parent),
 		sizeof(drvinfo->bus_info));
 }
 
