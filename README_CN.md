@@ -2,7 +2,7 @@
 
 NXP系统SDK下载
 
-- Yocto-Linux 6.6.36_2.1.0
+- Yocto-Linux 6.12.3_1.0.0
   https://www.nxp.com/design/software/embedded-software/i-mx-software/embedded-linux-for-i-mx-applications-processors:IMXLINUX?
   
   
@@ -19,7 +19,7 @@ a.使用下面的命令clone提供的kernel源码：
 git clone https://github.com/debix-tech/linux-nxp-debix.git
 ```
 
-进入`linux-nxp-debix`，切换对应的分支，以**lf_6.6.36-debix_model_ab分支**为例：
+进入`linux-nxp-debix`，切换对应的分支，以**lf_6.12.3-debix_model_ab分支**为例：
 
 b.查看所有的分支:
 
@@ -31,7 +31,7 @@ git branch -a
 ljm@polyhex:~/workstation/Github/linux-nxp-debix$ git branch -a
   Model_AB-L6.6.36
   debix
-* lf_6.6.36-debix_model_ab
+* lf_6.12.3-debix_model_ab
   remotes/origin/Debix_SOM_A-L6.6.36
   remotes/origin/EMB-IMX8MP-07-L6.6.36
   remotes/origin/HEAD -> origin/debix
@@ -53,12 +53,12 @@ ljm@polyhex:~/workstation/Github/linux-nxp-debix$ git branch -a
 
 ```
 
-c.切换分支：`git checkout lf_6.6.36-debix_model_ab `
+c.切换分支：`git checkout lf_6.12.3-debix_model_ab `
 
 ```shell
-ljm@polyhex:~/workstation/Github/linux-nxp-debix$ git checkout lf_6.6.36-debix_model_ab
-Branch 'lf_6.6.36-debix_model_ab' set up to track remote branch 'lf_6.6.36-debix_model_ab' from 'origin'.
-Switched to a new branch 'lf_6.6.36-debix_model_ab'
+ljm@polyhex:~/workstation/Github/linux-nxp-debix$ git checkout lf_6.12.3-debix_model_ab
+Branch 'lf_6.12.3-debix_model_ab' set up to track remote branch 'lf_6.12.3-debix_model_ab' from 'origin'.
+Switched to a new branch 'lf_6.12.3-debix_model_ab'
 
 ```
 
@@ -77,15 +77,17 @@ b.下载交叉编译器
 ```shell
 sudo mkdir /opt/toolchain
 cd /opt/toolchain
-sudo wget https://armkeil.blob.core.windows.net/developer/Files/downloads/gnu-a/9.2-2019.12/binrel/gcc-arm-9.2-2019.12-x86_64-aarch64-none-linux-gnu.tar.xz
-sudo tar xpf gcc-arm-9.2-2019.12-x86_64-aarch64-none-linux-gnu.tar.xz
-export PATH=$PATH:/opt/toolchain/gcc-arm-9.2-2019.12-x86_64-aarch64-none-linux-gnu/bin
+sudo wget https://armkeil.blob.core.windows.net/developer/Files/downloads/gnu/14.2.rel1/binrel/arm-gnu-toolchain-14.2.rel1-x86_64-aarch64-none-linux-gnu.tar.xz
+sudo tar xpf arm-gnu-toolchain-14.2.rel1-x86_64-aarch64-none-linux-gnu.tar.xz
+
 ```
 
 注意🔔这个export是只适用于当前的终端，重新打开终端时需要再export
 
 ```shell
-export PATH=$PATH:/opt/toolchain/gcc-arm-9.2-2019.12-x86_64-aarch64-none-linux-gnu/bin
+export PATH=$PATH:/opt/toolchain/arm-gnu-toolchain-14.2.rel1-x86_64-aarch64-none-linux-gnu/bin
+export ARCH=arm64
+export CROSS_COMPILE=aarch64-none-linux-gnu-
 ```
 
 # 3.交叉编译kernel
@@ -95,7 +97,7 @@ export PATH=$PATH:/opt/toolchain/gcc-arm-9.2-2019.12-x86_64-aarch64-none-linux-g
 a.编译.config
 
 ```shell
-export PATH=$PATH:/opt/toolchain/gcc-arm-9.2-2019.12-x86_64-aarch64-none-linux-gnu/bin
+export PATH=$PATH:/opt/toolchain/arm-gnu-toolchain-14.2.rel1-x86_64-aarch64-none-linux-gnu/bin
 make ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu-  imx_v8_defconfig
 ```
 

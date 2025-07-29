@@ -2,7 +2,7 @@
 
 NXP System SDK Download  
 
-- Yocto-Linux 6.6.36_2.1.0  
+- Yocto-Linux 6.12.3_1.0.0  
   https://www.nxp.com/design/software/embedded-software/i-mx-software/embedded-linux-for-i-mx-applications-processors:IMXLINUX?  
 
 
@@ -19,7 +19,7 @@ a. Use the following command to clone the provided kernel source code:
 git clone https://github.com/debix-tech/linux-nxp-debix.git
 ```
 
-Enter the `linux-nxp-debix` directory and switch to the corresponding branch. Take the **lf_6.6.36-debix_model_ab branch** as an example:  
+Enter the `linux-nxp-debix` directory and switch to the corresponding branch. Take the **lf_6.12.3-debix_model_ab branch** as an example:  
 
 b. View all branches:  
 
@@ -31,7 +31,8 @@ git branch -a
 ljm@polyhex:~/workstation/Github/linux-nxp-debix$ git branch -a
   Model_AB-L6.6.36
   debix
-* lf_6.6.36-debix_model_ab
+* lf_6.12.3-debix_model_ab
+  lf_6.6.36-debix_model_ab
   remotes/origin/Debix_SOM_A-L6.6.36
   remotes/origin/EMB-IMX8MP-07-L6.6.36
   remotes/origin/HEAD -> origin/debix
@@ -53,12 +54,12 @@ ljm@polyhex:~/workstation/Github/linux-nxp-debix$ git branch -a
 
 ```
 
-c. Switch branches: `git checkout lf_6.6.36-debix_model_ab`  
+c. Switch branches: `git checkout lf_6.12.3-debix_model_ab`  
 
 ```shell
-ljm@polyhex:~/workstation/Github/linux-nxp-debix$ git checkout lf_6.6.36-debix_model_ab
-Branch 'lf_6.6.36-debix_model_ab' set up to track remote branch 'lf_6.6.36-debix_model_ab' from 'origin'.
-Switched to a new branch 'lf_6.6.36-debix_model_ab'
+ljm@polyhex:~/workstation/Github/linux-nxp-debix$ git checkout lf_6.12.3-debix_model_ab
+Branch 'lf_6.12.3-debix_model_ab' set up to track remote branch 'lf_6.12.3-debix_model_ab' from 'origin'.
+Switched to a new branch 'lf_6.12.3-debix_model_ab'
 
 ```
 
@@ -95,7 +96,7 @@ Execute the following in the `linux-nxp-debix` directory where the kernel source
 a. Compile `.config`  
 
 ```shell
-export PATH=$PATH:/opt/toolchain/gcc-arm-9.2-2019.12-x86_64-aarch64-none-linux-gnu/bin
+export PATH=$PATH:/opt/toolchain/arm-gnu-toolchain-14.2.rel1-x86_64-aarch64-none-linux-gnu/bin
 make ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu-  imx_v8_defconfig
 ```
 
