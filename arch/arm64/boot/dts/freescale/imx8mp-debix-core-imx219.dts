@@ -6,7 +6,7 @@
 #include "imx8mp-debix-core-board.dts"
 
 &i2c2 {
-        imx219_0: imx219_mipi@3c {
+        imx219_0: imx219_mipi@10 {
                 compatible = "sony,imx219";
                 reg = <0x10>;
                 pinctrl-names = "default";
