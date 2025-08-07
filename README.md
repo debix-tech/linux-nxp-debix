@@ -78,15 +78,15 @@ b. Download the cross-compiler
 ```shell
 sudo mkdir /opt/toolchain
 cd /opt/toolchain
-sudo wget https://armkeil.blob.core.windows.net/developer/Files/downloads/gnu-a/9.2-2019.12/binrel/gcc-arm-9.2-2019.12-x86_64-aarch64-none-linux-gnu.tar.xz
-sudo tar xpf gcc-arm-9.2-2019.12-x86_64-aarch64-none-linux-gnu.tar.xz
-export PATH=$PATH:/opt/toolchain/gcc-arm-9.2-2019.12-x86_64-aarch64-none-linux-gnu/bin
+sudo wget https://armkeil.blob.core.windows.net/developer/Files/downloads/gnu/14.2.rel1/binrel/arm-gnu-toolchain-14.2.rel1-x86_64-aarch64-none-linux-gnu.tar.xz
+sudo tar xpf arm-gnu-toolchain-14.2.rel1-x86_64-aarch64-none-linux-gnu.tar.xz
+export PATH=$PATH:/opt/toolchain/arm-gnu-toolchain-14.2.rel1-x86_64-aarch64-none-linux-gnu/bin/
 ```
 
 Note🔔This `export` is only valid for the current terminal. You need to re-export it when opening a new terminal:  
 
 ```shell
-export PATH=$PATH:/opt/toolchain/gcc-arm-9.2-2019.12-x86_64-aarch64-none-linux-gnu/bin
+export PATH=$PATH:/opt/toolchain/arm-gnu-toolchain-14.2.rel1-x86_64-aarch64-none-linux-gnu/bin/
 ```
 
 # 3. Cross-Compile the Kernel  
@@ -153,7 +153,7 @@ sudo mount /dev/sdb2 mnt/ext4
 c. Install kernel modules to the SD card 
 
 ```shell
-export PATH=$PATH:/opt/toolchain/gcc-arm-9.2-2019.12-x86_64-aarch64-none-linux-gnu/bin 
+export PATH=$PATH:/opt/toolchain/arm-gnu-toolchain-14.2.rel1-x86_64-aarch64-none-linux-gnu/bin/
 sudo env PATH=$PATH make ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu-  INSTALL_MOD_PATH=mnt/ext4 INSTALL_MOD_STRIP=1 modules_install
 sudo umount mnt/ext4
 ```
@@ -197,7 +197,7 @@ a. Enter the menu and select the required configurations
 If you haven’t executed the above `export` command, run it to set the environment: 
 
 ```shell
-export PATH=$PATH:/opt/toolchain/gcc-arm-9.2-2019.12-x86_64-aarch64-none-linux-gnu/bin
+export PATH=$PATH:/opt/toolchain/arm-gnu-toolchain-14.2.rel1-x86_64-aarch64-none-linux-gnu/bin/
 make ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu- menuconfig
 ```
 

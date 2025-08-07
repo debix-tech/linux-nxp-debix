@@ -154,7 +154,7 @@ sudo mount /dev/sdb2 mnt/ext4
 c.安装kernel module到SD card
 
 ```shell
-export PATH=$PATH:/opt/toolchain/gcc-arm-9.2-2019.12-x86_64-aarch64-none-linux-gnu/bin 
+export PATH=$PATH:/opt/toolchain/arm-gnu-toolchain-14.2.rel1-x86_64-aarch64-none-linux-gnu/bin/
 sudo env PATH=$PATH make ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu-  INSTALL_MOD_PATH=mnt/ext4 INSTALL_MOD_STRIP=1 modules_install
 sudo umount mnt/ext4
 ```
@@ -198,7 +198,7 @@ a.进入菜单，选择需要的配置
 如果没有执行过上面的`export`命令，需要执行来导出环境:
 
 ```shell
-export PATH=$PATH:/opt/toolchain/gcc-arm-9.2-2019.12-x86_64-aarch64-none-linux-gnu/bin
+export PATH=$PATH:/opt/toolchain/arm-gnu-toolchain-14.2.rel1-x86_64-aarch64-none-linux-gnu/bin
 make ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu- menuconfig
 ```
 
