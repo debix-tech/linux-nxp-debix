@@ -444,6 +444,14 @@ config DRM_PANEL_DEBIX_TD080B
           Say Y here if you want to enable support for debix TD080B
           (800x1280) DSI panel.
 
+config DRM_PANEL_WF101JSYAHMNB0
+	tristate "debix WF101JSYAHMNB0 1024x600 DSI video mode panel"
+	depends on OF
+	depends on DRM_MIPI_DSI
+	depends on BACKLIGHT_CLASS_DEVICE
+	help
+	  Say Y here if you want to enable support for debix WF101JSYAHMNB0
+	  (1024x600) DSI panel.
 
 
 config DRM_PANEL_RAYDIUM_RM68200

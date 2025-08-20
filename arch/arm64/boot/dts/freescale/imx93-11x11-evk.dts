@@ -545,8 +545,10 @@ gpio-leds {
 	pmic@25 {
 		compatible = "nxp,pca9451a";
 		reg = <0x25>;
-		//interrupt-parent = <&pcal6524>;
-		//interrupts = <11 IRQ_TYPE_EDGE_FALLING>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_pmic>;
+		interrupt-parent = <&gpio2>;
+		interrupts = <9 IRQ_TYPE_EDGE_FALLING>;
 
 		regulators {
 			buck1: BUCK1 {
@@ -922,6 +924,12 @@ gpio-leds {
 			MX93_PAD_I2C1_SDA__LPI2C1_SDA			0x40000b9e
 		>;
 	};
+	pinctrl_pmic: pmicgrp {
+		fsl,pins = <
+			MX93_PAD_GPIO_IO09__GPIO2_IO09 0x40000b9e
+		>;
+	};
+
 
 	pinctrl_lpi2c2: lpi2c2grp {
 		fsl,pins = <

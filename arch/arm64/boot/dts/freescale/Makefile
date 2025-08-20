@@ -359,6 +359,8 @@ imx8qm-mek-revd-root-dtbs := imx8qm-mek-root.dtb imx8qm-mek-revd.dtbo
 ## John_gao Add Model C dts 
 dtb-$(CONFIG_ARCH_MXC) += imx93-11x11-evk.dtb \
 			  imx93-debix-base.dtb \
+			  imx93-debix-lpspi8.dtb \
+			  imx93-debix-can-uart3-uart8.dtb \
 			  imx93-debix-TD101A.dtb \
 			  imx93-debix-TD101A_Debix200A.dtb \
 			  imx93-debix-TD101A_Debix500A.dtb \
@@ -369,6 +371,7 @@ dtb-$(CONFIG_ARCH_MXC) += imx93-11x11-evk.dtb \
 			  imx93-debix-TD050A_Debix200A.dtb \
 			  imx93-debix-TD050A_Debix500A.dtb \
 			  imx93-debix-TD080B.dtb \
+			  imx93-debix-WF101JSYAHMNB0.dtb \
 			  imx93-debix-TD080B_Debix200A.dtb \
 			  imx93-debix-TD080B_Debix500A.dtb \
 			  #imx93-debix-HC080IY28026-D60.C_Debix500A.dtb \
