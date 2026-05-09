@@ -194,7 +194,7 @@
 				};
 
 				cpu_crit: cpu-crit {
-					temperature = <90000>;
+					temperature = <105000>;
 					hysteresis = <2000>;
 					type = "critical";
 				};
