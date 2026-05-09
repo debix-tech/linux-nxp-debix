@@ -25,8 +25,8 @@ debix@polyhex:$ tar xpf arm-gnu-toolchain-14.3.rel1-x86_64-aarch64-none-linux-gn
 > make -j32
  
 compiled and generated
-arch/arm64/boot/dts/freescale/imx93-emb-13-a1.dtb
-arch/arm64/boot/dts/freescale/imx91-emb-13-a1.dtb
+arch/arm64/boot/dts/freescale/imx93-bmb-13-a1.dtb
+arch/arm64/boot/dts/freescale/imx91-bmb-13-a1.dtb
 arch/arm64/boot/Image
 
 cp dtb and Image to Debix /boot/ complete kernel update

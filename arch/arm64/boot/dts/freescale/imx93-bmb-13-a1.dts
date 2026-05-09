@@ -13,7 +13,7 @@
 };
 
 / {
-	model = "Debix i.MX93 EMB 13 A1 board";
+	model = "Debix i.MX93 BMB 13 A1 board";
 	compatible = "fsl,imx93-11x11-evk", "fsl,imx93";
 
 	chosen {
