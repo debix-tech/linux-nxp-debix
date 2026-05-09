@@ -2581,7 +2581,7 @@ static int mxc_mlb150_probe(struct platform_device *pdev)
 	}
 
 	/* create class and device for udev information */
-	drvdata->class = class_create(THIS_MODULE, "mlb150");
+	drvdata->class = class_create("mlb150");
 	if (IS_ERR(drvdata->class)) {
 		dev_err(&pdev->dev, "failed to create device class\n");
 		ret = -ENOMEM;
@@ -2697,7 +2697,7 @@ err_reg:
 	return ret;
 }
 
-static int mxc_mlb150_remove(struct platform_device *pdev)
+static void mxc_mlb150_remove(struct platform_device *pdev)
 {
 	int i;
 	struct mlb_data *drvdata = platform_get_drvdata(pdev);
@@ -2722,8 +2722,6 @@ static int mxc_mlb150_remove(struct platform_device *pdev)
 
 	/* Unregister the two MLB devices */
 	unregister_chrdev_region(drvdata->firstdev, MLB_MINOR_DEVICES);
-
-	return 0;
 }
 
 #ifdef CONFIG_PM

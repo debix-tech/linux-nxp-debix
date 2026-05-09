@@ -59,6 +59,7 @@
 	};
 
 	sound-wm8960 {
+		/delete-property/ audio-codec;
 		status = "disabled";
 	};
 
@@ -69,40 +70,43 @@
 	rpmsg_audio: rpmsg_audio {
 		compatible = "fsl,imx8mp-rpmsg-audio";
 		model = "wm8960-audio";
-		fsl,platform = "rpmsg-audio-channel";
+		fsl,rpmsg-channel-name = "rpmsg-audio-channel";
 		fsl,enable-lpa;
 		fsl,rpmsg-out;
 		fsl,rpmsg-in;
 		assigned-clocks = <&clk IMX8MP_CLK_SAI3>;
 		assigned-clock-parents = <&clk IMX8MP_AUDIO_PLL1_OUT>;
 		assigned-clock-rates = <12288000>;
-		clocks = <&audio_blk_ctrl IMX8MP_CLK_AUDIO_BLK_CTRL_SAI3_IPG>,
-			 <&audio_blk_ctrl IMX8MP_CLK_AUDIO_BLK_CTRL_SAI3_MCLK1>,
-			 <&audio_blk_ctrl IMX8MP_CLK_AUDIO_BLK_CTRL_SDMA3_ROOT>,
+		clocks = <&audio_blk_ctrl IMX8MP_CLK_AUDIOMIX_SAI3_IPG>,
+			 <&audio_blk_ctrl IMX8MP_CLK_AUDIOMIX_SAI3_MCLK1>,
+			 <&audio_blk_ctrl IMX8MP_CLK_AUDIOMIX_SDMA3_ROOT>,
 			 <&clk IMX8MP_AUDIO_PLL1_OUT>,
 			 <&clk IMX8MP_AUDIO_PLL2_OUT>;
 		clock-names = "ipg", "mclk", "dma", "pll8k", "pll11k";
-		audio-codec = <&codec>;
+		audio-codec = <&wm8960>;
 		memory-region = <&audio_reserved>;
 		power-domains = <&audiomix_pd>;
 		audio-routing =
 			"LINPUT1", "MICB",
 			"LINPUT3", "MICB";
+		ignore-suspend-widgets =
+			"HP_L", "HP_R", "Playback",
+			"Capture", "MICB", "LINPUT1";
 		status = "okay";
 	};
 
 	rpmsg_micfil: rpmsg_micfil {
 		compatible = "fsl,imx8mp-rpmsg-audio";
 		model = "micfil-audio";
-		fsl,platform = "rpmsg-micfil-channel";
+		fsl,rpmsg-channel-name = "rpmsg-micfil-channel";
 		fsl,enable-lpa;
 		fsl,rpmsg-in;
 		assigned-clocks = <&clk IMX8MP_CLK_PDM>;
 		assigned-clock-parents = <&clk IMX8MP_AUDIO_PLL1_OUT>;
 		assigned-clock-rates = <196608000>;
-		clocks = <&audio_blk_ctrl IMX8MP_CLK_AUDIO_BLK_CTRL_PDM_IPG>,
-			 <&audio_blk_ctrl IMX8MP_CLK_AUDIO_BLK_CTRL_PDM_ROOT>,
-			 <&audio_blk_ctrl IMX8MP_CLK_AUDIO_BLK_CTRL_SDMA3_ROOT>,
+		clocks = <&audio_blk_ctrl IMX8MP_CLK_AUDIOMIX_PDM_IPG>,
+			 <&audio_blk_ctrl IMX8MP_CLK_AUDIOMIX_PDM_SEL>,
+			 <&audio_blk_ctrl IMX8MP_CLK_AUDIOMIX_SDMA3_ROOT>,
 			 <&clk IMX8MP_AUDIO_PLL1_OUT>,
 			 <&clk IMX8MP_AUDIO_PLL2_OUT>;
 		clock-names = "ipg", "mclk", "dma", "pll8k", "pll11k";
@@ -115,13 +119,14 @@
 		compatible = "fsl,imx8mn-cm7";
 		rsc-da = <0x55000000>;
 		clocks = <&clk IMX8MP_CLK_M7_DIV>,
-			 <&audio_blk_ctrl IMX8MP_CLK_AUDIO_BLK_CTRL_AUDPLL_ROOT>;
+			 <&audio_blk_ctrl IMX8MP_CLK_AUDIOMIX_AUDPLL_ROOT>;
 		clock-names = "core", "audio";
 		mbox-names = "tx", "rx", "rxdb";
 		mboxes = <&mu 0 1
 			  &mu 1 1
 			  &mu 3 1>;
-		memory-region = <&vdevbuffer>, <&vdev0vring0>, <&vdev0vring1>, <&rsc_table>;
+		memory-region = <&vdevbuffer>, <&vdev0vring0>, <&vdev0vring1>, <&rsc_table>,
+				<&m4_reserved>;
 		status = "okay";
 		fsl,startup-delay-ms = <500>;
 	};
@@ -186,11 +191,20 @@
 		};
 	};
 
-	codec: wm8960@1a {
-		compatible = "wlf,wm8960,lpa";
+	wm8960: codec@1a {
+		#sound-dai-cells = <0>;
+		compatible = "wlf,wm8960";
 		reg = <0x1a>;
+		clocks = <&audio_blk_ctrl IMX8MP_CLK_AUDIOMIX_SAI3_MCLK1>;
+		clock-names = "mclk";
 		wlf,shared-lrclk;
+		wlf,hp-cfg = <3 2 3>;
+		wlf,gpio-cfg = <1 3>;
+		DCVDD-supply = <&reg_audio_pwr>;
+		DBVDD-supply = <&reg_audio_pwr>;
+		AVDD-supply = <&reg_audio_pwr>;
 		SPKVDD1-supply = <&reg_audio_pwr>;
+		SPKVDD2-supply = <&reg_audio_pwr>;
 	};
 };
 

@@ -27,13 +27,13 @@
 
 static struct mipi_csi2_info *gmipi_csi2;
 
-void _mipi_csi2_lock(struct mipi_csi2_info *info)
+static void _mipi_csi2_lock(struct mipi_csi2_info *info)
 {
 	if (!in_irq() && !in_softirq())
 		mutex_lock(&info->mutex_lock);
 }
 
-void _mipi_csi2_unlock(struct mipi_csi2_info *info)
+static void _mipi_csi2_unlock(struct mipi_csi2_info *info)
 {
 	if (!in_irq() && !in_softirq())
 		mutex_unlock(&info->mutex_lock);
@@ -67,8 +67,9 @@ bool mipi_csi2_enable(struct mipi_csi2_info *info)
 		info->mipi_en = true;
 		clk_prepare_enable(info->cfg_clk);
 		clk_prepare_enable(info->dphy_clk);
-	} else
+	} else {
 		mipi_dbg("mipi csi2 already enabled!\n");
+	}
 
 	status = info->mipi_en;
 
@@ -94,8 +95,9 @@ bool mipi_csi2_disable(struct mipi_csi2_info *info)
 		info->mipi_en = false;
 		clk_disable_unprepare(info->dphy_clk);
 		clk_disable_unprepare(info->cfg_clk);
-	} else
+	} else {
 		mipi_dbg("mipi csi2 already disabled!\n");
+	}
 
 	status = info->mipi_en;
 
@@ -474,7 +476,7 @@ alloc_failed:
 	return ret;
 }
 
-static int mipi_csi2_remove(struct platform_device *pdev)
+static void mipi_csi2_remove(struct platform_device *pdev)
 {
 	/* unmapping mipi register */
 	iounmap(gmipi_csi2->mipi_csi2_base);
@@ -482,8 +484,6 @@ static int mipi_csi2_remove(struct platform_device *pdev)
 	kfree(gmipi_csi2);
 
 	dev_set_drvdata(&pdev->dev, NULL);
-
-	return 0;
 }
 
 static const struct of_device_id imx_mipi_csi2_dt_ids[] = {

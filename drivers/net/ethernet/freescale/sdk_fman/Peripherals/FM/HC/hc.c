@@ -30,7 +30,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
+#define __ERR_MODULE__  MODULE_FM
 
 #include "std_ext.h"
 #include "error_ext.h"
@@ -71,11 +71,7 @@
 
 #define HC_HCOR_KG_SCHEME_COUNTER           0x00000400
 
-#if (DPAA_VERSION == 10)
-#define HC_HCOR_KG_SCHEME_REGS_MASK         0xFFFFF800
-#else
 #define HC_HCOR_KG_SCHEME_REGS_MASK         0xFFFFFE00
-#endif /* (DPAA_VERSION == 10) */
 
 #define SIZE_OF_HC_FRAME_PORT_REGS          (sizeof(t_HcFrame)-sizeof(struct fman_kg_scheme_regs)+sizeof(t_FmPcdKgPortRegs))
 #define SIZE_OF_HC_FRAME_SCHEME_REGS        sizeof(t_HcFrame)
@@ -663,7 +659,6 @@ t_Error FmHcPcdKgSetClsPlan(t_Handle h_FmHc, t_FmPcdKgInterModuleClsPlanSet *p_S
         p_HcFrame->extraReg = HC_HCOR_KG_SCHEME_REGS_MASK;
 
         idx = (uint8_t)(i - p_Set->baseEntry);
-        ASSERT_COND(idx < FM_PCD_MAX_NUM_OF_CLS_PLANS);
 	dest = (void *)&p_HcFrame->hcSpecificData.clsPlanEntries;
 	src = &p_Set->vectors[idx];
         memcpy(dest, src, CLS_PLAN_NUM_PER_GRP*sizeof(uint32_t));

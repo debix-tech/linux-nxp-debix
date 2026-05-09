@@ -112,7 +112,7 @@ void amdtp_hid_wakeup(struct hid_device *hid)
 	}
 }
 
-static struct hid_ll_driver amdtp_hid_ll_driver = {
+static const struct hid_ll_driver amdtp_hid_ll_driver = {
 	.parse	=	amdtp_hid_parse,
 	.start	=	amdtp_hid_start,
 	.stop	=	amdtp_hid_stop,
@@ -171,11 +171,13 @@ err_hid_data:
 void amdtp_hid_remove(struct amdtp_cl_data *cli_data)
 {
 	int i;
+	struct amdtp_hid_data *hid_data;
 
 	for (i = 0; i < cli_data->num_hid_devices; ++i) {
 		if (cli_data->hid_sensor_hubs[i]) {
-			kfree(cli_data->hid_sensor_hubs[i]->driver_data);
+			hid_data = cli_data->hid_sensor_hubs[i]->driver_data;
 			hid_destroy_device(cli_data->hid_sensor_hubs[i]);
+			kfree(hid_data);
 			cli_data->hid_sensor_hubs[i] = NULL;
 		}
 	}

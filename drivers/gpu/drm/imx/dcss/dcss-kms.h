@@ -62,6 +62,7 @@ to_dcss_crtc_state(struct drm_crtc_state *state)
 
 struct dcss_kms_dev *dcss_kms_attach(struct dcss_dev *dcss, bool componetized);
 void dcss_kms_detach(struct dcss_kms_dev *kms, bool componetized);
+void dcss_kms_shutdown(struct dcss_kms_dev *kms);
 int dcss_crtc_setup_opipe(struct drm_device *dev,
 			  struct drm_atomic_state *state);
 int dcss_crtc_init(struct dcss_crtc *crtc, struct drm_device *drm);

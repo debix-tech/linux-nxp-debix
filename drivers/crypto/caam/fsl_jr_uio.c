@@ -9,6 +9,7 @@
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
 #include <linux/of_platform.h>
+#include <linux/platform_device.h>
 #include <linux/io.h>
 #include <linux/uio_driver.h>
 #include <linux/slab.h>
@@ -214,17 +215,15 @@ abort:
 	return ret;
 }
 
-static int fsl_jr_remove(struct platform_device *dev)
+static void fsl_jr_remove(struct platform_device *dev)
 {
 	struct jr_dev *jr_dev = platform_get_drvdata(dev);
 
 	if (!jr_dev)
-		return 0;
+		return;
 
 	list_del(&jr_dev->node);
 	uio_unregister_device(&jr_dev->info.uio);
-
-	return 0;
 }
 
 MODULE_DEVICE_TABLE(of, jr_ids);

@@ -2,7 +2,7 @@
 *
 *    The MIT License (MIT)
 *
-*    Copyright (c) 2014 - 2023 Vivante Corporation
+*    Copyright (c) 2014 - 2024 Vivante Corporation
 *
 *    Permission is hereby granted, free of charge, to any person obtaining a
 *    copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@
 *
 *    The GPL License (GPL)
 *
-*    Copyright (C) 2014 - 2023 Vivante Corporation
+*    Copyright (C) 2014 - 2024 Vivante Corporation
 *
 *    This program is free software; you can redistribute it and/or
 *    modify it under the terms of the GNU General Public License
@@ -51,7 +51,6 @@
 *    version of this file.
 *
 *****************************************************************************/
-
 
 #include "gc_hal_kernel_linux.h"
 #include "gc_hal_kernel_allocator.h"
@@ -124,7 +123,7 @@ sys_printf(IN void *obj, IN const char *fmt, ...)
  **************************** DEBUG SHOW FUNCTIONS *****************************
  *******************************************************************************/
 
-int
+static int
 gc_info_show(void *m, void *data)
 {
     gckGALDEVICE gal_device = galDevice;
@@ -171,7 +170,7 @@ gc_info_show(void *m, void *data)
     return len;
 }
 
-int
+static int
 gc_clients_show(void *m, void *data)
 {
     gckGALDEVICE    device = galDevice;
@@ -217,7 +216,7 @@ gc_clients_show(void *m, void *data)
     return len;
 }
 
-int
+static int
 gc_meminfo_show(void *m, void *data)
 {
     gckGALDEVICE    device = galDevice;
@@ -307,7 +306,7 @@ gc_meminfo_show(void *m, void *data)
     return len;
 }
 
-int
+static int
 gc_load_show(void *m, void *data)
 {
     int               len        = 0;
@@ -796,9 +795,6 @@ gc_idle_show(void *m, void *data)
     return len;
 }
 
-extern void
-_DumpState(IN gckKERNEL Kernel);
-
 static gctUINT dumpDevice = 0;
 static gctUINT dumpCore   = 0;
 
@@ -844,7 +840,7 @@ gc_dump_trigger_show(void *m, void *data)
 
         gcmkONERROR(gckHARDWARE_SetPowerState(Hardware, gcvPOWER_ON_AUTO));
 
-        _DumpState(kernel);
+        gckKERNEL_DumpState(kernel);
 
         switch (statesStored) {
         case gcvPOWER_OFF:
@@ -1133,7 +1129,7 @@ static int
 set_clk(const char *buf)
 {
     gckHARDWARE  hardware;
-    gctINT       n, j, k;
+    gctINT       n, k;
     gctBOOL      isSpace = gcvFALSE;
     char         data[20];
     gckGALDEVICE gal_device = galDevice;
@@ -1144,7 +1140,7 @@ set_clk(const char *buf)
         return -ENXIO;
 
     memset(data, 0, 20);
-    n = 0; j = 0; k = 0;
+    n = 0; k = 0;
 
     while (gcvTRUE) {
         if ((buf[k] >= '0') && (buf[k] <= '9')) {
@@ -1169,7 +1165,7 @@ set_clk(const char *buf)
             break;
     }
 
-    if (4 == sscanf(data, "%u %d %d", &dumpCore, &clkScale[0], &clkScale[1])) {
+    if (4 == sscanf(data, "%u %u %d %d", &devIndex, &dumpCore, &clkScale[0], &clkScale[1])) {
         pr_warn("Change device:%d core:%d MC scale:%d SH scale:%d\n",
                 devIndex, dumpCore, clkScale[0], clkScale[1]);
     } else {
@@ -1298,80 +1294,80 @@ gc_poweroff_timeout_write(const char __user *buf, size_t count, void *data)
     return ret;
 }
 
-int
+static int
 gc_info_show_debugfs(struct seq_file *m, void *data)
 {
     return gc_info_show((void *)m, data);
 }
 
-int
+static int
 gc_clients_show_debugfs(struct seq_file *m, void *data)
 {
     return gc_clients_show((void *)m, data);
 }
 
-int
+static int
 gc_meminfo_show_debugfs(struct seq_file *m, void *data)
 {
     return gc_meminfo_show((void *)m, data);
 }
 
-int
+static int
 gc_idle_show_debugfs(struct seq_file *m, void *data)
 {
     return gc_idle_show((void *)m, data);
 }
 
-int
+static int
 gc_db_old_show_debugfs(struct seq_file *m, void *data)
 {
     return gc_db_old_show((void *)m, data, gcvTRUE);
 }
 
-int
+static int
 gc_db_show_debugfs(struct seq_file *m, void *data)
 {
     return gc_db_show((void *)m, data, gcvTRUE);
 }
 
-int
+static int
 gc_version_show_debugfs(struct seq_file *m, void *data)
 {
     return gc_version_show((void *)m, data);
 }
 
-int
+static int
 gc_vidmem_old_show_debugfs(struct seq_file *m, void *data)
 {
     return gc_vidmem_old_show((void *)m, data, gcvTRUE);
 }
 
-int
+static int
 gc_vidmem_show_debugfs(struct seq_file *m, void *data)
 {
     return gc_vidmem_show((void *)m, data, gcvTRUE);
 }
 
-int
+static int
 gc_dump_trigger_show_debugfs(struct seq_file *m, void *data)
 {
     return gc_dump_trigger_show((void *)m, data);
 }
 
-int
+static int
 gc_clk_show_debugfs(struct seq_file *m, void *data)
 {
     return gc_clk_show((void *)m, data);
 }
 
-int
+static int
 gc_poweroff_timeout_show_debugfs(struct seq_file *m, void *data)
 {
     return gc_poweroff_timeout_show((void *)m, data);
 }
 
 #if gcdENABLE_MP_SWITCH
-int
+static int
 gc_switch_core_count_debugfs(struct seq_file *m, void *data)
 {
     return gc_switch_core_count((void *)m, data);
@@ -1379,7 +1375,7 @@ gc_switch_core_count_debugfs(struct seq_file *m, void *data)
 #    endif
 
 #if VIVANTE_PROFILER
-int
+static int
 gc_load_show_debugfs(struct seq_file *m, void *data)
 {
     return gc_load_show((void *)m, data);
@@ -2339,6 +2335,7 @@ gckGALDEVICE_Construct(IN gcsPLATFORM                *Platform,
         device->physBase    = Args->baseAddress;
         device->physSize    = Args->physSize;
 
+        device->mmuSwSwitch = Args->mmuSwSwitch;
         /* Loop all the cores in one deivce. */
         for (i = 0; i < device->configCoreCount; i++) {
             /* Get arguments from global core index. */
@@ -2392,7 +2389,7 @@ gckGALDEVICE_Construct(IN gcsPLATFORM                *Platform,
                         gcmkONERROR(gcvSTATUS_OUT_OF_RESOURCES);
                     }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,6,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0)
                     device->registerBases[i] =
                         (gctPOINTER)ioremap(physical, device->requestedRegisterMemSizes[i]);
 #else
@@ -2415,7 +2412,7 @@ gckGALDEVICE_Construct(IN gcsPLATFORM                *Platform,
     }
 
     if (gal_device->devices[0]->irqLines[gcvCORE_MAJOR] != -1 ||
-        gcmBITTEST(isrPolling, gcvCORE_MAJOR)!= 0) {
+        gcmBITTEST(isrPolling, gcvCORE_MAJOR) != 0) {
         gcmkONERROR(gctaOS_ConstructOS(gal_device->os, &gal_device->taos));
     }
 
@@ -2582,7 +2579,7 @@ gckGALDEVICE_Construct(IN gcsPLATFORM                *Platform,
 
         for (i = gcvCORE_2D; i <= gcvCORE_2D_MAX; i++) {
 #if !gcdCAPTURE_ONLY_MODE
-            if (device->irqLines[i] != -1 || gcmBITTEST(isrPolling, i)!= 0) {
+            if (device->irqLines[i] != -1 || gcmBITTEST(isrPolling, i) != 0) {
                 gcmkONERROR(gckDEVICE_AddCore(device,
                                               (gceCORE)i,
                                               Args->chipIDs[i],
@@ -2607,7 +2604,7 @@ gckGALDEVICE_Construct(IN gcsPLATFORM                *Platform,
         }
 
 #if !gcdCAPTURE_ONLY_MODE
-        if (device->irqLines[gcvCORE_VG] != -1 || gcmBITTEST(isrPolling, gcvCORE_VG)!= 0) {
+        if (device->irqLines[gcvCORE_VG] != -1 || gcmBITTEST(isrPolling, gcvCORE_VG) != 0) {
 #if gcdENABLE_VG
              gcmkONERROR(gckDEVICE_AddCore(device,
                                            gcvCORE_VG,
@@ -3075,6 +3072,9 @@ gckGALDEVICE_Start(IN gckGALDEVICE Device)
             if (device->kernels[i] == gcvNULL)
                 continue;
 
+            if (device->kernels[i]->processPageTable && (!device->kernels[i]->flatMapping))
+                gcmkONERROR(gckMMU_ConstructMmuCopy(device->kernels[i], &device->kernels[i]->mmuCopy));
+
             /* Setup the ISR routine. */
             gcmkONERROR(_SetupIsr(device, i));
 
@@ -3160,6 +3160,10 @@ gckGALDEVICE_Stop(gckGALDEVICE Device)
                                                           gcvPOWER_OFF));
                 }
             }
+
+            if (device->kernels[i]->processPageTable && (!device->kernels[i]->flatMapping))
+                gcmkONERROR(gckMMU_DestroyMmuCopy(device->kernels[i]->mmuCopy));
+
 
             /* Stop the ISR routine. */
             gcmkONERROR(_ReleaseIsr(device, i));

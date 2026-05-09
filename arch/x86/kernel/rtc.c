@@ -10,7 +10,6 @@
 #include <asm/vsyscall.h>
 #include <asm/x86_init.h>
 #include <asm/time.h>
-#include <asm/intel-mid.h>
 #include <asm/setup.h>
 
 #ifdef CONFIG_X86_32
@@ -67,7 +66,7 @@ void mach_get_cmos_time(struct timespec64 *now)
 		return;
 	}
 
-	if (mc146818_get_time(&tm)) {
+	if (mc146818_get_time(&tm, 1000)) {
 		pr_err("Unable to read current time from RTC\n");
 		now->tv_sec = now->tv_nsec = 0;
 		return;
@@ -138,15 +137,12 @@ static __init int add_rtc_cmos(void)
 	static const char * const ids[] __initconst =
 	    { "PNP0b00", "PNP0b01", "PNP0b02", };
 	struct pnp_dev *dev;
-	struct pnp_id *id;
 	int i;
 
 	pnp_for_each_dev(dev) {
-		for (id = dev->id; id; id = id->next) {
-			for (i = 0; i < ARRAY_SIZE(ids); i++) {
-				if (compare_pnp_id(id, ids[i]) != 0)
-					return 0;
-			}
+		for (i = 0; i < ARRAY_SIZE(ids); i++) {
+			if (compare_pnp_id(dev->id, ids[i]) != 0)
+				return 0;
 		}
 	}
 #endif

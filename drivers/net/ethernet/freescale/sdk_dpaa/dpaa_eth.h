@@ -64,11 +64,11 @@ struct dpa_buffer_layout_s {
 	uint16_t	data_align;
 };
 
-#ifdef CONFIG_FSL_DPAA_ETH_DEBUG
-#define DPA_BUG_ON(cond)	BUG_ON(cond)
-#else
-#define DPA_BUG_ON(cond)
-#endif
+static inline void DPA_BUG_ON(bool cond)
+{
+	if (IS_ENABLED(CONFIG_FSL_DPAA_ETH_DEBUG))
+		BUG_ON(cond);
+}
 
 #define DPA_TX_PRIV_DATA_SIZE	16
 #define DPA_PARSE_RESULTS_SIZE sizeof(fm_prs_result_t)
@@ -444,8 +444,8 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 				   const struct qm_fd *fd);
 void __hot _dpa_process_parse_results(const fm_prs_result_t *parse_results,
 				      const struct qm_fd *fd,
-				      struct sk_buff *skb,
-				      int *use_gro);
+				      struct sk_buff *skb, bool *use_gro,
+				      bool dcl4c_valid);
 #ifndef CONFIG_FSL_DPAA_TS
 bool dpa_skb_is_recyclable(struct sk_buff *skb);
 bool dpa_buf_is_recyclable(struct sk_buff *skb,

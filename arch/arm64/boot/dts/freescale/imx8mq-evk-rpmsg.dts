@@ -38,6 +38,10 @@
 			reg = <0 0xb8400000 0 0x100000>;
 			no-map;
 		};
+
+		linux,cma {
+			alloc-ranges = <0 0x40000000 0 0x80000000>;
+		};
 	};
 
 	imx8mq-cm4 {
@@ -48,7 +52,8 @@
 		mboxes = <&mu 0 1
 			  &mu 1 1
 			  &mu 3 1>;
-		memory-region = <&vdevbuffer>, <&vdev0vring0>, <&vdev0vring1>, <&rsc_table>;
+		memory-region = <&vdevbuffer>, <&vdev0vring0>, <&vdev0vring1>, <&rsc_table>,
+				<&m4_reserved>;
 		syscon = <&src>;
 		fsl,startup-delay-ms = <500>;
 	};

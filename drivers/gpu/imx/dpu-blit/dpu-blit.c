@@ -198,11 +198,9 @@ void dpu_bliteng_set_dev(struct dpu_bliteng *dpu_be, struct device *dev)
 }
 EXPORT_SYMBOL(dpu_bliteng_set_dev);
 
-int dpu_be_get(struct dpu_bliteng *dpu_be)
+void dpu_be_get(struct dpu_bliteng *dpu_be)
 {
 	mutex_lock(&dpu_be->mutex);
-
-	return 0;
 }
 EXPORT_SYMBOL(dpu_be_get);
 
@@ -273,7 +271,7 @@ static struct dma_fence_ops dpu_be_fence_ops = {
 	.release = dma_fence_free,
 };
 
-int dpu_be_get_fence(struct dpu_bliteng *dpu_be)
+int dpu_be_get_fence(struct dpu_bliteng *dpu_be, int dpu_num)
 {
 	int fd = -1;
 	u64 seqno = 0;
@@ -288,7 +286,7 @@ int dpu_be_get_fence(struct dpu_bliteng *dpu_be)
 	/* Init fence pointer */
 	fence->signaled = false;
 	spin_lock_init(&fence->lock);
-	atomic_set(&fence->refcnt, 0);
+	atomic_set(&fence->refcnt, dpu_num);
 
 	/* Init dma fence base data */
 	seqno = atomic64_inc_return(&dpu_be->seqno);
@@ -370,9 +368,6 @@ int dpu_be_set_fence(struct dpu_bliteng *dpu_be, int fd)
 
 	/* Setup the fence and active it asynchronously */
 	dpu_be_emit_fence(dpu_be, fence, false);
-
-	/* Increase fence reference */
-	atomic_inc(&fence->refcnt);
 
 	return 0;
 }

@@ -189,15 +189,13 @@ static int wks_panel_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int wks_panel_remove(struct platform_device *pdev)
+static void wks_panel_remove(struct platform_device *pdev)
 {
 	struct wks_panel *p = dev_get_drvdata(&pdev->dev);
 
 	drm_panel_remove(&p->panel);
 
 	wks_panel_disable(&p->panel);
-
-	return 0;
 }
 
 static void wks_panel_shutdown(struct platform_device *pdev)

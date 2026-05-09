@@ -40,8 +40,7 @@ struct task_struct;
 DECLARE_PER_CPU(struct task_struct *, __entry_task);
 
 #include <asm/types.h>
-
-typedef unsigned long mm_segment_t;
+#include <asm/traps.h>
 
 struct cpu_context_save {
 	__u32	r4;
@@ -64,12 +63,10 @@ struct cpu_context_save {
 struct thread_info {
 	unsigned long		flags;		/* low level flags */
 	int			preempt_count;	/* 0 => preemptable, <0 => bug */
-	mm_segment_t		addr_limit;	/* address limit */
 	__u32			cpu;		/* cpu */
 	__u32			cpu_domain;	/* cpu domain */
 	struct cpu_context_save	cpu_context;	/* cpu context */
 	__u32			abi_syscall;	/* ABI type and syscall nr */
-	__u8			used_cp[16];	/* thread used copro */
 	unsigned long		tp_value[2];	/* TLS registers */
 	union fp_state		fpstate __attribute__((aligned(8)));
 	union vfp_state		vfpstate;
@@ -82,7 +79,6 @@ struct thread_info {
 {									\
 	.flags		= 0,						\
 	.preempt_count	= INIT_PREEMPT_COUNT,				\
-	.addr_limit	= KERNEL_DS,					\
 }
 
 static inline struct task_struct *thread_task(struct thread_info* ti)
@@ -108,6 +104,21 @@ extern void iwmmxt_task_copy(struct thread_info *, void *);
 extern void iwmmxt_task_restore(struct thread_info *, void *);
 extern void iwmmxt_task_release(struct thread_info *);
 extern void iwmmxt_task_switch(struct thread_info *);
+
+extern int iwmmxt_undef_handler(struct pt_regs *, u32);
+
+static inline void register_iwmmxt_undef_handler(void)
+{
+	static struct undef_hook iwmmxt_undef_hook = {
+		.instr_mask	= 0x0c000e00,
+		.instr_val	= 0x0c000000,
+		.cpsr_mask	= MODE_MASK | PSR_T_BIT,
+		.cpsr_val	= USR_MODE,
+		.fn		= iwmmxt_undef_handler,
+	};
+
+	register_undef_hook(&iwmmxt_undef_hook);
+}
 
 extern void vfp_sync_hwstate(struct thread_info *);
 extern void vfp_flush_hwstate(struct thread_info *);

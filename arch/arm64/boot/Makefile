@@ -15,18 +15,11 @@
 #
 
 OBJCOPYFLAGS_Image :=-O binary -R .note -R .note.gnu.build-id -R .comment -S
-OBJCOPYFLAGS_yocto_sd.efi :=-O binary -R .note -R .note.gnu.build-id -R .comment -S
-OBJCOPYFLAGS_yocto.efi :=-O binary -R .note -R .note.gnu.build-id -R .comment -S
 
-targets := Image yocto.efi yocto_sd.efi Image.bz2 Image.gz Image.lz4 Image.lzma Image.lzo Image.zst
+targets := Image Image.bz2 Image.gz Image.lz4 Image.lzma Image.lzo \
+	Image.zst Image.xz image.fit
 
 $(obj)/Image: vmlinux FORCE
-	$(call if_changed,objcopy)
-
-$(obj)/yocto_sd.efi: vmlinux FORCE
-	$(call if_changed,objcopy)
-
-$(obj)/yocto.efi: vmlinux FORCE
 	$(call if_changed,objcopy)
 
 $(obj)/Image.bz2: $(obj)/Image FORCE
@@ -47,8 +40,18 @@ $(obj)/Image.lzo: $(obj)/Image FORCE
 $(obj)/Image.zst: $(obj)/Image FORCE
 	$(call if_changed,zstd)
 
+$(obj)/Image.xz: $(obj)/Image FORCE
+	$(call if_changed,xzkern)
+
+$(obj)/image.fit: $(obj)/Image $(obj)/dts/dtbs-list FORCE
+	$(call if_changed,fit)
+
 EFI_ZBOOT_PAYLOAD	:= Image
 EFI_ZBOOT_BFD_TARGET	:= elf64-littleaarch64
 EFI_ZBOOT_MACH_TYPE	:= ARM64
+EFI_ZBOOT_FORWARD_CFI	:= $(CONFIG_ARM64_BTI_KERNEL)
+
+EFI_ZBOOT_OBJCOPY_FLAGS	= --add-symbol zboot_code_size=0x$$( \
+				$(NM) vmlinux|grep _kernel_codesize|cut -d' ' -f1)
 
 include $(srctree)/drivers/firmware/efi/libstub/Makefile.zboot

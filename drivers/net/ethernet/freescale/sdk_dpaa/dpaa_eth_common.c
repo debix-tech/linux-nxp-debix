@@ -33,6 +33,7 @@
 #include <linux/module.h>
 #include <linux/of_platform.h>
 #include <linux/of_net.h>
+#include <linux/platform_device.h>
 #include <linux/etherdevice.h>
 #include <linux/kthread.h>
 #include <linux/percpu.h>
@@ -228,9 +229,10 @@ EXPORT_SYMBOL(dpa_timeout);
 /* net_device */
 
 /**
- * @param net_dev the device for which statistics are calculated
- * @param stats the function fills this structure with the device's statistics
- * @return the address of the structure containing the statistics
+ * dpa_get_stats64() - Implementation of ndo_get_stats64()
+ *
+ * @net_dev: the device for which statistics are calculated
+ * @stats: the function fills this structure with the device's statistics
  *
  * Calculates the statistics for the given device by adding the statistics
  * collected by each CPU.
@@ -278,29 +280,22 @@ EXPORT_SYMBOL(dpa_ndo_init);
 
 int dpa_set_features(struct net_device *dev, netdev_features_t features)
 {
-	/* Not much to do here for now */
-	dev->features = features;
+	netdev_features_t changed = features ^ dev->features;
+	struct dpa_priv_s *priv = netdev_priv(dev);
+	struct mac_device *mac_dev = priv->mac_dev;
+	bool enable;
+	int err;
+
+	if (changed & NETIF_F_RXCSUM) {
+		enable = !!(features & NETIF_F_RXCSUM);
+		err = fm_port_enable_rx_l4csum(mac_dev->port_dev[RX], enable);
+		if (err)
+			return err;
+	}
+
 	return 0;
 }
 EXPORT_SYMBOL(dpa_set_features);
-
-netdev_features_t dpa_fix_features(struct net_device *dev,
-		netdev_features_t features)
-{
-	netdev_features_t unsupported_features = 0;
-
-	/* In theory we should never be requested to enable features that
-	 * we didn't set in netdev->features and netdev->hw_features at probe
-	 * time, but double check just to be on the safe side.
-	 * We don't support enabling Rx csum through ethtool yet
-	 */
-	unsupported_features |= NETIF_F_RXCSUM;
-
-	features &= ~unsupported_features;
-
-	return features;
-}
-EXPORT_SYMBOL(dpa_fix_features);
 
 #ifdef CONFIG_FSL_DPAA_TS
 u64 dpa_get_timestamp_ns(const struct dpa_priv_s *priv, enum port_type rx_tx,
@@ -350,19 +345,6 @@ static void dpa_ts_tx_disable(struct net_device *dev)
 {
 	struct dpa_priv_s *priv = netdev_priv(dev);
 
-#if 0
-/* the RTC might be needed by the Rx Ts, cannot disable here
- * no separate ptp_disable API for Rx/Tx, cannot disable here
- */
-	struct mac_device *mac_dev = priv->mac_dev;
-
-	if (mac_dev->fm_rtc_disable)
-		mac_dev->fm_rtc_disable(get_fm_handle(dev));
-
-	if (mac_dev->ptp_disable)
-		mac_dev->ptp_disable(mac_dev->get_mac_handle(mac_dev));
-#endif
-
 	priv->ts_tx_en = false;
 }
 
@@ -380,19 +362,6 @@ static void dpa_ts_rx_enable(struct net_device *dev)
 static void dpa_ts_rx_disable(struct net_device *dev)
 {
 	struct dpa_priv_s *priv = netdev_priv(dev);
-
-#if 0
-/* the RTC might be needed by the Tx Ts, cannot disable here
- * no separate ptp_disable API for Rx/Tx, cannot disable here
- */
-	struct mac_device *mac_dev = priv->mac_dev;
-
-	if (mac_dev->fm_rtc_disable)
-		mac_dev->fm_rtc_disable(get_fm_handle(dev));
-
-	if (mac_dev->ptp_disable)
-		mac_dev->ptp_disable(mac_dev->get_mac_handle(mac_dev));
-#endif
 
 	priv->ts_rx_en = false;
 }
@@ -463,9 +432,8 @@ int dpa_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 }
 EXPORT_SYMBOL(dpa_ioctl);
 
-int __cold dpa_remove(struct platform_device *of_dev)
+void __cold dpa_remove(struct platform_device *of_dev)
 {
-	int			err;
 	struct device		*dev;
 	struct net_device	*net_dev;
 	struct dpa_priv_s	*priv;
@@ -480,7 +448,7 @@ int __cold dpa_remove(struct platform_device *of_dev)
 	dev_set_drvdata(dev, NULL);
 	unregister_netdev(net_dev);
 
-	err = dpa_fq_free(dev, &priv->dpa_fq_list);
+	dpa_fq_free(dev, &priv->dpa_fq_list);
 
 	qman_delete_cgr_safe(&priv->ingress_cgr);
 	qman_release_cgrid(priv->ingress_cgr.cgrid);
@@ -505,8 +473,6 @@ int __cold dpa_remove(struct platform_device *of_dev)
 #endif
 
 	free_netdev(net_dev);
-
-	return err;
 }
 EXPORT_SYMBOL(dpa_remove);
 
@@ -1006,8 +972,7 @@ void dpaa_eth_add_channel(u16 channel)
 }
 EXPORT_SYMBOL(dpaa_eth_add_channel);
 
-/**
- * Congestion group state change notification callback.
+/* Congestion group state change notification callback.
  * Stops the device's egress queues while they are congested and
  * wakes them upon exiting congested state.
  * Also updates some CGR-related stats.
@@ -1667,8 +1632,7 @@ void count_ern(struct dpa_percpu_priv_s *percpu_priv,
 }
 EXPORT_SYMBOL(count_ern);
 
-/**
- * Turn on HW checksum computation for this outgoing frame.
+/* Turn on HW checksum computation for this outgoing frame.
  * If the current protocol is not something we support in this regard
  * (or if the stack has already computed the SW checksum), we do nothing.
  *

@@ -2996,8 +2996,9 @@ out:
 	return rate;
 }
 
-static int max9286_g_frame_interval(struct v4l2_subdev *sd,
-				    struct v4l2_subdev_frame_interval *fi)
+static int max9286_get_frame_interval(struct v4l2_subdev *sd,
+				      struct v4l2_subdev_state *state,
+				      struct v4l2_subdev_frame_interval *fi)
 {
 	struct sensor_data *max9286_data = subdev_to_sensor_data(sd);
 
@@ -3008,8 +3009,9 @@ static int max9286_g_frame_interval(struct v4l2_subdev *sd,
 	return 0;
 }
 
-static int max9286_s_frame_interval(struct v4l2_subdev *sd,
-				    struct v4l2_subdev_frame_interval *fi)
+static int max9286_set_frame_interval(struct v4l2_subdev *sd,
+				      struct v4l2_subdev_state *state,
+				      struct v4l2_subdev_frame_interval *fi)
 {
 	struct sensor_data *max9286_data = subdev_to_sensor_data(sd);
 	enum ov10635_mode mode = max9286_data->current_mode;
@@ -3090,6 +3092,8 @@ static const struct v4l2_subdev_pad_ops max9286_pad_ops = {
 	.set_fmt		= max9286_set_fmt,
 	.get_frame_desc		= max9286_get_frame_desc,
 	.set_frame_desc		= max9286_set_frame_desc,
+	.get_frame_interval     = max9286_get_frame_interval,
+	.set_frame_interval     = max9286_set_frame_interval,
 };
 
 static const struct v4l2_subdev_core_ops max9286_core_ops = {
@@ -3097,8 +3101,6 @@ static const struct v4l2_subdev_core_ops max9286_core_ops = {
 };
 
 static const struct v4l2_subdev_video_ops max9286_video_ops = {
-	.g_frame_interval = max9286_g_frame_interval,
-	.s_frame_interval = max9286_s_frame_interval,
 	.s_stream	  = max9286_s_stream,
 };
 
@@ -3112,8 +3114,8 @@ static const struct media_entity_operations max9286_sd_media_ops = {
 	.link_setup = max9286_link_setup,
 };
 
-ssize_t analog_test_pattern_show(struct device *dev,
-				 struct device_attribute *attr, char *buf)
+static ssize_t analog_test_pattern_show(struct device *dev,
+					struct device_attribute *attr, char *buf)
 {
 	struct v4l2_subdev *sd = dev_get_drvdata(dev);
 	struct sensor_data *max9286_data = subdev_to_sensor_data(sd);
@@ -3131,7 +3133,7 @@ static ssize_t analog_test_pattern_store(struct device *dev,
 	struct sensor_data *max9286_data = subdev_to_sensor_data(sd);
 	char enabled[32];
 
-	if (sscanf(buf, "%s", enabled) > 0) {
+	if (sscanf(buf, "%31s", enabled) > 0) {
 		if (strcmp(enabled, "enable") == 0)
 			ov10635_write_reg(max9286_data, 0, 0x370A, 0x4);
 		else
@@ -3149,7 +3151,7 @@ static DEVICE_ATTR_RW(analog_test_pattern);
  * @param adapter            struct i2c_adapter *
  * @return  Error code indicating success or failure
  */
-static int max9286_probe(struct i2c_client *client, const struct i2c_device_id *id)
+static int max9286_probe(struct i2c_client *client)
 {
 	struct device *dev = &client->dev;
 	struct sensor_data *max9286_data;
@@ -3205,7 +3207,8 @@ static int max9286_probe(struct i2c_client *client, const struct i2c_device_id *
 	 */
 	max9286_data->format.reserved[0] = 72 * 8;
 	max9286_data->format.field = V4L2_FIELD_NONE;
-	max9286_data->current_mode = 0;
+	max9286_data->current_mode = ov10635_mode_WXGA_1280_800;
+	max9286_data->current_fr = OV10635_30_FPS;
 	max9286_data->frame_interval.denominator = 30;
 	max9286_data->frame_interval.numerator = 1;
 	max9286_data->is_mipi = 1;

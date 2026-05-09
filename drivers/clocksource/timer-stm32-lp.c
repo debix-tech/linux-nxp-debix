@@ -168,9 +168,7 @@ static int stm32_clkevent_lp_probe(struct platform_device *pdev)
 	}
 
 	if (of_property_read_bool(pdev->dev.parent->of_node, "wakeup-source")) {
-		ret = device_init_wakeup(&pdev->dev, true);
-		if (ret)
-			goto out_clk_disable;
+		device_set_wakeup_capable(&pdev->dev, true);
 
 		ret = dev_pm_set_wake_irq(&pdev->dev, irq);
 		if (ret)
@@ -195,11 +193,6 @@ out_clk_disable:
 	return ret;
 }
 
-static int stm32_clkevent_lp_remove(struct platform_device *pdev)
-{
-	return -EBUSY; /* cannot unregister clockevent */
-}
-
 static const struct of_device_id stm32_clkevent_lp_of_match[] = {
 	{ .compatible = "st,stm32-lptimer-timer", },
 	{},
@@ -207,15 +200,14 @@ static const struct of_device_id stm32_clkevent_lp_of_match[] = {
 MODULE_DEVICE_TABLE(of, stm32_clkevent_lp_of_match);
 
 static struct platform_driver stm32_clkevent_lp_driver = {
-	.probe	= stm32_clkevent_lp_probe,
-	.remove = stm32_clkevent_lp_remove,
+	.probe  = stm32_clkevent_lp_probe,
 	.driver	= {
 		.name = "stm32-lptimer-timer",
-		.of_match_table = of_match_ptr(stm32_clkevent_lp_of_match),
+		.of_match_table = stm32_clkevent_lp_of_match,
+		.suppress_bind_attrs = true,
 	},
 };
 module_platform_driver(stm32_clkevent_lp_driver);
 
 MODULE_ALIAS("platform:stm32-lptimer-timer");
 MODULE_DESCRIPTION("STMicroelectronics STM32 clockevent low power driver");
-MODULE_LICENSE("GPL v2");

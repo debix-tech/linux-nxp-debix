@@ -11,6 +11,7 @@
 #include <linux/module.h>
 #include <linux/of_device.h>
 #include <linux/of_graph.h>
+#include <linux/of_platform.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <drm/drm_fourcc.h>
@@ -43,6 +44,8 @@ static struct imx8mp_hdmi_pavi *gpavi;
 /* PAI APIs  */
 void imx8mp_hdmi_pai_enable(int channel, int width, int rate, int non_pcm)
 {
+	reset_control_deassert(gpavi->reset_pai);
+
 	/* PAI set */
 	writel((0x3030000 | ((channel-1) << 8)),
 			gpavi->base + HTX_PAI_CTRL_EXT);
@@ -64,6 +67,8 @@ void imx8mp_hdmi_pai_disable(void)
 {
 	/* stop PAI */
 	writel(0, gpavi->base + HTX_PAI_CTRL);
+
+	reset_control_assert(gpavi->reset_pai);
 }
 EXPORT_SYMBOL(imx8mp_hdmi_pai_disable);
 
@@ -135,6 +140,12 @@ static int imx8mp_hdmi_pavi_probe(struct platform_device *pdev)
 		return -EPROBE_DEFER;
 	}
 
+	pavi->reset_pai = devm_reset_control_get_optional(dev, "pai_rst");
+	if (IS_ERR(pavi->reset_pai)) {
+		dev_err(pavi->dev, "No PAI reset\n");
+		return -EPROBE_DEFER;
+	}
+
 	platform_set_drvdata(pdev, pavi);
 
 	gpavi = pavi;
@@ -145,12 +156,10 @@ static int imx8mp_hdmi_pavi_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int imx8mp_hdmi_pavi_remove(struct platform_device *pdev)
+static void imx8mp_hdmi_pavi_remove(struct platform_device *pdev)
 {
 	clk_disable_unprepare(gpavi->clk_apb);
 	gpavi = NULL;
-
-	return 0;
 }
 
 static const struct of_device_id imx8mp_hdmi_pavi_dt_ids[] = {

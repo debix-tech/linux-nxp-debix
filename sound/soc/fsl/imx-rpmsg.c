@@ -5,9 +5,7 @@
 #include <linux/of_platform.h>
 #include <linux/of_reserved_mem.h>
 #include <linux/i2c.h>
-#include <linux/of_gpio.h>
 #include <linux/slab.h>
-#include <linux/gpio.h>
 #include <linux/clk.h>
 #include <sound/soc.h>
 #include <sound/jack.h>
@@ -16,13 +14,15 @@
 #include <sound/soc-dapm.h>
 #include <sound/simple_card_utils.h>
 #include "imx-pcm-rpmsg.h"
+#include "../codecs/wm8960.h"
 
 struct imx_rpmsg {
 	struct snd_soc_dai_link dai;
 	struct snd_soc_card card;
 	unsigned long sysclk;
-	struct asoc_simple_jack hp_jack;
 	bool lpa;
+	struct simple_util_jack hp_jack;
+	int sysclk_id;
 };
 
 static struct dev_pm_ops lpa_pm;
@@ -39,7 +39,7 @@ static int imx_rpmsg_late_probe(struct snd_soc_card *card)
 	struct imx_rpmsg *data = snd_soc_card_get_drvdata(card);
 	struct snd_soc_pcm_runtime *rtd = list_first_entry(&card->rtd_list,
 							   struct snd_soc_pcm_runtime, list);
-	struct snd_soc_dai *codec_dai = asoc_rtd_to_codec(rtd, 0);
+	struct snd_soc_dai *codec_dai = snd_soc_rtd_to_codec(rtd, 0);
 	struct device *dev = card->dev;
 	int ret;
 
@@ -68,14 +68,16 @@ static int imx_rpmsg_late_probe(struct snd_soc_card *card)
 			if (codec_comp) {
 				int i, num_widgets;
 				const char *widgets;
+				struct snd_soc_dapm_context *dapm;
 
 				num_widgets = of_property_count_strings(data->card.dev->of_node,
-									"fsl,lpa-widgets");
+									"ignore-suspend-widgets");
 				for (i = 0; i < num_widgets; i++) {
 					of_property_read_string_index(data->card.dev->of_node,
-								      "fsl,lpa-widgets", i, &widgets);
-					snd_soc_dapm_ignore_suspend(snd_soc_component_get_dapm(codec_comp),
-								    widgets);
+								      "ignore-suspend-widgets",
+								      i, &widgets);
+					dapm = snd_soc_component_get_dapm(codec_comp);
+					snd_soc_dapm_ignore_suspend(dapm, widgets);
 				}
 			}
 			codec_drv = codec_dev->driver;
@@ -96,7 +98,7 @@ static int imx_rpmsg_late_probe(struct snd_soc_card *card)
 	if (!data->sysclk)
 		return 0;
 
-	ret = snd_soc_dai_set_sysclk(codec_dai, 0, data->sysclk, SND_SOC_CLOCK_IN);
+	ret = snd_soc_dai_set_sysclk(codec_dai, data->sysclk_id, data->sysclk, SND_SOC_CLOCK_IN);
 	if (ret && ret != -ENOTSUPP) {
 		dev_err(dev, "failed to set sysclk in %s\n", __func__);
 		return ret;
@@ -108,10 +110,8 @@ static int imx_rpmsg_late_probe(struct snd_soc_card *card)
 static int imx_rpmsg_probe(struct platform_device *pdev)
 {
 	struct snd_soc_dai_link_component *dlc;
-	struct device *dev = pdev->dev.parent;
-	/* rpmsg_pdev is the platform device for the rpmsg node that probed us */
-	struct platform_device *rpmsg_pdev = to_platform_device(dev);
-	struct device_node *np = rpmsg_pdev->dev.of_node;
+	struct snd_soc_dai *cpu_dai;
+	struct device_node *np = NULL;
 	struct of_phandle_args args;
 	const char *platform_name;
 	const char *model_string;
@@ -128,10 +128,6 @@ static int imx_rpmsg_probe(struct platform_device *pdev)
 		goto fail;
 	}
 
-	ret = of_reserved_mem_device_init_by_idx(&pdev->dev, np, 0);
-	if (ret)
-		dev_warn(&pdev->dev, "no reserved DMA memory\n");
-
 	data->dai.cpus = &dlc[0];
 	data->dai.num_cpus = 1;
 	data->dai.platforms = &dlc[1];
@@ -145,6 +141,31 @@ static int imx_rpmsg_probe(struct platform_device *pdev)
 			    SND_SOC_DAIFMT_NB_NF |
 			    SND_SOC_DAIFMT_CBC_CFC;
 
+	/*
+	 * i.MX rpmsg sound cards work on codec slave mode. MCLK will be
+	 * disabled by CPU DAI driver in hw_free(). Some codec requires MCLK
+	 * present at power up/down sequence. So need to set ignore_pmdown_time
+	 * to power down codec immediately before MCLK is turned off.
+	 */
+	data->dai.ignore_pmdown_time = 1;
+
+	data->dai.cpus->dai_name = pdev->dev.platform_data;
+	cpu_dai = snd_soc_find_dai(data->dai.cpus);
+	if (!cpu_dai) {
+		ret = -EPROBE_DEFER;
+		goto fail;
+	}
+	np = cpu_dai->dev->of_node;
+	if (!np) {
+		dev_err(&pdev->dev, "failed to parse CPU DAI device node\n");
+		ret = -ENODEV;
+		goto fail;
+	}
+
+	ret = of_reserved_mem_device_init_by_idx(&pdev->dev, np, 0);
+	if (ret)
+		dev_warn(&pdev->dev, "no reserved DMA memory\n");
+
 	/* Optional codec node */
 	of_property_read_string(np, "model", &model_string);
 	ret = of_parse_phandle_with_fixed_args(np, "audio-codec", 0, 0, &args);
@@ -153,18 +174,16 @@ static int imx_rpmsg_probe(struct platform_device *pdev)
 			data->dai.codecs->dai_name = "rpmsg-wm8960-hifi";
 			data->dai.codecs->name = RPMSG_CODEC_DRV_NAME_WM8960;
 		} else if (of_device_is_compatible(np, "fsl,imx8mm-rpmsg-audio") &&
-				!strcmp("ak4497-audio", model_string)) {
+			   !strcmp("ak4497-audio", model_string)) {
 			data->dai.codecs->dai_name = "rpmsg-ak4497-aif";
 			data->dai.codecs->name = RPMSG_CODEC_DRV_NAME_AK4497;
 		} else {
-			data->dai.codecs->dai_name = "snd-soc-dummy-dai";
-			data->dai.codecs->name = "snd-soc-dummy";
+			*data->dai.codecs = snd_soc_dummy_dlc;
 		}
 	} else {
 		struct clk *clk;
 
-		data->dai.codecs->of_node = args.np;
-		ret = snd_soc_get_dai_name(&args, &data->dai.codecs->dai_name);
+		ret = snd_soc_get_dlc(&args, data->dai.codecs);
 		if (ret) {
 			dev_err(&pdev->dev, "Unable to get codec_dai_name\n");
 			goto fail;
@@ -173,13 +192,15 @@ static int imx_rpmsg_probe(struct platform_device *pdev)
 		clk = devm_get_clk_from_child(&pdev->dev, args.np, NULL);
 		if (!IS_ERR(clk))
 			data->sysclk = clk_get_rate(clk);
+
+		if (of_device_is_compatible(args.np, "wlf,wm8960,lpa"))
+			data->sysclk_id = WM8960_SYSCLK_MCLK;
 	}
 
-	data->dai.cpus->dai_name = dev_name(&rpmsg_pdev->dev);
-	data->dai.platforms->name = IMX_PCM_DRV_NAME;
-	if (!of_property_read_string(np, "fsl,platform", &platform_name))
+	if (!of_property_read_string(np, "fsl,rpmsg-channel-name", &platform_name))
 		data->dai.platforms->name = platform_name;
-
+	else
+		data->dai.platforms->name = "rpmsg-audio-channel";
 	data->dai.playback_only = true;
 	data->dai.capture_only = true;
 	data->card.num_links = 1;

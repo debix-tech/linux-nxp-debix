@@ -387,7 +387,7 @@ err_priority:
 /* pfe_eth_sysfs_exit
  *
  */
-void pfe_eth_sysfs_exit(struct net_device *ndev)
+static void pfe_eth_sysfs_exit(struct net_device *ndev)
 {
 #ifdef PFE_ETH_TX_STATS
 	device_remove_file(&ndev->dev, &dev_attr_tx_stats);
@@ -588,10 +588,10 @@ static void pfe_eth_get_wol(struct net_device *ndev, struct ethtool_wolinfo
 static void pfe_eth_get_drvinfo(struct net_device *ndev, struct ethtool_drvinfo
 				*drvinfo)
 {
-	strlcpy(drvinfo->driver, DRV_NAME, sizeof(drvinfo->driver));
-	strlcpy(drvinfo->version, DRV_VERSION, sizeof(drvinfo->version));
-	strlcpy(drvinfo->fw_version, "N/A", sizeof(drvinfo->fw_version));
-	strlcpy(drvinfo->bus_info, "N/A", sizeof(drvinfo->bus_info));
+	strscpy(drvinfo->driver, DRV_NAME, sizeof(drvinfo->driver));
+	strscpy(drvinfo->version, DRV_VERSION, sizeof(drvinfo->version));
+	strscpy(drvinfo->fw_version, "N/A", sizeof(drvinfo->fw_version));
+	strscpy(drvinfo->bus_info, "N/A", sizeof(drvinfo->bus_info));
 }
 
 /*
@@ -884,24 +884,6 @@ static int pfe_eth_mdio_mux(u8 muxval)
 	return 0;
 }
 
-static int pfe_eth_mdio_write_addr(struct mii_bus *bus, int mii_id,
-				   int dev_addr, int regnum)
-{
-	struct pfe_mdio_priv_s *priv = (struct pfe_mdio_priv_s *)bus->priv;
-
-	__raw_writel(EMAC_MII_DATA_PA(mii_id) |
-		     EMAC_MII_DATA_RA(dev_addr) |
-		     EMAC_MII_DATA_TA | EMAC_MII_DATA(regnum),
-		     priv->mdio_base + EMAC_MII_DATA_REG);
-
-	if (pfe_eth_mdio_timeout(priv, EMAC_MDIO_TIMEOUT)) {
-		dev_err(&bus->dev, "phy MDIO address write timeout\n");
-		return -1;
-	}
-
-	return 0;
-}
-
 static int pfe_eth_mdio_write(struct mii_bus *bus, int mii_id, int regnum,
 			      u16 value)
 {
@@ -911,22 +893,12 @@ static int pfe_eth_mdio_write(struct mii_bus *bus, int mii_id, int regnum,
 	if ((mii_id) && (pfe->mdio_muxval[mii_id]))
 		pfe_eth_mdio_mux(pfe->mdio_muxval[mii_id]);
 
-	if (regnum & MII_ADDR_C45) {
-		pfe_eth_mdio_write_addr(bus, mii_id, (regnum >> 16) & 0x1f,
-					regnum & 0xffff);
-		__raw_writel(EMAC_MII_DATA_OP_CL45_WR |
-			     EMAC_MII_DATA_PA(mii_id) |
-			     EMAC_MII_DATA_RA((regnum >> 16) & 0x1f) |
-			     EMAC_MII_DATA_TA | EMAC_MII_DATA(value),
-			     priv->mdio_base + EMAC_MII_DATA_REG);
-	} else {
-		/* start a write op */
-		__raw_writel(EMAC_MII_DATA_ST | EMAC_MII_DATA_OP_WR |
-			     EMAC_MII_DATA_PA(mii_id) |
-			     EMAC_MII_DATA_RA(regnum) |
-			     EMAC_MII_DATA_TA | EMAC_MII_DATA(value),
-			     priv->mdio_base + EMAC_MII_DATA_REG);
-	}
+	/* start a write op */
+	__raw_writel(EMAC_MII_DATA_ST | EMAC_MII_DATA_OP_WR |
+		     EMAC_MII_DATA_PA(mii_id) |
+		     EMAC_MII_DATA_RA(regnum) |
+		     EMAC_MII_DATA_TA | EMAC_MII_DATA(value),
+		     priv->mdio_base + EMAC_MII_DATA_REG);
 
 	if (pfe_eth_mdio_timeout(priv, EMAC_MDIO_TIMEOUT)) {
 		dev_err(&bus->dev, "%s: phy MDIO write timeout\n", __func__);
@@ -944,22 +916,12 @@ static int pfe_eth_mdio_read(struct mii_bus *bus, int mii_id, int regnum)
 	if ((mii_id) && (pfe->mdio_muxval[mii_id]))
 		pfe_eth_mdio_mux(pfe->mdio_muxval[mii_id]);
 
-	if (regnum & MII_ADDR_C45) {
-		pfe_eth_mdio_write_addr(bus, mii_id, (regnum >> 16) & 0x1f,
-					regnum & 0xffff);
-		__raw_writel(EMAC_MII_DATA_OP_CL45_RD |
-			     EMAC_MII_DATA_PA(mii_id) |
-			     EMAC_MII_DATA_RA((regnum >> 16) & 0x1f) |
-			     EMAC_MII_DATA_TA,
-			     priv->mdio_base + EMAC_MII_DATA_REG);
-	} else {
-		/* start a read op */
-		__raw_writel(EMAC_MII_DATA_ST | EMAC_MII_DATA_OP_RD |
-			     EMAC_MII_DATA_PA(mii_id) |
-			     EMAC_MII_DATA_RA(regnum) |
-			     EMAC_MII_DATA_TA, priv->mdio_base +
-			     EMAC_MII_DATA_REG);
-	}
+	/* start a read op */
+	__raw_writel(EMAC_MII_DATA_ST | EMAC_MII_DATA_OP_RD |
+		     EMAC_MII_DATA_PA(mii_id) |
+		     EMAC_MII_DATA_RA(regnum) |
+		     EMAC_MII_DATA_TA, priv->mdio_base +
+		     EMAC_MII_DATA_REG);
 
 	if (pfe_eth_mdio_timeout(priv, EMAC_MDIO_TIMEOUT)) {
 		dev_err(&bus->dev, "%s: phy MDIO read timeout\n", __func__);
@@ -1497,7 +1459,7 @@ err0:
 /*
  *  pfe_eth_shutdown
  */
-int pfe_eth_shutdown(struct net_device *ndev, int wake)
+static int pfe_eth_shutdown(struct net_device *ndev, int wake)
 {
 	struct pfe_eth_priv_s *priv = netdev_priv(ndev);
 	int i, qstatus, id;
@@ -1827,7 +1789,7 @@ static void pfe_eth_flush_tx(struct pfe_eth_priv_s *priv)
 	}
 }
 
-void pfe_tx_get_req_desc(struct sk_buff *skb, unsigned int *n_desc, unsigned int
+static void pfe_tx_get_req_desc(struct sk_buff *skb, unsigned int *n_desc, unsigned int
 				*n_segs)
 {
 	struct skb_shared_info *sh = skb_shinfo(skb);
@@ -1941,8 +1903,8 @@ static int pfe_eth_set_mac_address(struct net_device *ndev, void *addr)
 
 /* pfe_eth_enet_addr_byte_mac
  */
-int pfe_eth_enet_addr_byte_mac(u8 *enet_byte_addr,
-			       struct pfe_mac_addr *enet_addr)
+static int pfe_eth_enet_addr_byte_mac(u8 *enet_byte_addr,
+				      struct pfe_mac_addr *enet_addr)
 {
 	if (!enet_byte_addr || !enet_addr) {
 		return -1;

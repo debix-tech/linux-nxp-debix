@@ -47,11 +47,11 @@
 #include "fm_mac.h"
 #include "fsl_fman_memac.h"
 
-
-#define MEMAC_default_exceptions    \
+#define MEMAC_EXCEPTIONS    \
         ((uint32_t)(MEMAC_IMASK_TSECC_ER | MEMAC_IMASK_TECC_ER | MEMAC_IMASK_RECC_ER | MEMAC_IMASK_MGI))
 
-#define GET_EXCEPTION_FLAG(bitMask, exception)       switch (exception){    \
+#define MEMAC_GET_EXCEPTION_FLAG(bitMask, exception)                        \
+    switch (exception) {                                                    \
     case e_FM_MAC_EX_10G_1TX_ECC_ER:                                        \
         bitMask = MEMAC_IMASK_TECC_ER; break;                               \
     case e_FM_MAC_EX_10G_RX_ECC_ER:                                         \
@@ -83,6 +83,7 @@ typedef struct
     uint8_t                     macId;
     uint32_t                    exceptions;
     struct memac_cfg            *p_MemacDriverParam;
+    bool                        fixed;
 } t_Memac;
 
 
@@ -104,8 +105,8 @@ typedef struct
 
 #define MEMAC_TO_MII_OFFSET         0x030       /* Offset from the MEM map to the MDIO mem map */
 
+t_Handle MEMAC_Config(t_FmMacParams *p_FmMacParam);
 t_Error MEMAC_MII_WritePhyReg(t_Handle h_Memac, uint8_t phyAddr, uint8_t reg, uint16_t data);
 t_Error MEMAC_MII_ReadPhyReg(t_Handle h_Memac,  uint8_t phyAddr, uint8_t reg, uint16_t *p_Data);
-
 
 #endif /* __MEMAC_H */

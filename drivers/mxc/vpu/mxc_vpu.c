@@ -370,7 +370,7 @@ static irqreturn_t vpu_jpu_irq_handler(int irq, void *dev_id)
  *
  * @return true return is a valid phy memory address, false return not.
  */
-bool vpu_is_valid_phy_memory(u32 paddr)
+static bool vpu_is_valid_phy_memory(u32 paddr)
 {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 5, 0)
 	if (paddr > top_address_DRAM)
@@ -806,7 +806,7 @@ static int vpu_map_hwregs(struct file *fp, struct vm_area_struct *vm)
 {
 	unsigned long pfn;
 
-	vm->vm_flags |= VM_IO | VM_RESERVED;
+	vm_flags_set(vm, VM_IO | VM_RESERVED);
 	/*
 	 * Since vpu registers have been mapped with ioremap() at probe
 	 * which L_PTE_XN is 1, and the same physical address must be
@@ -834,7 +834,7 @@ static int vpu_map_dma_mem(struct file *fp, struct vm_area_struct *vm)
 		 (unsigned int)(vm->vm_start), (unsigned int)(vm->vm_pgoff),
 		 request_size);
 
-	vm->vm_flags |= VM_IO | VM_RESERVED;
+	vm_flags_set(vm, VM_IO | VM_RESERVED);
 	vm->vm_page_prot = pgprot_writecombine(vm->vm_page_prot);
 
 	return remap_pfn_range(vm, vm->vm_start, vm->vm_pgoff,
@@ -851,7 +851,7 @@ static int vpu_map_vshare_mem(struct file *fp, struct vm_area_struct *vm)
 	int ret = -EINVAL;
 
 	ret = remap_vmalloc_range(vm, (void *)(vm->vm_pgoff << PAGE_SHIFT), 0);
-	vm->vm_flags |= VM_IO;
+	vm_flags_set(vm, VM_IO);
 
 	return ret;
 }
@@ -956,7 +956,7 @@ static int vpu_dev_probe(struct platform_device *pdev)
 		goto error;
 	}
 
-	vpu_class = class_create(THIS_MODULE, "mxc_vpu");
+	vpu_class = class_create("mxc_vpu");
 	if (IS_ERR(vpu_class)) {
 		err = PTR_ERR(vpu_class);
 		goto err_out_chrdev;
@@ -1033,7 +1033,7 @@ out:
 	return err;
 }
 
-static int vpu_dev_remove(struct platform_device *pdev)
+static void vpu_dev_remove(struct platform_device *pdev)
 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 5, 0)
 	pm_runtime_disable(&pdev->dev);
@@ -1060,7 +1060,6 @@ static int vpu_dev_remove(struct platform_device *pdev)
 #endif
 
 	vpu_power_get(false);
-	return 0;
 }
 
 #ifdef CONFIG_PM

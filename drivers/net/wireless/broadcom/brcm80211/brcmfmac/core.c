@@ -18,6 +18,7 @@
 
 #include "core.h"
 #include "bus.h"
+#include "fwvid.h"
 #include "debug.h"
 #include "fwil_types.h"
 #include "p2p.h"
@@ -538,6 +539,11 @@ void brcmf_txfinalize(struct brcmf_if *ifp, struct sk_buff *txp, bool success)
 {
 	struct ethhdr *eh;
 	u16 type;
+
+	if (!ifp) {
+		brcmu_pkt_buf_free_skb(txp);
+		return;
+	}
 
 	eh = (struct ethhdr *)(txp->data);
 	type = ntohs(eh->h_proto);
@@ -1136,7 +1142,8 @@ static int brcmf_revinfo_read(struct seq_file *s, void *data)
 	seq_printf(s, "vendorid: 0x%04x\n", ri->vendorid);
 	seq_printf(s, "deviceid: 0x%04x\n", ri->deviceid);
 	seq_printf(s, "radiorev: %s\n", brcmu_dotrev_str(ri->radiorev, drev));
-	seq_printf(s, "chip: %s\n", ri->chipname);
+	seq_printf(s, "chip: %s (%s)\n", ri->chipname,
+		   brcmf_fwvid_vendor_name(bus_if->drvr));
 	seq_printf(s, "chippkg: %u\n", ri->chippkg);
 	seq_printf(s, "corerev: %u\n", ri->corerev);
 	seq_printf(s, "boardid: 0x%04x\n", ri->boardid);
@@ -1182,7 +1189,6 @@ static ssize_t bus_reset_write(struct file *file, const char __user *user_buf,
 
 static const struct file_operations bus_reset_fops = {
 	.open	= simple_open,
-	.llseek	= no_llseek,
 	.write	= bus_reset_write,
 };
 
@@ -1333,6 +1339,12 @@ int brcmf_attach(struct device *dev)
 	/* Link to bus module */
 	drvr->hdrlen = 0;
 
+	ret = brcmf_fwvid_attach(drvr);
+	if (ret != 0) {
+		bphy_err(drvr, "brcmf_fwvid_attach failed\n");
+		goto fail;
+	}
+
 	/* Attach and link in the protocol */
 	ret = brcmf_proto_attach(drvr);
 	if (ret != 0) {
@@ -1340,12 +1352,16 @@ int brcmf_attach(struct device *dev)
 		goto fail;
 	}
 
+	/* attach firmware event handler */
+	ret = brcmf_fweh_attach(drvr);
+	if (ret != 0) {
+		bphy_err(drvr, "brcmf_fweh_attach failed\n");
+		goto fail;
+	}
+
 	/* Attach to events important for core code */
 	brcmf_fweh_register(drvr, BRCMF_E_PSM_WATCHDOG,
 			    brcmf_psm_watchdog_notify);
-
-	/* attach firmware event handler */
-	brcmf_fweh_attach(drvr);
 
 	ret = brcmf_bus_started(drvr, drvr->ops);
 	if (ret != 0) {
@@ -1400,7 +1416,8 @@ void brcmf_fw_crashed(struct device *dev)
 
 	brcmf_dev_coredump(dev);
 
-	schedule_work(&drvr->bus_reset);
+	if (drvr->bus_reset.func)
+		schedule_work(&drvr->bus_reset);
 }
 
 void brcmf_detach(struct device *dev)
@@ -1443,6 +1460,8 @@ void brcmf_detach(struct device *dev)
 		brcmf_cfg80211_detach(drvr->config);
 		drvr->config = NULL;
 	}
+
+	brcmf_fwvid_detach(drvr);
 }
 
 void brcmf_free(struct device *dev)

@@ -37,6 +37,8 @@
 
  @Description   FM driver routines implementation.
  *//***************************************************************************/
+#define __ERR_MODULE__  MODULE_FM_PORT
+
 #include "error_ext.h"
 #include "std_ext.h"
 #include "string_ext.h"
@@ -44,16 +46,13 @@
 #include "debug_ext.h"
 #include "fm_muram_ext.h"
 
+#include "../Pcd/fm_prs.h"
 #include "fman_common.h"
 #include "fm_port.h"
-#include "fm_port_dsar.h"
-#include "common/general.h"
 
 /****************************************/
 /*       static functions               */
 /****************************************/
-static t_Error FmPortConfigAutoResForDeepSleepSupport1(t_FmPort *p_FmPort);
-
 static t_Error CheckInitParameters(t_FmPort *p_FmPort)
 {
     t_FmPortDriverParam *p_Params = p_FmPort->p_FmPortDriverParam;
@@ -163,10 +162,6 @@ static t_Error CheckInitParameters(t_FmPort *p_FmPort)
             if (!p_Params->dfltFqid)
                 RETURN_ERROR(MAJOR, E_INVALID_VALUE,
                              ("dfltFqid must be between 1 and 2^24-1"));
-#if defined(FM_CAPWAP_SUPPORT) && defined(FM_LOCKUP_ALIGNMENT_ERRATA_FMAN_SW004)
-            if (p_FmPort->p_FmPortDriverParam->bufferPrefixContent.manipExtraSpace % 16)
-            RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("bufferPrefixContent.manipExtraSpace has to be devidable by 16"));
-#endif /* defined(FM_CAPWAP_SUPPORT) && ... */
         }
 
         /****************************************/
@@ -476,16 +471,10 @@ static t_Error VerifySizeOfFifo(t_FmPort *p_FmPort)
                 }
                 else
                 {
-#if (DPAA_VERSION >= 11)
                     minFifoSizeRequired =
                             (uint32_t)(ROUND_UP(p_FmPort->maxFrameLength, BMI_FIFO_UNITS)
                                     + (5 * BMI_FIFO_UNITS));
                     /* 4 according to spec + 1 for FOF>0 */
-#else
-                    minFifoSizeRequired = (uint32_t)
-                    (ROUND_UP(MIN(p_FmPort->maxFrameLength, p_FmPort->rxPoolsParams.largestBufSize), BMI_FIFO_UNITS)
-                            + (7*BMI_FIFO_UNITS));
-#endif /* (DPAA_VERSION >= 11) */
                 }
 
                 optFifoSizeForB2B = minFifoSizeRequired;
@@ -504,16 +493,12 @@ static t_Error VerifySizeOfFifo(t_FmPort *p_FmPort)
                 if ((p_FmPort->portType == e_FM_PORT_TYPE_OH_OFFLINE_PARSING)
                         || (p_FmPort->portType == e_FM_PORT_TYPE_OH_HOST_COMMAND))
                 {
-#if (DPAA_VERSION >= 11)
                     optFifoSizeForB2B =
                             minFifoSizeRequired =
                                     (uint32_t)(ROUND_UP(p_FmPort->maxFrameLength, BMI_FIFO_UNITS)
                                             + ((p_FmPort->p_FmPortDriverParam->dfltCfg.tx_fifo_deq_pipeline_depth
                                                     + 5) * BMI_FIFO_UNITS));
                     /* 4 according to spec + 1 for FOF>0 */
-#else
-                    optFifoSizeForB2B = minFifoSizeRequired = (uint32_t)((p_FmPort->tasks.num + 2) * BMI_FIFO_UNITS);
-#endif /* (DPAA_VERSION >= 11) */
                 }
 
     ASSERT_COND(minFifoSizeRequired > 0);
@@ -624,7 +609,6 @@ static t_Error SetExtBufferPools(t_FmPort *p_FmPort)
         }
     }
 
-#if (DPAA_VERSION >= 11)
     /* fill QbbPEV */
     if (p_BufPoolDepletion->poolsGrpModeEnable
             || p_BufPoolDepletion->singlePoolModeEnable)
@@ -637,7 +621,6 @@ static t_Error SetExtBufferPools(t_FmPort *p_FmPort)
             }
         }
     }
-#endif /* (DPAA_VERSION >= 11) */
 
     /* Issue flibs function */
     err = fman_port_set_bpools(&p_FmPort->port, &bpools);
@@ -1196,17 +1179,6 @@ static t_Error SetPcd(t_FmPort *p_FmPort, t_FmPortPcdParams *p_PcdParams)
         case (e_FM_PORT_PCD_SUPPORT_CC_ONLY):
             p_FmPort->pcdEngines |= FM_PCD_CC;
             break;
-#ifdef FM_CAPWAP_SUPPORT
-            case (e_FM_PORT_PCD_SUPPORT_CC_AND_KG):
-            p_FmPort->pcdEngines |= FM_PCD_CC;
-            p_FmPort->pcdEngines |= FM_PCD_KG;
-            break;
-            case (e_FM_PORT_PCD_SUPPORT_CC_AND_KG_AND_PLCR):
-            p_FmPort->pcdEngines |= FM_PCD_CC;
-            p_FmPort->pcdEngines |= FM_PCD_KG;
-            p_FmPort->pcdEngines |= FM_PCD_PLCR;
-            break;
-#endif /* FM_CAPWAP_SUPPORT */
 
         default:
             RETURN_ERROR(MAJOR, E_INVALID_STATE, ("invalid pcdSupport"));
@@ -1301,14 +1273,12 @@ static t_Error SetPcd(t_FmPort *p_FmPort, t_FmPortPcdParams *p_PcdParams)
             /* build vector */
             p_FmPort->schemesPerPortVector |= 1
                     << (31 - (uint32_t)physicalSchemeId);
-#if (DPAA_VERSION >= 11)
             /*because of the state that VSPE is defined per port - all PCD path should be according to this requirement
              if !VSPE - in port, for relevant scheme VSPE can not be set*/
             if (!p_FmPort->vspe
                     && FmPcdKgGetVspe((p_PcdParams->p_KgParams->h_Schemes[i])))
                 RETURN_ERROR(MAJOR, E_INVALID_STATE,
                              ("VSPE is not at port level"));
-#endif /* (DPAA_VERSION >= 11) */
         }
 
         err = FmPcdKgBindPortToSchemes(p_FmPort->h_FmPcd, &schemeBind);
@@ -1351,12 +1321,7 @@ static t_Error SetPcd(t_FmPort *p_FmPort, t_FmPortPcdParams *p_PcdParams)
     }
 
     /* if CC is used directly after BMI */
-    if ((p_PcdParams->pcdSupport == e_FM_PORT_PCD_SUPPORT_CC_ONLY)
-#ifdef FM_CAPWAP_SUPPORT
-    || (p_PcdParams->pcdSupport == e_FM_PORT_PCD_SUPPORT_CC_AND_KG)
-    || (p_PcdParams->pcdSupport == e_FM_PORT_PCD_SUPPORT_CC_AND_KG_AND_PLCR)
-#endif /* FM_CAPWAP_SUPPORT */
-    )
+    if (p_PcdParams->pcdSupport == e_FM_PORT_PCD_SUPPORT_CC_ONLY)
     {
         if (p_FmPort->portType != e_FM_PORT_TYPE_OH_OFFLINE_PARSING)
             RETURN_ERROR(
@@ -1370,19 +1335,15 @@ static t_Error SetPcd(t_FmPort *p_FmPort, t_FmPortPcdParams *p_PcdParams)
     if (p_FmPort->pcdEngines & FM_PCD_PRS)
     {
         ASSERT_COND(p_PcdParams->p_PrsParams);
-#if (DPAA_VERSION >= 11)
         if (p_PcdParams->p_PrsParams->firstPrsHdr == HEADER_TYPE_CAPWAP)
             hdrNum = OFFLOAD_SW_PATCH_CAPWAP_LABEL;
         else
         {
-#endif /* (DPAA_VERSION >= 11) */
             /* if PRS is used it is always first */
                 hdrNum = GetPrsHdrNum(p_PcdParams->p_PrsParams->firstPrsHdr);
             if (hdrNum == ILLEGAL_HDR_NUM)
                 RETURN_ERROR(MAJOR, E_NOT_SUPPORTED, ("Unsupported header."));
-#if (DPAA_VERSION >= 11)
         }
-#endif /* (DPAA_VERSION >= 11) */
         p_FmPort->savedBmiNia |= (uint32_t)(NIA_ENG_PRS | (uint32_t)(hdrNum));
         /* set after parser NIA */
         tmpReg = 0;
@@ -1588,16 +1549,6 @@ static t_Error SetPcd(t_FmPort *p_FmPort, t_FmPortPcdParams *p_PcdParams)
                 }
             }
 
-#if ((DPAA_VERSION == 10) && defined(FM_CAPWAP_SUPPORT))
-        if (FmPcdNetEnvIsHdrExist(p_FmPort->h_FmPcd, p_FmPort->netEnvId,
-                        HEADER_TYPE_UDP_LITE))
-        {
-            /* link to sw parser code for udp lite - only if no other code is applied. */
-            hdrNum = GetPrsHdrNum(HEADER_TYPE_IPv6);
-            if (!(tmpHxs[hdrNum] & PRS_HDR_SW_PRS_EN))
-            tmpHxs[hdrNum] |= (PRS_HDR_SW_PRS_EN | UDP_LITE_SW_PATCH_LABEL);
-        }
-#endif /* ((DPAA_VERSION == 10) && defined(FM_CAPWAP_SUPPORT)) */
         for (i = 0; i < FM_PCD_PRS_NUM_OF_HDRS; i++)
         {
             /* For all header set LCV as taken from netEnv*/
@@ -1928,7 +1879,6 @@ uint32_t FmPortGetPcdEngines(t_Handle h_FmPort)
     return ((t_FmPort*)h_FmPort)->pcdEngines;
 }
 
-#if (DPAA_VERSION >= 11)
 t_Error FmPortSetGprFunc(t_Handle h_FmPort, e_FmPortGprFuncType gprFunc,
                          void **p_Value)
 {
@@ -1993,7 +1943,6 @@ t_Error FmPortSetGprFunc(t_Handle h_FmPort, e_FmPortGprFuncType gprFunc,
 
     return E_OK;
 }
-#endif /* (DPAA_VERSION >= 11) */
 
 t_Error FmPortGetSetCcParams(t_Handle h_FmPort,
                              t_FmPortGetSetCcParams *p_CcParams)
@@ -2393,10 +2342,8 @@ t_Handle FM_PORT_Config(t_FmPortParams *p_FmPortParams)
                     DEFAULT_PORT_errorsToDiscard;
             p_FmPort->p_FmPortDriverParam->forwardReuseIntContext =
                     DEFAULT_PORT_forwardIntContextReuse;
-#if (DPAA_VERSION >= 11)
             p_FmPort->p_FmPortDriverParam->noScatherGather =
                     DEFAULT_PORT_noScatherGather;
-#endif /* (DPAA_VERSION >= 11) */
             break;
 
         case (e_FM_PORT_TYPE_TX):
@@ -2435,10 +2382,8 @@ t_Handle FM_PORT_Config(t_FmPortParams *p_FmPortParams)
         case (e_FM_PORT_TYPE_OH_OFFLINE_PARSING):
             p_FmPort->p_FmPortDriverParam->errorsToDiscard =
                     DEFAULT_PORT_errorsToDiscard;
-#if (DPAA_VERSION >= 11)
             p_FmPort->p_FmPortDriverParam->noScatherGather =
                     DEFAULT_PORT_noScatherGather;
-#endif /* (DPAA_VERSION >= 11) */
             fallthrough;
         case (e_FM_PORT_TYPE_OH_HOST_COMMAND):
             p_FmPort->p_FmPortDriverParam->deqPrefetchOption =
@@ -2714,7 +2659,6 @@ t_Error FM_PORT_Init(t_Handle h_FmPort)
 
     FmPortDriverParamFree(p_FmPort);
 
-#if (DPAA_VERSION >= 11)
     if ((p_FmPort->portType == e_FM_PORT_TYPE_RX_10G)
             || (p_FmPort->portType == e_FM_PORT_TYPE_RX)
             || (p_FmPort->portType == e_FM_PORT_TYPE_OH_OFFLINE_PARSING))
@@ -2748,10 +2692,7 @@ t_Error FM_PORT_Init(t_Handle h_FmPort)
                     (GET_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rfsdm) | GET_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rfsem)));
 #endif /* FM_ERROR_VSP_NO_MATCH_SW006 */
     }
-#endif /* (DPAA_VERSION >= 11) */
 
-    if (p_FmPort->deepSleepVars.autoResMaxSizes)
-        FmPortConfigAutoResForDeepSleepSupport1(p_FmPort);
     return E_OK;
 }
 
@@ -2798,14 +2739,12 @@ t_Error FM_PORT_Free(t_Handle h_FmPort)
 
     FmFreePortParams(p_FmPort->h_Fm, &fmParams);
 
-#if (DPAA_VERSION >= 11)
     if (FmVSPFreeForPort(p_FmPort->h_Fm, p_FmPort->portType, p_FmPort->portId)
             != E_OK)
         RETURN_ERROR(MAJOR, E_INVALID_STATE, ("VSP free of port FAILED"));
 
     if (p_FmPort->p_ParamsPage)
         FM_MURAM_FreeMem(p_FmPort->h_FmMuram, p_FmPort->p_ParamsPage);
-#endif /* (DPAA_VERSION >= 11) */
 
     if (p_FmPort->h_Spinlock)
         XX_FreeSpinlock(p_FmPort->h_Spinlock);
@@ -3202,7 +3141,6 @@ t_Error FM_PORT_ConfigDmaWriteOptimize(t_Handle h_FmPort, bool optimize)
     return E_OK;
 }
 
-#if (DPAA_VERSION >= 11)
 t_Error FM_PORT_ConfigNoScatherGather(t_Handle h_FmPort, bool noScatherGather)
 {
     t_FmPort *p_FmPort = (t_FmPort*)h_FmPort;
@@ -3217,7 +3155,6 @@ t_Error FM_PORT_ConfigNoScatherGather(t_Handle h_FmPort, bool noScatherGather)
 
     return E_OK;
 }
-#endif /* (DPAA_VERSION >= 11) */
 
 t_Error FM_PORT_ConfigForwardReuseIntContext(t_Handle h_FmPort,
                                              bool forwardReuse)
@@ -4394,7 +4331,7 @@ t_Error FM_PORT_ReleaseStalled(t_Handle h_FmPort)
     return FmResumeStalledPort(p_FmPort->h_Fm, p_FmPort->hardwarePortId);
 }
 
-t_Error FM_PORT_SetRxL4ChecksumVerify(t_Handle h_FmPort, bool l4Checksum)
+t_Error FM_PORT_SetRxL4ChecksumVerify(t_Handle h_FmPort, bool enable)
 {
     t_FmPort *p_FmPort = (t_FmPort*)h_FmPort;
     int err;
@@ -4407,7 +4344,13 @@ t_Error FM_PORT_SetRxL4ChecksumVerify(t_Handle h_FmPort, bool l4Checksum)
         RETURN_ERROR(MAJOR, E_INVALID_OPERATION,
                      ("available for Rx ports only"));
 
-    if (l4Checksum)
+    /* Bits 0-7 in the Rx FD Status are initialized by the user configurable
+     * FMBM_RFNE[FDCS]. A bit which is set by the user in FMBM_RFNE[FDCS] is
+     * reflected in the corresponding bit, and is not reset by the FMan
+     * hardware. So to let the hardware do its job, we need to clear the FMBM
+     * bit, and vice versa.
+     */
+    if (!enable)
         err = fman_port_modify_rx_fd_bits(
                 &p_FmPort->port, (uint8_t)(BMI_PORT_RFNE_FRWD_DCL4C >> 24),
                 TRUE);
@@ -4425,7 +4368,6 @@ t_Error FM_PORT_SetRxL4ChecksumVerify(t_Handle h_FmPort, bool l4Checksum)
 /*       API Run-time PCD Control unit functions                             */
 /*****************************************************************************/
 
-#if (DPAA_VERSION >= 11)
 t_Error FM_PORT_VSPAlloc(t_Handle h_FmPort, t_FmPortVSPAllocParams *p_VSPParams)
 {
     t_FmPort *p_FmPort = (t_FmPort*)h_FmPort;
@@ -4519,7 +4461,6 @@ t_Error FM_PORT_VSPAlloc(t_Handle h_FmPort, t_FmPortVSPAllocParams *p_VSPParams)
     WRITE_UINT32(*p_BmiVspe, tmpReg | BMI_SP_EN | tmp);
     return E_OK;
 }
-#endif /* (DPAA_VERSION >= 11) */
 
 t_Error FM_PORT_PcdPlcrAllocProfiles(t_Handle h_FmPort, uint16_t numOfProfiles)
 {
@@ -4884,403 +4825,354 @@ t_Error FM_PORT_DetachPCD(t_Handle h_FmPort)
     return E_OK;
 }
 
+static int FM_PORT_ConfigureMuramPage(t_Handle h_FmPort)
+{
+	t_FmPort *p_FmPort = (t_FmPort*)h_FmPort;
+	t_FmPortGetSetCcParams fmPortGetSetCcParams;
+	t_FmPcdCtrlParamsPage *p_ParamsPage;
+	uint32_t nia;
+	int err;
+
+	memset(&fmPortGetSetCcParams, 0, sizeof(t_FmPortGetSetCcParams));
+
+	/* Set up the Next Invoked Action to do frame processing through the
+	 * FMan Controller. If advanced offload support has been previously
+	 * enabled through ioctl, set up this NIA's Action Code to "Pop To
+	 * Next Step" (0x0e), otherwise to "Pop to Next Step NonIPACCOffload"
+	 * (0x2c).
+	 */
+	fmPortGetSetCcParams.setCcParams.type = UPDATE_NIA_CMNE;
+	if (FmPcdIsAdvancedOffloadSupported(p_FmPort->h_FmPcd))
+		nia = NIA_FM_CTL_AC_POP_TO_N_STEP | NIA_ENG_FM_CTL;
+	else
+		nia = NIA_FM_CTL_AC_NO_IPACC_POP_TO_N_STEP | NIA_ENG_FM_CTL;
+
+	fmPortGetSetCcParams.setCcParams.nia = nia;
+
+	err = FmPortGetSetCcParams(h_FmPort, &fmPortGetSetCcParams);
+	if (err)
+		return err;
+
+	/* Allocate a MURAM page which will be used by the microcode
+	 * for IP reassembly.
+	 */
+	FmPortSetGprFunc(p_FmPort, e_FM_PORT_GPR_MURAM_PAGE,
+			 (void**)&p_ParamsPage);
+	ASSERT_COND(p_ParamsPage);
+
+	if (FmPcdIsAdvancedOffloadSupported(p_FmPort->h_FmPcd)) {
+		WRITE_UINT32(p_ParamsPage->misc,
+			     GET_UINT32(p_ParamsPage->misc) |
+			     FM_CTL_PARAMS_PAGE_OFFLOAD_SUPPORT_EN);
+	}
+
+	/* For OH ports, communicate the discard mask to the microcode
+	 * through the MURAM page
+	 */
+	if (p_FmPort->h_IpReassemblyManip || p_FmPort->h_CapwapReassemblyManip) {
+		if (p_FmPort->portType == e_FM_PORT_TYPE_OH_OFFLINE_PARSING) {
+			WRITE_UINT32(p_ParamsPage->discardMask,
+				     GET_UINT32(p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs.fmbm_ofsdm));
+		} else {
+			WRITE_UINT32(p_ParamsPage->discardMask,
+				     GET_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rfsdm));
+		}
+	}
+#ifdef FM_ERROR_VSP_NO_MATCH_SW006
+	if (p_FmPort->vspe) {
+		WRITE_UINT32(p_ParamsPage->misc,
+			     GET_UINT32(p_ParamsPage->misc) |
+			     (p_FmPort->dfltRelativeId & FM_CTL_PARAMS_PAGE_ERROR_VSP_MASK));
+	}
+#endif /* FM_ERROR_VSP_NO_MATCH_SW006 */
+
+	return 0;
+}
+
 t_Error FM_PORT_SetPCD(t_Handle h_FmPort, t_FmPortPcdParams *p_PcdParam)
 {
-    t_FmPort *p_FmPort = (t_FmPort*)h_FmPort;
-    t_Error err = E_OK;
-    t_FmPortPcdParams modifiedPcdParams, *p_PcdParams;
-    t_FmPcdCcTreeParams *p_FmPcdCcTreeParams;
-    t_FmPortPcdCcParams fmPortPcdCcParams;
-    t_FmPortGetSetCcParams fmPortGetSetCcParams;
+	t_FmPort *p_FmPort = (t_FmPort*)h_FmPort;
+	t_Error err = E_OK;
+	t_FmPortPcdParams modifiedPcdParams, *p_PcdParams;
+	t_FmPcdCcTreeParams *p_FmPcdCcTreeParams;
+	t_FmPortPcdCcParams fmPortPcdCcParams;
+	t_FmPortGetSetCcParams fmPortGetSetCcParams;
 
-    SANITY_CHECK_RETURN_ERROR(h_FmPort, E_INVALID_HANDLE);
-    SANITY_CHECK_RETURN_ERROR(p_PcdParam, E_NULL_POINTER);
-    SANITY_CHECK_RETURN_ERROR(!p_FmPort->p_FmPortDriverParam, E_INVALID_STATE);
+	SANITY_CHECK_RETURN_ERROR(h_FmPort, E_INVALID_HANDLE);
+	SANITY_CHECK_RETURN_ERROR(p_PcdParam, E_NULL_POINTER);
+	SANITY_CHECK_RETURN_ERROR(!p_FmPort->p_FmPortDriverParam, E_INVALID_STATE);
 
-    if (p_FmPort->imEn)
-        RETURN_ERROR(MAJOR, E_INVALID_OPERATION,
-                     ("available for non-independent mode ports only"));
+	if (p_FmPort->imEn) {
+		RETURN_ERROR(MAJOR, E_INVALID_OPERATION,
+			     ("available for non-independent mode ports only"));
+	}
 
-    if ((p_FmPort->portType != e_FM_PORT_TYPE_RX_10G)
-            && (p_FmPort->portType != e_FM_PORT_TYPE_RX)
-            && (p_FmPort->portType != e_FM_PORT_TYPE_OH_OFFLINE_PARSING))
-        RETURN_ERROR( MAJOR, E_INVALID_OPERATION,
-                     ("available for Rx and offline parsing ports only"));
+	if (p_FmPort->portType != e_FM_PORT_TYPE_RX_10G &&
+	    p_FmPort->portType != e_FM_PORT_TYPE_RX &&
+	    p_FmPort->portType != e_FM_PORT_TYPE_OH_OFFLINE_PARSING) {
+		RETURN_ERROR(MAJOR, E_INVALID_OPERATION,
+			     ("available for Rx and offline parsing ports only"));
+	}
 
-    if (!TRY_LOCK(p_FmPort->h_Spinlock, &p_FmPort->lock))
-    {
-        DBG(TRACE, ("FM Port Try Lock - BUSY"));
-        return ERROR_CODE(E_BUSY);
-    }
+	if (!TRY_LOCK(p_FmPort->h_Spinlock, &p_FmPort->lock)) {
+		DBG(TRACE, ("FM Port Try Lock - BUSY"));
+		return ERROR_CODE(E_BUSY);
+	}
 
-    p_FmPort->h_FmPcd = FmGetPcdHandle(p_FmPort->h_Fm);
-    ASSERT_COND(p_FmPort->h_FmPcd);
+	p_FmPort->h_FmPcd = FmGetPcdHandle(p_FmPort->h_Fm);
+	ASSERT_COND(p_FmPort->h_FmPcd);
 
-    if (p_PcdParam->p_CcParams && !p_PcdParam->p_CcParams->h_CcTree)
-        RETURN_ERROR(MAJOR, E_INVALID_HANDLE,
-                     ("Tree handle must be given if CC is required"));
+	if (p_PcdParam->p_CcParams && !p_PcdParam->p_CcParams->h_CcTree) {
+		RETURN_ERROR(MAJOR, E_INVALID_HANDLE,
+			     ("Tree handle must be given if CC is required"));
+	}
 
-    memcpy(&modifiedPcdParams, p_PcdParam, sizeof(t_FmPortPcdParams));
-    p_PcdParams = &modifiedPcdParams;
-    if ((p_PcdParams->h_IpReassemblyManip)
-#if (DPAA_VERSION >= 11)
-            || (p_PcdParams->h_CapwapReassemblyManip)
-#endif /* (DPAA_VERSION >= 11) */
-            )
-    {
-        if ((p_PcdParams->pcdSupport != e_FM_PORT_PCD_SUPPORT_PRS_AND_KG)
-                && (p_PcdParams->pcdSupport
-                        != e_FM_PORT_PCD_SUPPORT_PRS_AND_KG_AND_CC)
-                && (p_PcdParams->pcdSupport
-                        != e_FM_PORT_PCD_SUPPORT_PRS_AND_KG_AND_CC_AND_PLCR)
-                && (p_PcdParams->pcdSupport
-                        != e_FM_PORT_PCD_SUPPORT_PRS_AND_KG_AND_PLCR))
-        {
-            RELEASE_LOCK(p_FmPort->lock);
-            RETURN_ERROR( MAJOR, E_INVALID_STATE,
-                         ("pcdSupport must have KG for supporting Reassembly"));
-        }
-        p_FmPort->h_IpReassemblyManip = p_PcdParams->h_IpReassemblyManip;
-#if (DPAA_VERSION >= 11)
-        if ((p_PcdParams->h_IpReassemblyManip)
-                && (p_PcdParams->h_CapwapReassemblyManip))
-            RETURN_ERROR(MAJOR, E_INVALID_STATE,
-                         ("Either IP-R or CAPWAP-R is allowed"));
-        if ((p_PcdParams->h_CapwapReassemblyManip)
-                && (p_FmPort->portType != e_FM_PORT_TYPE_OH_OFFLINE_PARSING))
-            RETURN_ERROR(MAJOR, E_INVALID_STATE,
-                         ("CAPWAP-R is allowed only on offline-port"));
-        if (p_PcdParams->h_CapwapReassemblyManip)
-            p_FmPort->h_CapwapReassemblyManip =
-                    p_PcdParams->h_CapwapReassemblyManip;
-#endif /* (DPAA_VERSION >= 11) */
+	memcpy(&modifiedPcdParams, p_PcdParam, sizeof(t_FmPortPcdParams));
+	p_PcdParams = &modifiedPcdParams;
+	if (p_PcdParams->h_IpReassemblyManip ||
+	    p_PcdParams->h_CapwapReassemblyManip) {
+		if (p_PcdParams->pcdSupport != e_FM_PORT_PCD_SUPPORT_PRS_AND_KG &&
+		    p_PcdParams->pcdSupport != e_FM_PORT_PCD_SUPPORT_PRS_AND_KG_AND_CC &&
+		    p_PcdParams->pcdSupport != e_FM_PORT_PCD_SUPPORT_PRS_AND_KG_AND_CC_AND_PLCR &&
+		    p_PcdParams->pcdSupport != e_FM_PORT_PCD_SUPPORT_PRS_AND_KG_AND_PLCR) {
+			RELEASE_LOCK(p_FmPort->lock);
+			RETURN_ERROR(MAJOR, E_INVALID_STATE,
+				     ("pcdSupport must have KG for supporting Reassembly"));
+		}
+		p_FmPort->h_IpReassemblyManip = p_PcdParams->h_IpReassemblyManip;
+		if (p_PcdParams->h_IpReassemblyManip && p_PcdParams->h_CapwapReassemblyManip) {
+			RETURN_ERROR(MAJOR, E_INVALID_STATE,
+				     ("Either IP-R or CAPWAP-R is allowed"));
+		}
+		if (p_PcdParams->h_CapwapReassemblyManip &&
+		    p_FmPort->portType != e_FM_PORT_TYPE_OH_OFFLINE_PARSING) {
+			RETURN_ERROR(MAJOR, E_INVALID_STATE,
+				     ("CAPWAP-R is allowed only on offline-port"));
+		}
+		if (p_PcdParams->h_CapwapReassemblyManip)
+			p_FmPort->h_CapwapReassemblyManip = p_PcdParams->h_CapwapReassemblyManip;
 
-        if (!p_PcdParams->p_CcParams)
-        {
-            if (!((p_PcdParams->pcdSupport == e_FM_PORT_PCD_SUPPORT_PRS_AND_KG)
-                    || (p_PcdParams->pcdSupport
-                            == e_FM_PORT_PCD_SUPPORT_PRS_AND_KG_AND_PLCR)))
-            {
-                RELEASE_LOCK(p_FmPort->lock);
-                RETURN_ERROR(
-                        MAJOR,
-                        E_INVALID_STATE,
-                        ("PCD initialization structure is not consistent with pcdSupport"));
-            }
+		if (!p_PcdParams->p_CcParams) {
+			if (!(p_PcdParams->pcdSupport == e_FM_PORT_PCD_SUPPORT_PRS_AND_KG ||
+			      p_PcdParams->pcdSupport == e_FM_PORT_PCD_SUPPORT_PRS_AND_KG_AND_PLCR)) {
+				RELEASE_LOCK(p_FmPort->lock);
+				RETURN_ERROR(MAJOR, E_INVALID_STATE,
+					     ("PCD initialization structure is not consistent with pcdSupport"));
+			}
 
-            /* No user-tree, need to build internal tree */
-            p_FmPcdCcTreeParams = (t_FmPcdCcTreeParams*)XX_Malloc(
-                    sizeof(t_FmPcdCcTreeParams));
-            if (!p_FmPcdCcTreeParams)
-                RETURN_ERROR(MAJOR, E_NO_MEMORY, ("p_FmPcdCcTreeParams"));
-            memset(p_FmPcdCcTreeParams, 0, sizeof(t_FmPcdCcTreeParams));
-            p_FmPcdCcTreeParams->h_NetEnv = p_PcdParams->h_NetEnv;
-            p_FmPort->h_ReassemblyTree = FM_PCD_CcRootBuild(
-                    p_FmPort->h_FmPcd, p_FmPcdCcTreeParams);
+			/* No user-tree, need to build internal tree */
+			p_FmPcdCcTreeParams = (t_FmPcdCcTreeParams*)XX_Malloc(sizeof(t_FmPcdCcTreeParams));
+			if (!p_FmPcdCcTreeParams)
+				RETURN_ERROR(MAJOR, E_NO_MEMORY, ("p_FmPcdCcTreeParams"));
 
-            if (!p_FmPort->h_ReassemblyTree)
-            {
-                RELEASE_LOCK(p_FmPort->lock);
-                XX_Free(p_FmPcdCcTreeParams);
-                RETURN_ERROR( MAJOR, E_INVALID_HANDLE,
-                             ("FM_PCD_CcBuildTree for Reassembly failed"));
-            }
-            if (p_PcdParams->pcdSupport == e_FM_PORT_PCD_SUPPORT_PRS_AND_KG)
-                p_PcdParams->pcdSupport =
-                        e_FM_PORT_PCD_SUPPORT_PRS_AND_KG_AND_CC;
-            else
-                p_PcdParams->pcdSupport =
-                        e_FM_PORT_PCD_SUPPORT_PRS_AND_KG_AND_CC_AND_PLCR;
+			memset(p_FmPcdCcTreeParams, 0, sizeof(t_FmPcdCcTreeParams));
+			p_FmPcdCcTreeParams->h_NetEnv = p_PcdParams->h_NetEnv;
 
-            memset(&fmPortPcdCcParams, 0, sizeof(t_FmPortPcdCcParams));
-            fmPortPcdCcParams.h_CcTree = p_FmPort->h_ReassemblyTree;
-            p_PcdParams->p_CcParams = &fmPortPcdCcParams;
-            XX_Free(p_FmPcdCcTreeParams);
-        }
+			p_FmPort->h_ReassemblyTree = FM_PCD_CcRootBuild(p_FmPort->h_FmPcd,
+									p_FmPcdCcTreeParams);
+			if (!p_FmPort->h_ReassemblyTree) {
+				RELEASE_LOCK(p_FmPort->lock);
+				XX_Free(p_FmPcdCcTreeParams);
+				RETURN_ERROR(MAJOR, E_INVALID_HANDLE,
+					     ("FM_PCD_CcBuildTree for Reassembly failed"));
+			}
+			if (p_PcdParams->pcdSupport == e_FM_PORT_PCD_SUPPORT_PRS_AND_KG)
+				p_PcdParams->pcdSupport = e_FM_PORT_PCD_SUPPORT_PRS_AND_KG_AND_CC;
+			else
+				p_PcdParams->pcdSupport = e_FM_PORT_PCD_SUPPORT_PRS_AND_KG_AND_CC_AND_PLCR;
 
-        if (p_FmPort->h_IpReassemblyManip)
-            err = FmPcdCcTreeAddIPR(p_FmPort->h_FmPcd,
-                                    p_PcdParams->p_CcParams->h_CcTree,
-                                    p_PcdParams->h_NetEnv,
-                                    p_FmPort->h_IpReassemblyManip, TRUE);
-#if (DPAA_VERSION >= 11)
-        else
-            if (p_FmPort->h_CapwapReassemblyManip)
-                err = FmPcdCcTreeAddCPR(p_FmPort->h_FmPcd,
-                                        p_PcdParams->p_CcParams->h_CcTree,
-                                        p_PcdParams->h_NetEnv,
-                                        p_FmPort->h_CapwapReassemblyManip,
-                                        TRUE);
-#endif /* (DPAA_VERSION >= 11) */
+			memset(&fmPortPcdCcParams, 0, sizeof(t_FmPortPcdCcParams));
+			fmPortPcdCcParams.h_CcTree = p_FmPort->h_ReassemblyTree;
+			p_PcdParams->p_CcParams = &fmPortPcdCcParams;
+			XX_Free(p_FmPcdCcTreeParams);
+		}
 
-        if (err != E_OK)
-        {
-            if (p_FmPort->h_ReassemblyTree)
-            {
-                FM_PCD_CcRootDelete(p_FmPort->h_ReassemblyTree);
-                p_FmPort->h_ReassemblyTree = NULL;
-            }RELEASE_LOCK(p_FmPort->lock);
-            RETURN_ERROR(MAJOR, err, NO_MSG);
-        }
-    }
+		if (p_FmPort->h_IpReassemblyManip) {
+			err = FmPcdCcTreeAddIPR(p_FmPort->h_FmPcd,
+						p_PcdParams->p_CcParams->h_CcTree,
+						p_PcdParams->h_NetEnv,
+						p_FmPort->h_IpReassemblyManip, TRUE);
+		} else if (p_FmPort->h_CapwapReassemblyManip) {
+			err = FmPcdCcTreeAddCPR(p_FmPort->h_FmPcd,
+						p_PcdParams->p_CcParams->h_CcTree,
+						p_PcdParams->h_NetEnv,
+						p_FmPort->h_CapwapReassemblyManip,
+						TRUE);
+		}
+		if (err != E_OK) {
+			if (p_FmPort->h_ReassemblyTree) {
+				FM_PCD_CcRootDelete(p_FmPort->h_ReassemblyTree);
+				p_FmPort->h_ReassemblyTree = NULL;
+			}
+			RELEASE_LOCK(p_FmPort->lock);
+			RETURN_ERROR(MAJOR, err, NO_MSG);
+		}
+	}
 
-    if (!FmPcdLockTryLockAll(p_FmPort->h_FmPcd))
-    {
-        if (p_FmPort->h_ReassemblyTree)
-        {
-            FM_PCD_CcRootDelete(p_FmPort->h_ReassemblyTree);
-            p_FmPort->h_ReassemblyTree = NULL;
-        }RELEASE_LOCK(p_FmPort->lock);
-        DBG(TRACE, ("Try LockAll - BUSY"));
-        return ERROR_CODE(E_BUSY);
-    }
+	if (!FmPcdLockTryLockAll(p_FmPort->h_FmPcd)) {
+		if (p_FmPort->h_ReassemblyTree) {
+			FM_PCD_CcRootDelete(p_FmPort->h_ReassemblyTree);
+			p_FmPort->h_ReassemblyTree = NULL;
+		}
+		RELEASE_LOCK(p_FmPort->lock);
+		DBG(TRACE, ("Try LockAll - BUSY"));
+		return ERROR_CODE(E_BUSY);
+	}
 
-    err = SetPcd(h_FmPort, p_PcdParams);
-    if (err)
-    {
-        if (p_FmPort->h_ReassemblyTree)
-        {
-            FM_PCD_CcRootDelete(p_FmPort->h_ReassemblyTree);
-            p_FmPort->h_ReassemblyTree = NULL;
-        }
-        FmPcdLockUnlockAll(p_FmPort->h_FmPcd);
-        RELEASE_LOCK(p_FmPort->lock);
-        RETURN_ERROR(MAJOR, err, NO_MSG);
-    }
+	err = SetPcd(h_FmPort, p_PcdParams);
+	if (err) {
+		if (p_FmPort->h_ReassemblyTree) {
+			FM_PCD_CcRootDelete(p_FmPort->h_ReassemblyTree);
+			p_FmPort->h_ReassemblyTree = NULL;
+		}
+		FmPcdLockUnlockAll(p_FmPort->h_FmPcd);
+		RELEASE_LOCK(p_FmPort->lock);
+		RETURN_ERROR(MAJOR, err, NO_MSG);
+	}
 
-    if ((p_FmPort->pcdEngines & FM_PCD_PRS)
-            && (p_PcdParams->p_PrsParams->includeInPrsStatistics))
-    {
-        err = FmPcdPrsIncludePortInStatistics(p_FmPort->h_FmPcd,
-                                              p_FmPort->hardwarePortId, TRUE);
-        if (err)
-        {
-            DeletePcd(p_FmPort);
-            if (p_FmPort->h_ReassemblyTree)
-            {
-                FM_PCD_CcRootDelete(p_FmPort->h_ReassemblyTree);
-                p_FmPort->h_ReassemblyTree = NULL;
-            }
-            FmPcdLockUnlockAll(p_FmPort->h_FmPcd);
-            RELEASE_LOCK(p_FmPort->lock);
-            RETURN_ERROR(MAJOR, err, NO_MSG);
-        }
-        p_FmPort->includeInPrsStatistics = TRUE;
-    }
+	if ((p_FmPort->pcdEngines & FM_PCD_PRS) &&
+	    p_PcdParams->p_PrsParams->includeInPrsStatistics) {
+		err = FmPcdPrsIncludePortInStatistics(p_FmPort->h_FmPcd,
+						      p_FmPort->hardwarePortId,
+						      TRUE);
+		if (err) {
+			DeletePcd(p_FmPort);
+			if (p_FmPort->h_ReassemblyTree) {
+				FM_PCD_CcRootDelete(p_FmPort->h_ReassemblyTree);
+				p_FmPort->h_ReassemblyTree = NULL;
+			}
+			FmPcdLockUnlockAll(p_FmPort->h_FmPcd);
+			RELEASE_LOCK(p_FmPort->lock);
+			RETURN_ERROR(MAJOR, err, NO_MSG);
+		}
+		p_FmPort->includeInPrsStatistics = TRUE;
+	}
 
-    FmPcdIncNetEnvOwners(p_FmPort->h_FmPcd, p_FmPort->netEnvId);
+	FmPcdIncNetEnvOwners(p_FmPort->h_FmPcd, p_FmPort->netEnvId);
 
-    if (FmPcdIsAdvancedOffloadSupported(p_FmPort->h_FmPcd))
-    {
-        memset(&fmPortGetSetCcParams, 0, sizeof(t_FmPortGetSetCcParams));
+	if (FmPcdIsAdvancedOffloadSupported(p_FmPort->h_FmPcd)) {
+		memset(&fmPortGetSetCcParams, 0, sizeof(t_FmPortGetSetCcParams));
 
-        if (p_FmPort->portType == e_FM_PORT_TYPE_OH_OFFLINE_PARSING)
-        {
+		if (p_FmPort->portType == e_FM_PORT_TYPE_OH_OFFLINE_PARSING) {
+			t_FmPcdCtrlParamsPage *p_ParamsPage;
+
 #ifdef FM_KG_ERASE_FLOW_ID_ERRATA_FMAN_SW004
-            if ((p_FmPort->fmRevInfo.majorRev < 6) &&
-                    (p_FmPort->pcdEngines & FM_PCD_KG))
-            {
-                int i;
-                for (i = 0; i<p_PcdParams->p_KgParams->numOfSchemes; i++)
-                /* The following function must be locked */
-                FmPcdKgCcGetSetParams(p_FmPort->h_FmPcd,
-                        p_PcdParams->p_KgParams->h_Schemes[i],
-                        UPDATE_KG_NIA_CC_WA,
-                        0);
-            }
+			if (p_FmPort->fmRevInfo.majorRev < 6 &&
+			    p_FmPort->pcdEngines & FM_PCD_KG) {
+				int i;
+
+				for (i = 0; i < p_PcdParams->p_KgParams->numOfSchemes; i++) {
+					/* The following function must be locked */
+					FmPcdKgCcGetSetParams(p_FmPort->h_FmPcd,
+							      p_PcdParams->p_KgParams->h_Schemes[i],
+							      UPDATE_KG_NIA_CC_WA, 0);
+				}
+			}
 #endif /* FM_KG_ERASE_FLOW_ID_ERRATA_FMAN_SW004 */
 
-#if (DPAA_VERSION >= 11)
-            {
-                t_FmPcdCtrlParamsPage *p_ParamsPage;
+			FmPortSetGprFunc(p_FmPort, e_FM_PORT_GPR_MURAM_PAGE,
+					 (void**)&p_ParamsPage);
+			ASSERT_COND(p_ParamsPage);
+			WRITE_UINT32(p_ParamsPage->postBmiFetchNia, p_FmPort->savedBmiNia);
 
-                FmPortSetGprFunc(p_FmPort, e_FM_PORT_GPR_MURAM_PAGE,
-                                 (void**)&p_ParamsPage);
-                ASSERT_COND(p_ParamsPage);
-                WRITE_UINT32(p_ParamsPage->postBmiFetchNia,
-                             p_FmPort->savedBmiNia);
-            }
-#endif /* (DPAA_VERSION >= 11) */
+			/* Set post-bmi-fetch nia */
+			p_FmPort->savedBmiNia &= BMI_RFNE_FDCS_MASK;
+			p_FmPort->savedBmiNia |= NIA_FM_CTL_AC_POST_BMI_FETCH | NIA_ENG_FM_CTL;
 
-            /* Set post-bmi-fetch nia */
-            p_FmPort->savedBmiNia &= BMI_RFNE_FDCS_MASK;
-            p_FmPort->savedBmiNia |= (NIA_FM_CTL_AC_POST_BMI_FETCH
-                    | NIA_ENG_FM_CTL);
+			/* Set pre-bmi-fetch nia */
+			fmPortGetSetCcParams.setCcParams.type = UPDATE_NIA_PNDN;
+			fmPortGetSetCcParams.setCcParams.nia = NIA_FM_CTL_AC_PRE_BMI_FETCH_FULL_FRAME |
+							       NIA_ENG_FM_CTL;
 
-            /* Set pre-bmi-fetch nia */
-            fmPortGetSetCcParams.setCcParams.type = UPDATE_NIA_PNDN;
-#if (DPAA_VERSION >= 11)
-            fmPortGetSetCcParams.setCcParams.nia =
-                    (NIA_FM_CTL_AC_PRE_BMI_FETCH_FULL_FRAME | NIA_ENG_FM_CTL);
-#else
-            fmPortGetSetCcParams.setCcParams.nia = (NIA_FM_CTL_AC_PRE_BMI_FETCH_HEADER | NIA_ENG_FM_CTL);
-#endif /* (DPAA_VERSION >= 11) */
-            if ((err = FmPortGetSetCcParams(p_FmPort, &fmPortGetSetCcParams))
-                    != E_OK)
-            {
-                DeletePcd(p_FmPort);
-                if (p_FmPort->h_ReassemblyTree)
-                {
-                    FM_PCD_CcRootDelete(p_FmPort->h_ReassemblyTree);
-                    p_FmPort->h_ReassemblyTree = NULL;
-                }
-                FmPcdLockUnlockAll(p_FmPort->h_FmPcd);
-                RELEASE_LOCK(p_FmPort->lock);
-                RETURN_ERROR(MAJOR, err, NO_MSG);
-            }
-        }
+			err = FmPortGetSetCcParams(p_FmPort, &fmPortGetSetCcParams);
+			if (err != E_OK) {
+				DeletePcd(p_FmPort);
+				if (p_FmPort->h_ReassemblyTree) {
+					FM_PCD_CcRootDelete(p_FmPort->h_ReassemblyTree);
+					p_FmPort->h_ReassemblyTree = NULL;
+				}
+				FmPcdLockUnlockAll(p_FmPort->h_FmPcd);
+				RELEASE_LOCK(p_FmPort->lock);
+				RETURN_ERROR(MAJOR, err, NO_MSG);
+			}
+		}
 
-        FmPcdLockUnlockAll(p_FmPort->h_FmPcd);
+		FmPcdLockUnlockAll(p_FmPort->h_FmPcd);
 
-        /* Set pop-to-next-step nia */
-#if (DPAA_VERSION == 10)
-        if (p_FmPort->fmRevInfo.majorRev < 6)
-        {
-            fmPortGetSetCcParams.setCcParams.type = UPDATE_NIA_PNEN;
-            fmPortGetSetCcParams.setCcParams.nia = NIA_FM_CTL_AC_POP_TO_N_STEP | NIA_ENG_FM_CTL;
-        }
-        else
-        {
-#endif /* (DPAA_VERSION == 10) */
-        fmPortGetSetCcParams.getCcParams.type = GET_NIA_FPNE;
-#if (DPAA_VERSION == 10)
-    }
-#endif /* (DPAA_VERSION == 10) */
-        if ((err = FmPortGetSetCcParams(h_FmPort, &fmPortGetSetCcParams))
-                != E_OK)
-        {
-            DeletePcd(p_FmPort);
-            if (p_FmPort->h_ReassemblyTree)
-            {
-                FM_PCD_CcRootDelete(p_FmPort->h_ReassemblyTree);
-                p_FmPort->h_ReassemblyTree = NULL;
-            }RELEASE_LOCK(p_FmPort->lock);
-            RETURN_ERROR(MAJOR, err, NO_MSG);
-        }
+		/* Set pop-to-next-step nia */
+		fmPortGetSetCcParams.getCcParams.type = GET_NIA_FPNE;
+		err = FmPortGetSetCcParams(h_FmPort, &fmPortGetSetCcParams);
+		if (err != E_OK) {
+			DeletePcd(p_FmPort);
+			if (p_FmPort->h_ReassemblyTree) {
+				FM_PCD_CcRootDelete(p_FmPort->h_ReassemblyTree);
+				p_FmPort->h_ReassemblyTree = NULL;
+			}
+			RELEASE_LOCK(p_FmPort->lock);
+			RETURN_ERROR(MAJOR, err, NO_MSG);
+		}
 
-        /* Set post-bmi-prepare-to-enq nia */
-        fmPortGetSetCcParams.setCcParams.type = UPDATE_NIA_FENE;
-        fmPortGetSetCcParams.setCcParams.nia = (NIA_FM_CTL_AC_POST_BMI_ENQ
-                | NIA_ENG_FM_CTL);
-        if ((err = FmPortGetSetCcParams(h_FmPort, &fmPortGetSetCcParams))
-                != E_OK)
-        {
-            DeletePcd(p_FmPort);
-            if (p_FmPort->h_ReassemblyTree)
-            {
-                FM_PCD_CcRootDelete(p_FmPort->h_ReassemblyTree);
-                p_FmPort->h_ReassemblyTree = NULL;
-            }RELEASE_LOCK(p_FmPort->lock);
-            RETURN_ERROR(MAJOR, err, NO_MSG);
-        }
+		/* Set post-bmi-prepare-to-enq nia */
+		fmPortGetSetCcParams.setCcParams.type = UPDATE_NIA_FENE;
+		fmPortGetSetCcParams.setCcParams.nia = NIA_FM_CTL_AC_POST_BMI_ENQ | NIA_ENG_FM_CTL;
 
-        if ((p_FmPort->h_IpReassemblyManip)
-                || (p_FmPort->h_CapwapReassemblyManip))
-        {
-#if (DPAA_VERSION == 10)
-            if (p_FmPort->fmRevInfo.majorRev < 6)
-            {
-                /* Overwrite post-bmi-prepare-to-enq nia */
-                fmPortGetSetCcParams.setCcParams.type = UPDATE_NIA_FENE;
-                fmPortGetSetCcParams.setCcParams.nia = (NIA_FM_CTL_AC_POST_BMI_ENQ_ORR | NIA_ENG_FM_CTL | NIA_ORDER_RESTOR);
-                fmPortGetSetCcParams.setCcParams.overwrite = TRUE;
-            }
-            else
-            {
-#endif /* (DPAA_VERSION == 10) */
-            /* Set the ORR bit (for order-restoration) */
-            fmPortGetSetCcParams.setCcParams.type = UPDATE_NIA_FPNE;
-            fmPortGetSetCcParams.setCcParams.nia =
-                    fmPortGetSetCcParams.getCcParams.nia | NIA_ORDER_RESTOR;
-#if (DPAA_VERSION == 10)
-        }
-#endif /* (DPAA_VERSION == 10) */
-            if ((err = FmPortGetSetCcParams(h_FmPort, &fmPortGetSetCcParams))
-                    != E_OK)
-            {
-                DeletePcd(p_FmPort);
-                if (p_FmPort->h_ReassemblyTree)
-                {
-                    FM_PCD_CcRootDelete(p_FmPort->h_ReassemblyTree);
-                    p_FmPort->h_ReassemblyTree = NULL;
-                }RELEASE_LOCK(p_FmPort->lock);
-                RETURN_ERROR(MAJOR, err, NO_MSG);
-            }
-        }
-    }
-    else
-        FmPcdLockUnlockAll(p_FmPort->h_FmPcd);
+		err = FmPortGetSetCcParams(h_FmPort, &fmPortGetSetCcParams);
+		if (err != E_OK) {
+			DeletePcd(p_FmPort);
+			if (p_FmPort->h_ReassemblyTree) {
+				FM_PCD_CcRootDelete(p_FmPort->h_ReassemblyTree);
+				p_FmPort->h_ReassemblyTree = NULL;
+			}
+			RELEASE_LOCK(p_FmPort->lock);
+			RETURN_ERROR(MAJOR, err, NO_MSG);
+		}
 
-#if (DPAA_VERSION >= 11)
-    {
-        t_FmPcdCtrlParamsPage *p_ParamsPage;
+		if (p_FmPort->h_IpReassemblyManip || p_FmPort->h_CapwapReassemblyManip) {
+			/* Set the ORR bit (for order-restoration) */
+			fmPortGetSetCcParams.setCcParams.type = UPDATE_NIA_FPNE;
+			fmPortGetSetCcParams.setCcParams.nia = fmPortGetSetCcParams.getCcParams.nia |
+							       NIA_ORDER_RESTOR;
 
-        memset(&fmPortGetSetCcParams, 0, sizeof(t_FmPortGetSetCcParams));
+			err = FmPortGetSetCcParams(h_FmPort, &fmPortGetSetCcParams);
+			if (err != E_OK) {
+				DeletePcd(p_FmPort);
+				if (p_FmPort->h_ReassemblyTree) {
+					FM_PCD_CcRootDelete(p_FmPort->h_ReassemblyTree);
+					p_FmPort->h_ReassemblyTree = NULL;
+				}
+				RELEASE_LOCK(p_FmPort->lock);
+				RETURN_ERROR(MAJOR, err, NO_MSG);
+			}
+		}
+	} else {
+		FmPcdLockUnlockAll(p_FmPort->h_FmPcd);
+	}
 
-        fmPortGetSetCcParams.setCcParams.type = UPDATE_NIA_CMNE;
-        if (FmPcdIsAdvancedOffloadSupported(p_FmPort->h_FmPcd))
-            fmPortGetSetCcParams.setCcParams.nia = NIA_FM_CTL_AC_POP_TO_N_STEP
-                    | NIA_ENG_FM_CTL;
-        else
-            fmPortGetSetCcParams.setCcParams.nia =
-                    NIA_FM_CTL_AC_NO_IPACC_POP_TO_N_STEP | NIA_ENG_FM_CTL;
-        if ((err = FmPortGetSetCcParams(h_FmPort, &fmPortGetSetCcParams))
-                != E_OK)
-        {
-            DeletePcd(p_FmPort);
-            if (p_FmPort->h_ReassemblyTree)
-            {
-                FM_PCD_CcRootDelete(p_FmPort->h_ReassemblyTree);
-                p_FmPort->h_ReassemblyTree = NULL;
-            }RELEASE_LOCK(p_FmPort->lock);
-            RETURN_ERROR(MAJOR, err, NO_MSG);
-        }
+	err = FM_PORT_ConfigureMuramPage(h_FmPort);
+	if (err) {
+		DeletePcd(p_FmPort);
+		if (p_FmPort->h_ReassemblyTree) {
+			FM_PCD_CcRootDelete(p_FmPort->h_ReassemblyTree);
+			p_FmPort->h_ReassemblyTree = NULL;
+		}
+		RELEASE_LOCK(p_FmPort->lock);
+		RETURN_ERROR(MAJOR, err, NO_MSG);
+	}
 
-        FmPortSetGprFunc(p_FmPort, e_FM_PORT_GPR_MURAM_PAGE,
-                         (void**)&p_ParamsPage);
-        ASSERT_COND(p_ParamsPage);
+	err = AttachPCD(h_FmPort);
+	if (err) {
+		DeletePcd(p_FmPort);
+		if (p_FmPort->h_ReassemblyTree) {
+			FM_PCD_CcRootDelete(p_FmPort->h_ReassemblyTree);
+			p_FmPort->h_ReassemblyTree = NULL;
+		}
+		RELEASE_LOCK(p_FmPort->lock);
+		RETURN_ERROR(MAJOR, err, NO_MSG);
+	}
 
-        if (FmPcdIsAdvancedOffloadSupported(p_FmPort->h_FmPcd))
-            WRITE_UINT32(
-                    p_ParamsPage->misc,
-                    GET_UINT32(p_ParamsPage->misc) | FM_CTL_PARAMS_PAGE_OFFLOAD_SUPPORT_EN);
+	RELEASE_LOCK(p_FmPort->lock);
 
-        if ((p_FmPort->h_IpReassemblyManip)
-                || (p_FmPort->h_CapwapReassemblyManip))
-        {
-            if (p_FmPort->portType == e_FM_PORT_TYPE_OH_OFFLINE_PARSING)
-                WRITE_UINT32(
-                        p_ParamsPage->discardMask,
-                        GET_UINT32(p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs.fmbm_ofsdm));
-            else
-                WRITE_UINT32(
-                        p_ParamsPage->discardMask,
-                        GET_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rfsdm));
-        }
-#ifdef FM_ERROR_VSP_NO_MATCH_SW006
-        if (p_FmPort->vspe)
-            WRITE_UINT32(
-                    p_ParamsPage->misc,
-                    GET_UINT32(p_ParamsPage->misc) | (p_FmPort->dfltRelativeId & FM_CTL_PARAMS_PAGE_ERROR_VSP_MASK));
-#endif /* FM_ERROR_VSP_NO_MATCH_SW006 */
-    }
-#endif /* (DPAA_VERSION >= 11) */
-
-    err = AttachPCD(h_FmPort);
-    if (err)
-    {
-        DeletePcd(p_FmPort);
-        if (p_FmPort->h_ReassemblyTree)
-        {
-            FM_PCD_CcRootDelete(p_FmPort->h_ReassemblyTree);
-            p_FmPort->h_ReassemblyTree = NULL;
-        }RELEASE_LOCK(p_FmPort->lock);
-        RETURN_ERROR(MAJOR, err, NO_MSG);
-    }
-
-    RELEASE_LOCK(p_FmPort->lock);
-
-    return err;
+	return err;
 }
 
 t_Error FM_PORT_DeletePCD(t_Handle h_FmPort)
@@ -5451,9 +5343,7 @@ t_Error FM_PORT_AddCongestionGrps(t_Handle h_FmPort,
     uint8_t mod, index;
     uint32_t i, grpsMap[FMAN_PORT_CG_MAP_NUM];
     int err;
-#if (DPAA_VERSION >= 11)
     int j;
-#endif /* (DPAA_VERSION >= 11) */
 
     SANITY_CHECK_RETURN_ERROR(p_FmPort, E_INVALID_HANDLE);
 
@@ -5497,15 +5387,12 @@ t_Error FM_PORT_AddCongestionGrps(t_Handle h_FmPort,
 
     for (i = 0; i < p_CongestionGrps->numOfCongestionGrpsToConsider; i++)
     {
-#if (DPAA_VERSION >= 11)
         for (j = 0; j < FM_MAX_NUM_OF_PFC_PRIORITIES; j++)
             if (p_CongestionGrps->pfcPrioritiesEn[i][j])
                 priorityTmpArray[p_CongestionGrps->congestionGrpsToConsider[i]] |=
                         (0x01 << (FM_MAX_NUM_OF_PFC_PRIORITIES - j - 1));
-#endif /* (DPAA_VERSION >= 11) */
     }
 
-#if (DPAA_VERSION >= 11)
     for (i = 0; i < FM_PORT_NUM_OF_CONGESTION_GRPS; i++)
     {
         err = FmSetCongestionGroupPFCpriority(p_FmPort->h_Fm, i,
@@ -5513,7 +5400,6 @@ t_Error FM_PORT_AddCongestionGrps(t_Handle h_FmPort,
         if (err)
             return err;
     }
-#endif /* (DPAA_VERSION >= 11) */
 
     err = fman_port_add_congestion_grps(&p_FmPort->port, grpsMap);
     if (err != 0)
@@ -5564,7 +5450,6 @@ t_Error FM_PORT_RemoveCongestionGrps(t_Handle h_FmPort,
             grpsMap[0] |= (uint32_t)(1 << mod);
     }
 
-#if (DPAA_VERSION >= 11)
     for (i = 0; i < p_CongestionGrps->numOfCongestionGrpsToConsider; i++)
     {
         t_Error err = FmSetCongestionGroupPFCpriority(
@@ -5573,7 +5458,6 @@ t_Error FM_PORT_RemoveCongestionGrps(t_Handle h_FmPort,
         if (err)
             return err;
     }
-#endif /* (DPAA_VERSION >= 11) */
 
     err = fman_port_remove_congestion_grps(&p_FmPort->port, grpsMap);
     if (err != 0)
@@ -5582,7 +5466,6 @@ t_Error FM_PORT_RemoveCongestionGrps(t_Handle h_FmPort,
     return E_OK;
 }
 
-#if (DPAA_VERSION >= 11)
 t_Error FM_PORT_GetIPv4OptionsCount(t_Handle h_FmPort,
                                     uint32_t *p_Ipv4OptionsCount)
 {
@@ -5597,847 +5480,5 @@ t_Error FM_PORT_GetIPv4OptionsCount(t_Handle h_FmPort,
 
     *p_Ipv4OptionsCount = GET_UINT32(p_FmPort->p_ParamsPage->ipfOptionsCounter);
 
-    return E_OK;
-}
-#endif /* (DPAA_VERSION >= 11) */
-
-t_Error FM_PORT_ConfigDsarSupport(t_Handle h_FmPortRx,
-                                  t_FmPortDsarTablesSizes *params)
-{
-    t_FmPort *p_FmPort = (t_FmPort *)h_FmPortRx;
-    p_FmPort->deepSleepVars.autoResMaxSizes = XX_Malloc(
-            sizeof(struct t_FmPortDsarTablesSizes));
-    memcpy(p_FmPort->deepSleepVars.autoResMaxSizes, params,
-           sizeof(struct t_FmPortDsarTablesSizes));
-    return E_OK;
-}
-
-static t_Error FmPortConfigAutoResForDeepSleepSupport1(t_FmPort *p_FmPort)
-{
-    uint32_t *param_page;
-    t_FmPortDsarTablesSizes *params = p_FmPort->deepSleepVars.autoResMaxSizes;
-    t_ArCommonDesc *ArCommonDescPtr;
-    uint32_t size = sizeof(t_ArCommonDesc);
-    // ARP
-    // should put here if (params->max_num_of_arp_entries)?
-    size = ROUND_UP(size,4);
-    size += sizeof(t_DsarArpDescriptor);
-    size += sizeof(t_DsarArpBindingEntry) * params->maxNumOfArpEntries;
-    size += sizeof(t_DsarArpStatistics);
-    //ICMPV4
-    size = ROUND_UP(size,4);
-    size += sizeof(t_DsarIcmpV4Descriptor);
-    size += sizeof(t_DsarIcmpV4BindingEntry) * params->maxNumOfEchoIpv4Entries;
-    size += sizeof(t_DsarIcmpV4Statistics);
-    //ICMPV6
-    size = ROUND_UP(size,4);
-    size += sizeof(t_DsarIcmpV6Descriptor);
-    size += sizeof(t_DsarIcmpV6BindingEntry) * params->maxNumOfEchoIpv6Entries;
-    size += sizeof(t_DsarIcmpV6Statistics);
-    //ND
-    size = ROUND_UP(size,4);
-    size += sizeof(t_DsarNdDescriptor);
-    size += sizeof(t_DsarIcmpV6BindingEntry) * params->maxNumOfNdpEntries;
-    size += sizeof(t_DsarIcmpV6Statistics);
-    //SNMP
-    size = ROUND_UP(size,4);
-    size += sizeof(t_DsarSnmpDescriptor);
-    size += sizeof(t_DsarSnmpIpv4AddrTblEntry)
-            * params->maxNumOfSnmpIPV4Entries;
-    size += sizeof(t_DsarSnmpIpv6AddrTblEntry)
-            * params->maxNumOfSnmpIPV6Entries;
-    size += sizeof(t_OidsTblEntry) * params->maxNumOfSnmpOidEntries;
-    size += params->maxNumOfSnmpOidChar;
-    size += sizeof(t_DsarIcmpV6Statistics);
-    //filters
-    size = ROUND_UP(size,4);
-    size += params->maxNumOfIpProtFiltering;
-    size = ROUND_UP(size,4);
-    size += params->maxNumOfUdpPortFiltering * sizeof(t_PortTblEntry);
-    size = ROUND_UP(size,4);
-    size += params->maxNumOfTcpPortFiltering * sizeof(t_PortTblEntry);
-
-    // add here for more protocols
-
-    // statistics
-    size = ROUND_UP(size,4);
-    size += sizeof(t_ArStatistics);
-
-    ArCommonDescPtr = FM_MURAM_AllocMem(p_FmPort->h_FmMuram, size, 0x10);
-
-    param_page =
-            XX_PhysToVirt(
-                    p_FmPort->fmMuramPhysBaseAddr
-                            + GET_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rgpr));
-    WRITE_UINT32(
-            *param_page,
-            (uint32_t)(XX_VirtToPhys(ArCommonDescPtr) - p_FmPort->fmMuramPhysBaseAddr));
-    return E_OK;
-}
-
-t_FmPortDsarTablesSizes* FM_PORT_GetDsarTablesMaxSizes(t_Handle h_FmPortRx)
-{
-    t_FmPort *p_FmPort = (t_FmPort *)h_FmPortRx;
-    return p_FmPort->deepSleepVars.autoResMaxSizes;
-}
-
-struct arOffsets
-{
-    uint32_t arp;
-    uint32_t nd;
-    uint32_t icmpv4;
-    uint32_t icmpv6;
-    uint32_t snmp;
-    uint32_t stats;
-    uint32_t filtIp;
-    uint32_t filtUdp;
-    uint32_t filtTcp;
-};
-
-static uint32_t AR_ComputeOffsets(struct arOffsets* of,
-                                  struct t_FmPortDsarParams *params,
-                                  t_FmPort *p_FmPort)
-{
-    uint32_t size = sizeof(t_ArCommonDesc);
-    // ARP
-    if (params->p_AutoResArpInfo)
-    {
-        size = ROUND_UP(size,4);
-        of->arp = size;
-        size += sizeof(t_DsarArpDescriptor);
-        size += sizeof(t_DsarArpBindingEntry)
-                * params->p_AutoResArpInfo->tableSize;
-        size += sizeof(t_DsarArpStatistics);
-    }
-    // ICMPV4
-    if (params->p_AutoResEchoIpv4Info)
-    {
-        size = ROUND_UP(size,4);
-        of->icmpv4 = size;
-        size += sizeof(t_DsarIcmpV4Descriptor);
-        size += sizeof(t_DsarIcmpV4BindingEntry)
-                * params->p_AutoResEchoIpv4Info->tableSize;
-        size += sizeof(t_DsarIcmpV4Statistics);
-    }
-    // ICMPV6
-    if (params->p_AutoResEchoIpv6Info)
-    {
-        size = ROUND_UP(size,4);
-        of->icmpv6 = size;
-        size += sizeof(t_DsarIcmpV6Descriptor);
-        size += sizeof(t_DsarIcmpV6BindingEntry)
-                * params->p_AutoResEchoIpv6Info->tableSize;
-        size += sizeof(t_DsarIcmpV6Statistics);
-    }
-    // ND
-    if (params->p_AutoResNdpInfo)
-    {
-        size = ROUND_UP(size,4);
-        of->nd = size;
-        size += sizeof(t_DsarNdDescriptor);
-        size += sizeof(t_DsarIcmpV6BindingEntry)
-                * (params->p_AutoResNdpInfo->tableSizeAssigned
-                        + params->p_AutoResNdpInfo->tableSizeTmp);
-        size += sizeof(t_DsarIcmpV6Statistics);
-    }
-    // SNMP
-    if (params->p_AutoResSnmpInfo)
-    {
-        size = ROUND_UP(size,4);
-        of->snmp = size;
-        size += sizeof(t_DsarSnmpDescriptor);
-        size += sizeof(t_DsarSnmpIpv4AddrTblEntry)
-                * params->p_AutoResSnmpInfo->numOfIpv4Addresses;
-        size += sizeof(t_DsarSnmpIpv6AddrTblEntry)
-                * params->p_AutoResSnmpInfo->numOfIpv6Addresses;
-        size += sizeof(t_OidsTblEntry) * params->p_AutoResSnmpInfo->oidsTblSize;
-        size += p_FmPort->deepSleepVars.autoResMaxSizes->maxNumOfSnmpOidChar;
-        size += sizeof(t_DsarIcmpV6Statistics);
-    }
-    //filters
-    size = ROUND_UP(size,4);
-    if (params->p_AutoResFilteringInfo)
-    {
-        of->filtIp = size;
-        size += params->p_AutoResFilteringInfo->ipProtTableSize;
-        size = ROUND_UP(size,4);
-        of->filtUdp = size;
-        size += params->p_AutoResFilteringInfo->udpPortsTableSize
-                * sizeof(t_PortTblEntry);
-        size = ROUND_UP(size,4);
-        of->filtTcp = size;
-        size += params->p_AutoResFilteringInfo->tcpPortsTableSize
-                * sizeof(t_PortTblEntry);
-    }
-    // add here for more protocols
-    // statistics
-    size = ROUND_UP(size,4);
-    of->stats = size;
-    size += sizeof(t_ArStatistics);
-    return size;
-}
-
-uint32_t* ARDesc;
-void PrsEnable(t_Handle p_FmPcd);
-void PrsDisable(t_Handle p_FmPcd);
-int PrsIsEnabled(t_Handle p_FmPcd);
-t_Handle FM_PCD_GetHcPort(t_Handle h_FmPcd);
-
-static t_Error DsarCheckParams(t_FmPortDsarParams *params,
-                               t_FmPortDsarTablesSizes *sizes)
-{
-    bool macInit = FALSE;
-    uint8_t mac[6];
-    int i = 0;
-
-    // check table sizes
-    if (params->p_AutoResArpInfo
-            && sizes->maxNumOfArpEntries < params->p_AutoResArpInfo->tableSize)
-        RETURN_ERROR(
-                MAJOR, E_INVALID_VALUE,
-                ("DSAR: Arp table size exceeds the configured maximum size."));
-    if (params->p_AutoResEchoIpv4Info
-            && sizes->maxNumOfEchoIpv4Entries
-                    < params->p_AutoResEchoIpv4Info->tableSize)
-        RETURN_ERROR(
-                MAJOR,
-                E_INVALID_VALUE,
-                ("DSAR: EchoIpv4 table size exceeds the configured maximum size."));
-    if (params->p_AutoResNdpInfo
-            && sizes->maxNumOfNdpEntries
-                    < params->p_AutoResNdpInfo->tableSizeAssigned
-                            + params->p_AutoResNdpInfo->tableSizeTmp)
-        RETURN_ERROR(
-                MAJOR, E_INVALID_VALUE,
-                ("DSAR: NDP table size exceeds the configured maximum size."));
-    if (params->p_AutoResEchoIpv6Info
-            && sizes->maxNumOfEchoIpv6Entries
-                    < params->p_AutoResEchoIpv6Info->tableSize)
-        RETURN_ERROR(
-                MAJOR,
-                E_INVALID_VALUE,
-                ("DSAR: EchoIpv6 table size exceeds the configured maximum size."));
-    if (params->p_AutoResSnmpInfo
-            && sizes->maxNumOfSnmpOidEntries
-                    < params->p_AutoResSnmpInfo->oidsTblSize)
-        RETURN_ERROR(
-                MAJOR,
-                E_INVALID_VALUE,
-                ("DSAR: Snmp Oid table size exceeds the configured maximum size."));
-    if (params->p_AutoResSnmpInfo
-            && sizes->maxNumOfSnmpIPV4Entries
-                    < params->p_AutoResSnmpInfo->numOfIpv4Addresses)
-        RETURN_ERROR(
-                MAJOR,
-                E_INVALID_VALUE,
-                ("DSAR: Snmp ipv4 table size exceeds the configured maximum size."));
-    if (params->p_AutoResSnmpInfo
-            && sizes->maxNumOfSnmpIPV6Entries
-                    < params->p_AutoResSnmpInfo->numOfIpv6Addresses)
-        RETURN_ERROR(
-                MAJOR,
-                E_INVALID_VALUE,
-                ("DSAR: Snmp ipv6 table size exceeds the configured maximum size."));
-    if (params->p_AutoResFilteringInfo)
-    {
-        if (sizes->maxNumOfIpProtFiltering
-                < params->p_AutoResFilteringInfo->ipProtTableSize)
-            RETURN_ERROR(
-                    MAJOR,
-                    E_INVALID_VALUE,
-                    ("DSAR: ip filter table size exceeds the configured maximum size."));
-        if (sizes->maxNumOfTcpPortFiltering
-                < params->p_AutoResFilteringInfo->udpPortsTableSize)
-            RETURN_ERROR(
-                    MAJOR,
-                    E_INVALID_VALUE,
-                    ("DSAR: udp filter table size exceeds the configured maximum size."));
-        if (sizes->maxNumOfUdpPortFiltering
-                < params->p_AutoResFilteringInfo->tcpPortsTableSize)
-            RETURN_ERROR(
-                    MAJOR,
-                    E_INVALID_VALUE,
-                    ("DSAR: tcp filter table size exceeds the configured maximum size."));
-    }
-    /* check only 1 MAC address is configured (this is what ucode currently supports) */
-    if (params->p_AutoResArpInfo && params->p_AutoResArpInfo->tableSize)
-    {
-        memcpy(mac, params->p_AutoResArpInfo->p_AutoResTable[0].mac, 6);
-        i = 1;
-        macInit = TRUE;
-
-        for (; i < params->p_AutoResArpInfo->tableSize; i++)
-            if (memcmp(mac, params->p_AutoResArpInfo->p_AutoResTable[i].mac, 6))
-                RETURN_ERROR(
-                        MAJOR, E_INVALID_VALUE,
-                        ("DSAR: Only 1 mac address is currently supported."));
-    }
-    if (params->p_AutoResEchoIpv4Info
-            && params->p_AutoResEchoIpv4Info->tableSize)
-    {
-        i = 0;
-        if (!macInit)
-        {
-            memcpy(mac, params->p_AutoResEchoIpv4Info->p_AutoResTable[0].mac,
-                   6);
-            i = 1;
-            macInit = TRUE;
-        }
-        for (; i < params->p_AutoResEchoIpv4Info->tableSize; i++)
-            if (memcmp(mac,
-                       params->p_AutoResEchoIpv4Info->p_AutoResTable[i].mac, 6))
-                RETURN_ERROR(
-                        MAJOR, E_INVALID_VALUE,
-                        ("DSAR: Only 1 mac address is currently supported."));
-    }
-    if (params->p_AutoResEchoIpv6Info
-            && params->p_AutoResEchoIpv6Info->tableSize)
-    {
-        i = 0;
-        if (!macInit)
-        {
-            memcpy(mac, params->p_AutoResEchoIpv6Info->p_AutoResTable[0].mac,
-                   6);
-            i = 1;
-            macInit = TRUE;
-        }
-        for (; i < params->p_AutoResEchoIpv6Info->tableSize; i++)
-            if (memcmp(mac,
-                       params->p_AutoResEchoIpv6Info->p_AutoResTable[i].mac, 6))
-                RETURN_ERROR(
-                        MAJOR, E_INVALID_VALUE,
-                        ("DSAR: Only 1 mac address is currently supported."));
-    }
-    if (params->p_AutoResNdpInfo && params->p_AutoResNdpInfo->tableSizeAssigned)
-    {
-        i = 0;
-        if (!macInit)
-        {
-            memcpy(mac, params->p_AutoResNdpInfo->p_AutoResTableAssigned[0].mac,
-                   6);
-            i = 1;
-            macInit = TRUE;
-        }
-        for (; i < params->p_AutoResNdpInfo->tableSizeAssigned; i++)
-            if (memcmp(mac,
-                       params->p_AutoResNdpInfo->p_AutoResTableAssigned[i].mac,
-                       6))
-                RETURN_ERROR(
-                        MAJOR, E_INVALID_VALUE,
-                        ("DSAR: Only 1 mac address is currently supported."));
-    }
-    if (params->p_AutoResNdpInfo && params->p_AutoResNdpInfo->tableSizeTmp)
-    {
-        i = 0;
-        if (!macInit)
-        {
-            memcpy(mac, params->p_AutoResNdpInfo->p_AutoResTableTmp[0].mac, 6);
-            i = 1;
-        }
-        for (; i < params->p_AutoResNdpInfo->tableSizeTmp; i++)
-            if (memcmp(mac, params->p_AutoResNdpInfo->p_AutoResTableTmp[i].mac,
-                       6))
-                RETURN_ERROR(
-                        MAJOR, E_INVALID_VALUE,
-                        ("DSAR: Only 1 mac address is currently supported."));
-    }
-    return E_OK;
-}
-
-static int GetBERLen(uint8_t* buf)
-{
-    if (*buf & 0x80)
-    {
-        if ((*buf & 0x7F) == 1)
-            return buf[1];
-        else
-            return *(uint16_t*)&buf[1]; // assuming max len is 2
-    }
-    else
-        return buf[0];
-}
-#define TOTAL_BER_LEN(len) (len < 128) ? len + 2 : len + 3
-
-#define SCFG_FMCLKDPSLPCR_ADDR 0xFFE0FC00C
-#define SCFG_FMCLKDPSLPCR_DS_VAL 0x08402000
-#define SCFG_FMCLKDPSLPCR_NORMAL_VAL 0x00402000
-static int fm_soc_suspend(void)
-{
-	uint32_t *fmclk, tmp32;
-	fmclk = ioremap(SCFG_FMCLKDPSLPCR_ADDR, 4);
-	tmp32 = GET_UINT32(*fmclk);
-	WRITE_UINT32(*fmclk, SCFG_FMCLKDPSLPCR_DS_VAL);
-	tmp32 = GET_UINT32(*fmclk);
-	iounmap(fmclk);
-	return 0;
-}
-
-void fm_clk_down(void)
-{
-	uint32_t *fmclk, tmp32;
-	fmclk = ioremap(SCFG_FMCLKDPSLPCR_ADDR, 4);
-	tmp32 = GET_UINT32(*fmclk);
-	WRITE_UINT32(*fmclk, SCFG_FMCLKDPSLPCR_DS_VAL | 0x40000000);
-	tmp32 = GET_UINT32(*fmclk);
-	iounmap(fmclk);
-}
-
-t_Error FM_PORT_EnterDsar(t_Handle h_FmPortRx, t_FmPortDsarParams *params)
-{
-    int i, j;
-    t_Error err;
-    uint32_t nia;
-    t_FmPort *p_FmPort = (t_FmPort *)h_FmPortRx;
-    t_FmPort *p_FmPortTx = (t_FmPort *)params->h_FmPortTx;
-    t_DsarArpDescriptor *ArpDescriptor;
-    t_DsarIcmpV4Descriptor* ICMPV4Descriptor;
-    t_DsarIcmpV6Descriptor* ICMPV6Descriptor;
-    t_DsarNdDescriptor* NDDescriptor;
-
-    uint64_t fmMuramVirtBaseAddr = (uint64_t)PTR_TO_UINT(XX_PhysToVirt(p_FmPort->fmMuramPhysBaseAddr));
-    uint32_t *param_page = XX_PhysToVirt(p_FmPort->fmMuramPhysBaseAddr + GET_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rgpr));
-    t_ArCommonDesc *ArCommonDescPtr = (t_ArCommonDesc*)(XX_PhysToVirt(p_FmPort->fmMuramPhysBaseAddr + GET_UINT32(*param_page)));
-    struct arOffsets* of;
-    uint8_t tmp = 0;
-    t_FmGetSetParams fmGetSetParams;
-    memset(&fmGetSetParams, 0, sizeof (t_FmGetSetParams));
-    fmGetSetParams.setParams.type = UPDATE_FPM_BRKC_SLP;
-    fmGetSetParams.setParams.sleep = 1;
-
-    err = DsarCheckParams(params, p_FmPort->deepSleepVars.autoResMaxSizes);
-    if (err != E_OK)
-        return err;
-
-    p_FmPort->deepSleepVars.autoResOffsets = XX_Malloc(sizeof(struct arOffsets));
-    of = (struct arOffsets *)p_FmPort->deepSleepVars.autoResOffsets;
-    IOMemSet32(ArCommonDescPtr, 0, AR_ComputeOffsets(of, params, p_FmPort));
-
-    // common
-    WRITE_UINT8(ArCommonDescPtr->arTxPort, p_FmPortTx->hardwarePortId);
-    nia = GET_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rfne); // bmi nia
-    if ((nia & 0x007C0000) == 0x00440000) // bmi nia is parser
-        WRITE_UINT32(ArCommonDescPtr->activeHPNIA, GET_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rfpne));
-    else
-        WRITE_UINT32(ArCommonDescPtr->activeHPNIA, nia);
-    WRITE_UINT16(ArCommonDescPtr->snmpPort, 161);
-
-    // ARP
-    if (params->p_AutoResArpInfo)
-    {
-        t_DsarArpBindingEntry* arp_bindings;
-        ArpDescriptor = (t_DsarArpDescriptor*)(PTR_TO_UINT(ArCommonDescPtr) + of->arp);
-        WRITE_UINT32(ArCommonDescPtr->p_ArpDescriptor, PTR_TO_UINT(ArpDescriptor) - fmMuramVirtBaseAddr);
-        arp_bindings = (t_DsarArpBindingEntry*)(PTR_TO_UINT(ArpDescriptor) + sizeof(t_DsarArpDescriptor));
-	if (params->p_AutoResArpInfo->enableConflictDetection)
-	        WRITE_UINT16(ArpDescriptor->control, 1);
-	else
-        WRITE_UINT16(ArpDescriptor->control, 0);
-        if (params->p_AutoResArpInfo->tableSize)
-        {
-            t_FmPortDsarArpEntry* arp_entry = params->p_AutoResArpInfo->p_AutoResTable;
-            WRITE_UINT16(*(uint16_t*)&ArCommonDescPtr->macStationAddr[0], *(uint16_t*)&arp_entry[0].mac[0]);
-            WRITE_UINT32(*(uint32_t*)&ArCommonDescPtr->macStationAddr[2], *(uint32_t*)&arp_entry[0].mac[2]);
-            WRITE_UINT16(ArpDescriptor->numOfBindings, params->p_AutoResArpInfo->tableSize);
-
-            for (i = 0; i < params->p_AutoResArpInfo->tableSize; i++)
-            {
-                WRITE_UINT32(arp_bindings[i].ipv4Addr, arp_entry[i].ipAddress);
-                if (arp_entry[i].isVlan)
-                    WRITE_UINT16(arp_bindings[i].vlanId, arp_entry[i].vid & 0xFFF);
-            }
-            WRITE_UINT32(ArpDescriptor->p_Bindings, PTR_TO_UINT(arp_bindings) - fmMuramVirtBaseAddr);
-        }
-        WRITE_UINT32(ArpDescriptor->p_Statistics, PTR_TO_UINT(arp_bindings) +
-            sizeof(t_DsarArpBindingEntry) * params->p_AutoResArpInfo->tableSize - fmMuramVirtBaseAddr);
-    }
-
-    // ICMPV4
-    if (params->p_AutoResEchoIpv4Info)
-    {
-        t_DsarIcmpV4BindingEntry* icmpv4_bindings;
-        ICMPV4Descriptor = (t_DsarIcmpV4Descriptor*)(PTR_TO_UINT(ArCommonDescPtr) + of->icmpv4);
-        WRITE_UINT32(ArCommonDescPtr->p_IcmpV4Descriptor, PTR_TO_UINT(ICMPV4Descriptor) - fmMuramVirtBaseAddr);
-        icmpv4_bindings = (t_DsarIcmpV4BindingEntry*)(PTR_TO_UINT(ICMPV4Descriptor) + sizeof(t_DsarIcmpV4Descriptor));
-        WRITE_UINT16(ICMPV4Descriptor->control, 0);
-        if (params->p_AutoResEchoIpv4Info->tableSize)
-        {
-            t_FmPortDsarArpEntry* arp_entry = params->p_AutoResEchoIpv4Info->p_AutoResTable;
-            WRITE_UINT16(*(uint16_t*)&ArCommonDescPtr->macStationAddr[0], *(uint16_t*)&arp_entry[0].mac[0]);
-            WRITE_UINT32(*(uint32_t*)&ArCommonDescPtr->macStationAddr[2], *(uint32_t*)&arp_entry[0].mac[2]);
-            WRITE_UINT16(ICMPV4Descriptor->numOfBindings, params->p_AutoResEchoIpv4Info->tableSize);
-
-            for (i = 0; i < params->p_AutoResEchoIpv4Info->tableSize; i++)
-            {
-                WRITE_UINT32(icmpv4_bindings[i].ipv4Addr, arp_entry[i].ipAddress);
-                if (arp_entry[i].isVlan)
-                    WRITE_UINT16(icmpv4_bindings[i].vlanId, arp_entry[i].vid & 0xFFF);
-            }
-            WRITE_UINT32(ICMPV4Descriptor->p_Bindings, PTR_TO_UINT(icmpv4_bindings) - fmMuramVirtBaseAddr);
-        }
-        WRITE_UINT32(ICMPV4Descriptor->p_Statistics, PTR_TO_UINT(icmpv4_bindings) +
-            sizeof(t_DsarIcmpV4BindingEntry) * params->p_AutoResEchoIpv4Info->tableSize - fmMuramVirtBaseAddr);
-    }
-
-    // ICMPV6
-    if (params->p_AutoResEchoIpv6Info)
-    {
-        t_DsarIcmpV6BindingEntry* icmpv6_bindings;
-        ICMPV6Descriptor = (t_DsarIcmpV6Descriptor*)(PTR_TO_UINT(ArCommonDescPtr) + of->icmpv6);
-        WRITE_UINT32(ArCommonDescPtr->p_IcmpV6Descriptor, PTR_TO_UINT(ICMPV6Descriptor) - fmMuramVirtBaseAddr);
-        icmpv6_bindings = (t_DsarIcmpV6BindingEntry*)(PTR_TO_UINT(ICMPV6Descriptor) + sizeof(t_DsarIcmpV6Descriptor));
-        WRITE_UINT16(ICMPV6Descriptor->control, 0);
-        if (params->p_AutoResEchoIpv6Info->tableSize)
-        {
-            t_FmPortDsarNdpEntry* ndp_entry = params->p_AutoResEchoIpv6Info->p_AutoResTable;
-            WRITE_UINT16(*(uint16_t*)&ArCommonDescPtr->macStationAddr[0], *(uint16_t*)&ndp_entry[0].mac[0]);
-            WRITE_UINT32(*(uint32_t*)&ArCommonDescPtr->macStationAddr[2], *(uint32_t*)&ndp_entry[0].mac[2]);
-            WRITE_UINT16(ICMPV6Descriptor->numOfBindings, params->p_AutoResEchoIpv6Info->tableSize);
-
-            for (i = 0; i < params->p_AutoResEchoIpv6Info->tableSize; i++)
-            {
-                for (j = 0; j < 4; j++)
-                    WRITE_UINT32(icmpv6_bindings[i].ipv6Addr[j], ndp_entry[i].ipAddress[j]);
-                if (ndp_entry[i].isVlan)
-                    WRITE_UINT16(*(uint16_t*)&icmpv6_bindings[i].ipv6Addr[4], ndp_entry[i].vid & 0xFFF); // writing vlan
-            }
-            WRITE_UINT32(ICMPV6Descriptor->p_Bindings, PTR_TO_UINT(icmpv6_bindings) - fmMuramVirtBaseAddr);
-        }
-        WRITE_UINT32(ICMPV6Descriptor->p_Statistics, PTR_TO_UINT(icmpv6_bindings) +
-            sizeof(t_DsarIcmpV6BindingEntry) * params->p_AutoResEchoIpv6Info->tableSize - fmMuramVirtBaseAddr);
-    }
-
-    // ND
-    if (params->p_AutoResNdpInfo)
-    {
-        t_DsarIcmpV6BindingEntry* icmpv6_bindings;
-        NDDescriptor = (t_DsarNdDescriptor*)(PTR_TO_UINT(ArCommonDescPtr) + of->nd);
-        WRITE_UINT32(ArCommonDescPtr->p_NdDescriptor, PTR_TO_UINT(NDDescriptor) - fmMuramVirtBaseAddr);
-        icmpv6_bindings = (t_DsarIcmpV6BindingEntry*)(PTR_TO_UINT(NDDescriptor) + sizeof(t_DsarNdDescriptor));
-	if (params->p_AutoResNdpInfo->enableConflictDetection)
-	        WRITE_UINT16(NDDescriptor->control, 1);
-	else
-        WRITE_UINT16(NDDescriptor->control, 0);
-        if (params->p_AutoResNdpInfo->tableSizeAssigned + params->p_AutoResNdpInfo->tableSizeTmp)
-        {
-            t_FmPortDsarNdpEntry* ndp_entry = params->p_AutoResNdpInfo->p_AutoResTableAssigned;
-            WRITE_UINT16(*(uint16_t*)&ArCommonDescPtr->macStationAddr[0], *(uint16_t*)&ndp_entry[0].mac[0]);
-            WRITE_UINT32(*(uint32_t*)&ArCommonDescPtr->macStationAddr[2], *(uint32_t*)&ndp_entry[0].mac[2]);
-            WRITE_UINT16(NDDescriptor->numOfBindings, params->p_AutoResNdpInfo->tableSizeAssigned
-                + params->p_AutoResNdpInfo->tableSizeTmp);
-
-            for (i = 0; i < params->p_AutoResNdpInfo->tableSizeAssigned; i++)
-            {
-                for (j = 0; j < 4; j++)
-                    WRITE_UINT32(icmpv6_bindings[i].ipv6Addr[j], ndp_entry[i].ipAddress[j]);
-                if (ndp_entry[i].isVlan)
-                    WRITE_UINT16(*(uint16_t*)&icmpv6_bindings[i].ipv6Addr[4], ndp_entry[i].vid & 0xFFF); // writing vlan
-            }
-            ndp_entry = params->p_AutoResNdpInfo->p_AutoResTableTmp;
-            for (i = 0; i < params->p_AutoResNdpInfo->tableSizeTmp; i++)
-            {
-                for (j = 0; j < 4; j++)
-                    WRITE_UINT32(icmpv6_bindings[i + params->p_AutoResNdpInfo->tableSizeAssigned].ipv6Addr[j], ndp_entry[i].ipAddress[j]);
-                if (ndp_entry[i].isVlan)
-                    WRITE_UINT16(*(uint16_t*)&icmpv6_bindings[i + params->p_AutoResNdpInfo->tableSizeAssigned].ipv6Addr[4], ndp_entry[i].vid & 0xFFF); // writing vlan
-            }
-            WRITE_UINT32(NDDescriptor->p_Bindings, PTR_TO_UINT(icmpv6_bindings) - fmMuramVirtBaseAddr);
-        }
-        WRITE_UINT32(NDDescriptor->p_Statistics, PTR_TO_UINT(icmpv6_bindings) + sizeof(t_DsarIcmpV6BindingEntry)
-            * (params->p_AutoResNdpInfo->tableSizeAssigned + params->p_AutoResNdpInfo->tableSizeTmp)
-            - fmMuramVirtBaseAddr);
-        WRITE_UINT32(NDDescriptor->solicitedAddr, 0xFFFFFFFF);
-    }
-
-    // SNMP
-    if (params->p_AutoResSnmpInfo)
-    {
-        t_FmPortDsarSnmpInfo *snmpSrc = params->p_AutoResSnmpInfo;
-        t_DsarSnmpIpv4AddrTblEntry* snmpIpv4Addr;
-        t_DsarSnmpIpv6AddrTblEntry* snmpIpv6Addr;
-        t_OidsTblEntry* snmpOid;
-        uint8_t *charPointer;
-        int len;
-        t_DsarSnmpDescriptor* SnmpDescriptor = (t_DsarSnmpDescriptor*)(PTR_TO_UINT(ArCommonDescPtr) + of->snmp);
-        WRITE_UINT32(ArCommonDescPtr->p_SnmpDescriptor, PTR_TO_UINT(SnmpDescriptor) - fmMuramVirtBaseAddr);
-        WRITE_UINT16(SnmpDescriptor->control, snmpSrc->control);
-        WRITE_UINT16(SnmpDescriptor->maxSnmpMsgLength, snmpSrc->maxSnmpMsgLength);
-        snmpIpv4Addr = (t_DsarSnmpIpv4AddrTblEntry*)(PTR_TO_UINT(SnmpDescriptor) + sizeof(t_DsarSnmpDescriptor));
-        if (snmpSrc->numOfIpv4Addresses)
-        {
-            t_FmPortDsarSnmpIpv4AddrTblEntry* snmpIpv4AddrSrc = snmpSrc->p_Ipv4AddrTbl;
-            WRITE_UINT16(SnmpDescriptor->numOfIpv4Addresses, snmpSrc->numOfIpv4Addresses);
-            for (i = 0; i < snmpSrc->numOfIpv4Addresses; i++)
-            {
-                WRITE_UINT32(snmpIpv4Addr[i].ipv4Addr, snmpIpv4AddrSrc[i].ipv4Addr);
-                if (snmpIpv4AddrSrc[i].isVlan)
-                    WRITE_UINT16(snmpIpv4Addr[i].vlanId, snmpIpv4AddrSrc[i].vid & 0xFFF);
-            }
-            WRITE_UINT32(SnmpDescriptor->p_Ipv4AddrTbl, PTR_TO_UINT(snmpIpv4Addr) - fmMuramVirtBaseAddr);
-        }
-        snmpIpv6Addr = (t_DsarSnmpIpv6AddrTblEntry*)(PTR_TO_UINT(snmpIpv4Addr)
-                + sizeof(t_DsarSnmpIpv4AddrTblEntry) * snmpSrc->numOfIpv4Addresses);
-        if (snmpSrc->numOfIpv6Addresses)
-        {
-            t_FmPortDsarSnmpIpv6AddrTblEntry* snmpIpv6AddrSrc = snmpSrc->p_Ipv6AddrTbl;
-            WRITE_UINT16(SnmpDescriptor->numOfIpv6Addresses, snmpSrc->numOfIpv6Addresses);
-            for (i = 0; i < snmpSrc->numOfIpv6Addresses; i++)
-            {
-                for (j = 0; j < 4; j++)
-                    WRITE_UINT32(snmpIpv6Addr[i].ipv6Addr[j], snmpIpv6AddrSrc[i].ipv6Addr[j]);
-                if (snmpIpv6AddrSrc[i].isVlan)
-                    WRITE_UINT16(snmpIpv6Addr[i].vlanId, snmpIpv6AddrSrc[i].vid & 0xFFF);
-            }
-            WRITE_UINT32(SnmpDescriptor->p_Ipv6AddrTbl, PTR_TO_UINT(snmpIpv6Addr) - fmMuramVirtBaseAddr);
-        }
-        snmpOid = (t_OidsTblEntry*)(PTR_TO_UINT(snmpIpv6Addr)
-                + sizeof(t_DsarSnmpIpv6AddrTblEntry) * snmpSrc->numOfIpv6Addresses);
-        charPointer = (uint8_t*)(PTR_TO_UINT(snmpOid)
-                + sizeof(t_OidsTblEntry) * snmpSrc->oidsTblSize);
-        len = TOTAL_BER_LEN(GetBERLen(&snmpSrc->p_RdOnlyCommunityStr[1]));
-        Mem2IOCpy32(charPointer, snmpSrc->p_RdOnlyCommunityStr, len);
-        WRITE_UINT32(SnmpDescriptor->p_RdOnlyCommunityStr, PTR_TO_UINT(charPointer) - fmMuramVirtBaseAddr);
-        charPointer += len;
-        len = TOTAL_BER_LEN(GetBERLen(&snmpSrc->p_RdWrCommunityStr[1]));
-        Mem2IOCpy32(charPointer, snmpSrc->p_RdWrCommunityStr, len);
-        WRITE_UINT32(SnmpDescriptor->p_RdWrCommunityStr, PTR_TO_UINT(charPointer) - fmMuramVirtBaseAddr);
-        charPointer += len;
-        WRITE_UINT32(SnmpDescriptor->oidsTblSize, snmpSrc->oidsTblSize);
-        WRITE_UINT32(SnmpDescriptor->p_OidsTbl, PTR_TO_UINT(snmpOid) - fmMuramVirtBaseAddr);
-        for (i = 0; i < snmpSrc->oidsTblSize; i++)
-        {
-            WRITE_UINT16(snmpOid->oidSize, snmpSrc->p_OidsTbl[i].oidSize);
-            WRITE_UINT16(snmpOid->resSize, snmpSrc->p_OidsTbl[i].resSize);
-            Mem2IOCpy32(charPointer, snmpSrc->p_OidsTbl[i].oidVal, snmpSrc->p_OidsTbl[i].oidSize);
-            WRITE_UINT32(snmpOid->p_Oid, PTR_TO_UINT(charPointer) - fmMuramVirtBaseAddr);
-            charPointer += snmpSrc->p_OidsTbl[i].oidSize;
-            if (snmpSrc->p_OidsTbl[i].resSize <= 4)
-                WRITE_UINT32(snmpOid->resValOrPtr, *snmpSrc->p_OidsTbl[i].resVal);
-            else
-            {
-                Mem2IOCpy32(charPointer, snmpSrc->p_OidsTbl[i].resVal, snmpSrc->p_OidsTbl[i].resSize);
-                WRITE_UINT32(snmpOid->resValOrPtr, PTR_TO_UINT(charPointer) - fmMuramVirtBaseAddr);
-                charPointer += snmpSrc->p_OidsTbl[i].resSize;
-            }
-            snmpOid++;
-        }
-        charPointer = UINT_TO_PTR(ROUND_UP(PTR_TO_UINT(charPointer),4));
-        WRITE_UINT32(SnmpDescriptor->p_Statistics, PTR_TO_UINT(charPointer) - fmMuramVirtBaseAddr);
-    }
-
-    // filtering
-    if (params->p_AutoResFilteringInfo)
-    {
-        if (params->p_AutoResFilteringInfo->ipProtPassOnHit)
-            tmp |= IP_PROT_TBL_PASS_MASK;
-        if (params->p_AutoResFilteringInfo->udpPortPassOnHit)
-            tmp |= UDP_PORT_TBL_PASS_MASK;
-        if (params->p_AutoResFilteringInfo->tcpPortPassOnHit)
-            tmp |= TCP_PORT_TBL_PASS_MASK;
-        WRITE_UINT8(ArCommonDescPtr->filterControl, tmp);
-        WRITE_UINT16(ArCommonDescPtr->tcpControlPass, params->p_AutoResFilteringInfo->tcpFlagsMask);
-
-        // ip filtering
-        if (params->p_AutoResFilteringInfo->ipProtTableSize)
-        {
-            uint8_t* ip_tbl = (uint8_t*)(PTR_TO_UINT(ArCommonDescPtr) + of->filtIp);
-            WRITE_UINT8(ArCommonDescPtr->ipProtocolTblSize, params->p_AutoResFilteringInfo->ipProtTableSize);
-            for (i = 0; i < params->p_AutoResFilteringInfo->ipProtTableSize; i++)
-                WRITE_UINT8(ip_tbl[i], params->p_AutoResFilteringInfo->p_IpProtTablePtr[i]);
-            WRITE_UINT32(ArCommonDescPtr->p_IpProtocolFiltTbl, PTR_TO_UINT(ip_tbl) - fmMuramVirtBaseAddr);
-        }
-
-        // udp filtering
-        if (params->p_AutoResFilteringInfo->udpPortsTableSize)
-        {
-            t_PortTblEntry* udp_tbl = (t_PortTblEntry*)(PTR_TO_UINT(ArCommonDescPtr) + of->filtUdp);
-            WRITE_UINT8(ArCommonDescPtr->udpPortTblSize, params->p_AutoResFilteringInfo->udpPortsTableSize);
-            for (i = 0; i < params->p_AutoResFilteringInfo->udpPortsTableSize; i++)
-            {
-                WRITE_UINT32(udp_tbl[i].Ports,
-                    (params->p_AutoResFilteringInfo->p_UdpPortsTablePtr[i].srcPort << 16) +
-                    params->p_AutoResFilteringInfo->p_UdpPortsTablePtr[i].dstPort);
-                WRITE_UINT32(udp_tbl[i].PortsMask,
-                    (params->p_AutoResFilteringInfo->p_UdpPortsTablePtr[i].srcPortMask << 16) +
-                    params->p_AutoResFilteringInfo->p_UdpPortsTablePtr[i].dstPortMask);
-            }
-            WRITE_UINT32(ArCommonDescPtr->p_UdpPortFiltTbl, PTR_TO_UINT(udp_tbl) - fmMuramVirtBaseAddr);
-        }
-
-        // tcp filtering
-        if (params->p_AutoResFilteringInfo->tcpPortsTableSize)
-        {
-            t_PortTblEntry* tcp_tbl = (t_PortTblEntry*)(PTR_TO_UINT(ArCommonDescPtr) + of->filtTcp);
-            WRITE_UINT8(ArCommonDescPtr->tcpPortTblSize, params->p_AutoResFilteringInfo->tcpPortsTableSize);
-            for (i = 0; i < params->p_AutoResFilteringInfo->tcpPortsTableSize; i++)
-            {
-                WRITE_UINT32(tcp_tbl[i].Ports,
-                    (params->p_AutoResFilteringInfo->p_TcpPortsTablePtr[i].srcPort << 16) +
-                    params->p_AutoResFilteringInfo->p_TcpPortsTablePtr[i].dstPort);
-                WRITE_UINT32(tcp_tbl[i].PortsMask,
-                    (params->p_AutoResFilteringInfo->p_TcpPortsTablePtr[i].srcPortMask << 16) +
-                    params->p_AutoResFilteringInfo->p_TcpPortsTablePtr[i].dstPortMask);
-            }
-            WRITE_UINT32(ArCommonDescPtr->p_TcpPortFiltTbl, PTR_TO_UINT(tcp_tbl) - fmMuramVirtBaseAddr);
-        }
-    }
-    // common stats
-    WRITE_UINT32(ArCommonDescPtr->p_ArStats, PTR_TO_UINT(ArCommonDescPtr) + of->stats - fmMuramVirtBaseAddr);
-
-    // get into Deep Sleep sequence:
-
-	// Ensures that FMan do not enter the idle state. This is done by programing
-	// FMDPSLPCR[FM_STOP] to one.
-	fm_soc_suspend();
-
-    ARDesc = UINT_TO_PTR(XX_VirtToPhys(ArCommonDescPtr));
-    return E_OK;
-
-}
-
-void FM_ChangeClock(t_Handle h_Fm, int hardwarePortId);
-t_Error FM_PORT_EnterDsarFinal(t_Handle h_DsarRxPort, t_Handle h_DsarTxPort)
-{
-	t_FmGetSetParams fmGetSetParams;
-	t_FmPort *p_FmPort = (t_FmPort *)h_DsarRxPort;
-	t_FmPort *p_FmPortTx = (t_FmPort *)h_DsarTxPort;
-	t_Handle *h_FmPcd = FmGetPcd(p_FmPort->h_Fm);
-	t_FmPort *p_FmPortHc = FM_PCD_GetHcPort(h_FmPcd);
-	memset(&fmGetSetParams, 0, sizeof (t_FmGetSetParams));
-        fmGetSetParams.setParams.type = UPDATE_FM_CLD;
-        FmGetSetParams(p_FmPort->h_Fm, &fmGetSetParams);
-
-	/* Issue graceful stop to HC port */
-	FM_PORT_Disable(p_FmPortHc);
-
-	// config tx port
-    p_FmPort->deepSleepVars.fmbm_tcfg = GET_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tcfg);
-    WRITE_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tcfg, GET_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tcfg) | BMI_PORT_CFG_IM | BMI_PORT_CFG_EN);
-    // ????
-    p_FmPort->deepSleepVars.fmbm_tcmne = GET_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tcmne);
-    WRITE_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tcmne, 0xE);
-    // Stage 7:echo
-    p_FmPort->deepSleepVars.fmbm_rfpne = GET_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rfpne);
-    WRITE_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rfpne, 0x2E);
-    if (!PrsIsEnabled(h_FmPcd))
-    {
-        p_FmPort->deepSleepVars.dsarEnabledParser = TRUE;
-        PrsEnable(h_FmPcd);
-    }
-    else
-        p_FmPort->deepSleepVars.dsarEnabledParser = FALSE;
-
-    p_FmPort->deepSleepVars.fmbm_rfne = GET_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rfne);
-    WRITE_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rfne, 0x440000);
-
-    // save rcfg for restoring: accumulate mode is changed by ucode
-    p_FmPort->deepSleepVars.fmbm_rcfg = GET_UINT32(p_FmPort->port.bmi_regs->rx.fmbm_rcfg);
-    WRITE_UINT32(p_FmPort->port.bmi_regs->rx.fmbm_rcfg, p_FmPort->deepSleepVars.fmbm_rcfg | BMI_PORT_CFG_AM);
-        memset(&fmGetSetParams, 0, sizeof (t_FmGetSetParams));
-        fmGetSetParams.setParams.type = UPDATE_FPM_BRKC_SLP;
-        fmGetSetParams.setParams.sleep = 1;
-        FmGetSetParams(p_FmPort->h_Fm, &fmGetSetParams);
-
-// ***** issue external request sync command
-        memset(&fmGetSetParams, 0, sizeof (t_FmGetSetParams));
-        fmGetSetParams.setParams.type = UPDATE_FPM_EXTC;
-        FmGetSetParams(p_FmPort->h_Fm, &fmGetSetParams);
-	// get
-	memset(&fmGetSetParams, 0, sizeof (t_FmGetSetParams));
-	fmGetSetParams.getParams.type = GET_FMFP_EXTC;
-	FmGetSetParams(p_FmPort->h_Fm, &fmGetSetParams);
-	if (fmGetSetParams.getParams.fmfp_extc != 0)
-	{
-		// clear
-		memset(&fmGetSetParams, 0, sizeof (t_FmGetSetParams));
-		fmGetSetParams.setParams.type = UPDATE_FPM_EXTC_CLEAR;
-		FmGetSetParams(p_FmPort->h_Fm, &fmGetSetParams);
-}
-
-	memset(&fmGetSetParams, 0, sizeof (t_FmGetSetParams));
-	fmGetSetParams.getParams.type = GET_FMFP_EXTC | GET_FM_NPI;
-	do
-	{
-		FmGetSetParams(p_FmPort->h_Fm, &fmGetSetParams);
-	} while (fmGetSetParams.getParams.fmfp_extc != 0 && fmGetSetParams.getParams.fm_npi == 0);
-	if (fmGetSetParams.getParams.fm_npi != 0)
-		XX_Print("FM: Sync did not finish\n");
-
-        // check that all stoped
-	memset(&fmGetSetParams, 0, sizeof (t_FmGetSetParams));
-        fmGetSetParams.getParams.type = GET_FMQM_GS | GET_FM_NPI;
-        FmGetSetParams(p_FmPort->h_Fm, &fmGetSetParams);
-	while (fmGetSetParams.getParams.fmqm_gs & 0xF0000000)
-	        FmGetSetParams(p_FmPort->h_Fm, &fmGetSetParams);
-	if (fmGetSetParams.getParams.fmqm_gs == 0 && fmGetSetParams.getParams.fm_npi == 0)
-		XX_Print("FM: Sleeping\n");
-//	FM_ChangeClock(p_FmPort->h_Fm, p_FmPort->hardwarePortId);
-
-    return E_OK;
-}
-
-EXPORT_SYMBOL(FM_PORT_EnterDsarFinal);
-
-void FM_PORT_Dsar_DumpRegs()
-{
-    uint32_t* hh = XX_PhysToVirt(PTR_TO_UINT(ARDesc));
-    DUMP_MEMORY(hh, 0x220);
-}
-
-void FM_PORT_ExitDsar(t_Handle h_FmPortRx, t_Handle h_FmPortTx)
-{
-    t_FmPort *p_FmPort = (t_FmPort *)h_FmPortRx;
-    t_FmPort *p_FmPortTx = (t_FmPort *)h_FmPortTx;
-    t_Handle *h_FmPcd = FmGetPcd(p_FmPort->h_Fm);
-    t_FmPort *p_FmPortHc = FM_PCD_GetHcPort(h_FmPcd);
-    t_FmGetSetParams fmGetSetParams;
-    memset(&fmGetSetParams, 0, sizeof (t_FmGetSetParams));
-    fmGetSetParams.setParams.type = UPDATE_FPM_BRKC_SLP;
-    fmGetSetParams.setParams.sleep = 0;
-    if (p_FmPort->deepSleepVars.autoResOffsets)
-    {
-        XX_Free(p_FmPort->deepSleepVars.autoResOffsets);
-        p_FmPort->deepSleepVars.autoResOffsets = 0;
-    }
-
-    if (p_FmPort->deepSleepVars.dsarEnabledParser)
-        PrsDisable(FmGetPcd(p_FmPort->h_Fm));
-    WRITE_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rfpne, p_FmPort->deepSleepVars.fmbm_rfpne);
-    WRITE_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rfne, p_FmPort->deepSleepVars.fmbm_rfne);
-    WRITE_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rcfg, p_FmPort->deepSleepVars.fmbm_rcfg);
-    FmGetSetParams(p_FmPort->h_Fm, &fmGetSetParams);
-    WRITE_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tcmne, p_FmPort->deepSleepVars.fmbm_tcmne);
-    WRITE_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tcfg, p_FmPort->deepSleepVars.fmbm_tcfg);
-    FM_PORT_Enable(p_FmPortHc);
-}
-
-bool FM_PORT_IsInDsar(t_Handle h_FmPort)
-{
-    t_FmPort *p_FmPort = (t_FmPort *)h_FmPort;
-    return PTR_TO_UINT(p_FmPort->deepSleepVars.autoResOffsets);
-}
-
-t_Error FM_PORT_GetDsarStats(t_Handle h_FmPortRx, t_FmPortDsarStats *stats)
-{
-    t_FmPort *p_FmPort = (t_FmPort *)h_FmPortRx;
-    struct arOffsets *of = (struct arOffsets*)p_FmPort->deepSleepVars.autoResOffsets;
-    uint8_t* fmMuramVirtBaseAddr = XX_PhysToVirt(p_FmPort->fmMuramPhysBaseAddr);
-    uint32_t *param_page = XX_PhysToVirt(p_FmPort->fmMuramPhysBaseAddr + GET_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rgpr));
-    t_ArCommonDesc *ArCommonDescPtr = (t_ArCommonDesc*)(XX_PhysToVirt(p_FmPort->fmMuramPhysBaseAddr + GET_UINT32(*param_page)));
-    t_DsarArpDescriptor *ArpDescriptor = (t_DsarArpDescriptor*)(PTR_TO_UINT(ArCommonDescPtr) + of->arp);
-    t_DsarArpStatistics* arp_stats = (t_DsarArpStatistics*)(PTR_TO_UINT(ArpDescriptor->p_Statistics) + fmMuramVirtBaseAddr);
-    t_DsarIcmpV4Descriptor* ICMPV4Descriptor = (t_DsarIcmpV4Descriptor*)(PTR_TO_UINT(ArCommonDescPtr) + of->icmpv4);
-    t_DsarIcmpV4Statistics* icmpv4_stats = (t_DsarIcmpV4Statistics*)(PTR_TO_UINT(ICMPV4Descriptor->p_Statistics) + fmMuramVirtBaseAddr);
-    t_DsarNdDescriptor* NDDescriptor = (t_DsarNdDescriptor*)(PTR_TO_UINT(ArCommonDescPtr) + of->nd);
-    t_NdStatistics* nd_stats = (t_NdStatistics*)(PTR_TO_UINT(NDDescriptor->p_Statistics) + fmMuramVirtBaseAddr);
-    t_DsarIcmpV6Descriptor* ICMPV6Descriptor = (t_DsarIcmpV6Descriptor*)(PTR_TO_UINT(ArCommonDescPtr) + of->icmpv6);
-    t_DsarIcmpV6Statistics* icmpv6_stats = (t_DsarIcmpV6Statistics*)(PTR_TO_UINT(ICMPV6Descriptor->p_Statistics) + fmMuramVirtBaseAddr);
-    t_DsarSnmpDescriptor* SnmpDescriptor = (t_DsarSnmpDescriptor*)(PTR_TO_UINT(ArCommonDescPtr) + of->snmp);
-    t_DsarSnmpStatistics* snmp_stats = (t_DsarSnmpStatistics*)(PTR_TO_UINT(SnmpDescriptor->p_Statistics) + fmMuramVirtBaseAddr);
-    stats->arpArCnt = arp_stats->arCnt;
-    stats->echoIcmpv4ArCnt = icmpv4_stats->arCnt;
-    stats->ndpArCnt = nd_stats->arCnt;
-    stats->echoIcmpv6ArCnt = icmpv6_stats->arCnt;
-    stats->snmpGetCnt = snmp_stats->snmpGetReqCnt;
-    stats->snmpGetNextCnt = snmp_stats->snmpGetNextReqCnt;
     return E_OK;
 }

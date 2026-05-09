@@ -688,7 +688,7 @@ static int mlxreg_lc_completion_notify(void *handle, struct i2c_adapter *parent,
 	if (regval & mlxreg_lc->data->mask) {
 		mlxreg_lc->state |= MLXREG_LC_SYNCED;
 		mlxreg_lc_state_update_locked(mlxreg_lc, MLXREG_LC_SYNCED, 1);
-		if (mlxreg_lc->state & ~MLXREG_LC_POWERED) {
+		if (!(mlxreg_lc->state & MLXREG_LC_POWERED)) {
 			err = mlxreg_lc_power_on_off(mlxreg_lc, 1);
 			if (err)
 				goto mlxreg_lc_regmap_power_on_off_fail;
@@ -907,7 +907,7 @@ i2c_get_adapter_fail:
 	return err;
 }
 
-static int mlxreg_lc_remove(struct platform_device *pdev)
+static void mlxreg_lc_remove(struct platform_device *pdev)
 {
 	struct mlxreg_core_data *data = dev_get_platdata(&pdev->dev);
 	struct mlxreg_lc *mlxreg_lc = platform_get_drvdata(pdev);
@@ -921,7 +921,7 @@ static int mlxreg_lc_remove(struct platform_device *pdev)
 	 * is nothing to remove.
 	 */
 	if (!data->notifier || !data->notifier->handle)
-		return 0;
+		return;
 
 	/* Clear event notification callback and handle. */
 	data->notifier->user_handler = NULL;
@@ -940,13 +940,11 @@ static int mlxreg_lc_remove(struct platform_device *pdev)
 		i2c_put_adapter(data->hpdev.adapter);
 		data->hpdev.adapter = NULL;
 	}
-
-	return 0;
 }
 
 static struct platform_driver mlxreg_lc_driver = {
 	.probe = mlxreg_lc_probe,
-	.remove = mlxreg_lc_remove,
+	.remove_new = mlxreg_lc_remove,
 	.driver = {
 		.name = "mlxreg-lc",
 	},

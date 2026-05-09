@@ -33,7 +33,7 @@
 #ifndef __FSL_FMAN_H
 #define __FSL_FMAN_H
 
-#include "common/general.h"
+#include "std_ext.h"
 
 struct fman_ext_pool_params {
 	uint8_t                 id;    /**< External buffer pool id */
@@ -278,6 +278,7 @@ struct fman_rg {
 	struct fman_qmi_regs *qmi_rg;
 };
 
+/* Enum for selecting DMA Cache Override */
 enum fman_dma_cache_override {
 	E_FMAN_DMA_NO_CACHE_OR = 0, /**< No override of the Cache field */
 	E_FMAN_DMA_NO_STASH_DATA, /**< No data stashing in system level cache */
@@ -285,6 +286,7 @@ enum fman_dma_cache_override {
 	E_FMAN_DMA_STASH_DATA /**< Stashing performed in system level cache */
 };
 
+/* Enum for choosing the field that will be output on AID */
 enum fman_dma_aid_mode {
 	E_FMAN_DMA_AID_OUT_PORT_ID = 0,           /**< 4 LSB of PORT_ID */
 	E_FMAN_DMA_AID_OUT_TNUM                   /**< 4 LSB of TNUM */
@@ -793,33 +795,32 @@ void fman_set_vsp_window(struct fman_bmi_regs *bmi_rg,
 /**************************************************************************//**
  @Description       default values
 *//***************************************************************************/
-#define DEFAULT_CATASTROPHIC_ERR                E_FMAN_CATAST_ERR_STALL_PORT
-#define DEFAULT_DMA_ERR                         E_FMAN_DMA_ERR_CATASTROPHIC
-#define DEFAULT_HALT_ON_EXTERNAL_ACTIVATION     FALSE   /* do not change! if changed, must be disabled for rev1 ! */
-#define DEFAULT_HALT_ON_UNRECOVERABLE_ECC_ERROR FALSE   /* do not change! if changed, must be disabled for rev1 ! */
-#define DEFAULT_EXTERNAL_ECC_RAMS_ENABLE        FALSE
-#define DEFAULT_AID_OVERRIDE                    FALSE
-#define DEFAULT_AID_MODE                        E_FMAN_DMA_AID_OUT_TNUM
-#define DEFAULT_DMA_COMM_Q_LOW                  0x2A
-#define DEFAULT_DMA_COMM_Q_HIGH                 0x3F
-#define DEFAULT_CACHE_OVERRIDE                  E_FMAN_DMA_NO_CACHE_OR
-#define DEFAULT_DMA_CAM_NUM_OF_ENTRIES          64
-#define DEFAULT_DMA_DBG_CNT_MODE                E_FMAN_DMA_DBG_NO_CNT
-#define DEFAULT_DMA_EN_EMERGENCY                FALSE
-#define DEFAULT_DMA_SOS_EMERGENCY               0
-#define DEFAULT_DMA_WATCHDOG                    0 /* disabled */
-#define DEFAULT_DMA_EN_EMERGENCY_SMOOTHER       FALSE
-#define DEFAULT_DMA_EMERGENCY_SWITCH_COUNTER    0
-#define DEFAULT_DISP_LIMIT                      0
-#define DEFAULT_PRS_DISP_TH                     16
-#define DEFAULT_PLCR_DISP_TH                    16
-#define DEFAULT_KG_DISP_TH                      16
-#define DEFAULT_BMI_DISP_TH                     16
-#define DEFAULT_QMI_ENQ_DISP_TH                 16
-#define DEFAULT_QMI_DEQ_DISP_TH                 16
-#define DEFAULT_FM_CTL1_DISP_TH                 16
-#define DEFAULT_FM_CTL2_DISP_TH                 16
-#define DEFAULT_TNUM_AGING_PERIOD               4
-
+#define FM_CATASTROPHIC_ERR                E_FMAN_CATAST_ERR_STALL_PORT
+#define FM_DMA_ERR                         E_FMAN_DMA_ERR_CATASTROPHIC
+#define FM_HALT_ON_EXTERNAL_ACTIVATION     FALSE   /* do not change! if changed, must be disabled for rev1 ! */
+#define FM_HALT_ON_UNRECOVERABLE_ECC_ERROR FALSE   /* do not change! if changed, must be disabled for rev1 ! */
+#define FM_EXTERNAL_ECC_RAMS_ENABLE        FALSE
+#define FM_AID_OVERRIDE                    FALSE
+#define FM_AID_MODE                        E_FMAN_DMA_AID_OUT_TNUM
+#define FM_DMA_COMM_Q_LOW                  0x2A
+#define FM_DMA_COMM_Q_HIGH                 0x3F
+#define FM_CACHE_OVERRIDE                  E_FMAN_DMA_NO_CACHE_OR
+#define FM_DMA_CAM_NUM_OF_ENTRIES          64
+#define FM_DMA_DBG_CNT_MODE                E_FMAN_DMA_DBG_NO_CNT
+#define FM_DMA_EN_EMERGENCY                FALSE
+#define FM_DMA_SOS_EMERGENCY               0
+#define FM_DMA_WATCHDOG                    0 /* disabled */
+#define FM_DMA_EN_EMERGENCY_SMOOTHER       FALSE
+#define FM_DMA_EMERGENCY_SWITCH_COUNTER    0
+#define FM_DISP_LIMIT                      0
+#define FM_PRS_DISP_TH                     16
+#define FM_PLCR_DISP_TH                    16
+#define FM_KG_DISP_TH                      16
+#define FM_BMI_DISP_TH                     16
+#define FM_QMI_ENQ_DISP_TH                 16
+#define FM_QMI_DEQ_DISP_TH                 16
+#define FM_CTL1_DISP_TH                    16
+#define FM_CTL2_DISP_TH                    16
+#define FM_TNUM_AGING_PERIOD               4
 
 #endif /* __FSL_FMAN_H */

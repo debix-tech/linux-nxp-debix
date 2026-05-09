@@ -42,7 +42,6 @@ static struct acpi_osi_entry
 osi_setup_entries[OSI_STRING_ENTRIES_MAX] __initdata = {
 	{"Module Device", true},
 	{"Processor Device", true},
-	{"3.0 _SCP Extensions", true},
 	{"Processor Aggregator Device", true},
 };
 
@@ -110,7 +109,7 @@ void __init acpi_osi_setup(char *str)
 			break;
 		} else if (osi->string[0] == '\0') {
 			osi->enable = enable;
-			strncpy(osi->string, str, OSI_STRING_LENGTH_MAX);
+			strscpy(osi->string, str, OSI_STRING_LENGTH_MAX);
 			break;
 		}
 	}

@@ -2,7 +2,7 @@
  * Copyright 2004-2016 Freescale Semiconductor, Inc. All Rights Reserved.
  */
 
-/* Copyright 2019,2021,2022 NXP */
+/* Copyright 2019,2021,2022,2024 NXP */
 
 /*
  * The code contained herein is licensed under the GNU General Public
@@ -2280,7 +2280,8 @@ static int mxcfb_ioctl(struct fb_info *fbi, unsigned int cmd, unsigned long arg)
 			struct mxcfb_info *mxc_fbi =
 				(struct mxcfb_info *)fbi->par;
 
-			if (put_user(mxc_fbi->ipu_ch, argp))
+			if (mxc_copy_to_user((void *)arg, &mxc_fbi->ipu_ch,
+					     sizeof(mxc_fbi->ipu_ch)))
 				return -EFAULT;
 			break;
 		}
@@ -2289,7 +2290,9 @@ static int mxcfb_ioctl(struct fb_info *fbi, unsigned int cmd, unsigned long arg)
 			struct mxcfb_info *mxc_fbi =
 				(struct mxcfb_info *)fbi->par;
 
-			if (put_user(mxc_fbi->ipu_di_pix_fmt, argp))
+			if (mxc_copy_to_user((void *)arg,
+					     &mxc_fbi->ipu_di_pix_fmt,
+					     sizeof(mxc_fbi->ipu_di_pix_fmt)))
 				return -EFAULT;
 			break;
 		}
@@ -2696,7 +2699,7 @@ static int mxcfb_mmap(struct fb_info *fbi, struct vm_area_struct *vma)
 	/* make buffers bufferable */
 	vma->vm_page_prot = pgprot_writecombine(vma->vm_page_prot);
 
-	vma->vm_flags |= VM_IO;
+	vm_flags_set(vma, VM_IO);
 
 	if (remap_pfn_range(vma, vma->vm_start, vma->vm_pgoff,
 			    vma->vm_end - vma->vm_start, vma->vm_page_prot)) {
@@ -2714,6 +2717,7 @@ static int mxcfb_mmap(struct fb_info *fbi, struct vm_area_struct *vma)
  */
 static struct fb_ops mxcfb_ops = {
 	.owner = THIS_MODULE,
+	__FB_DEFAULT_IOMEM_OPS_RDWR,
 	.fb_set_par = mxcfb_set_par,
 	.fb_check_var = mxcfb_check_var,
 	.fb_setcolreg = mxcfb_setcolreg,
@@ -2930,7 +2934,6 @@ static struct fb_info *mxcfb_init_fbinfo(struct device *dev, struct fb_ops *ops)
 	bpp_to_var(plat_data->default_bpp, &fbi->var);
 
 	fbi->fbops = ops;
-	fbi->flags = FBINFO_FLAG_DEFAULT;
 	fbi->pseudo_palette = mxcfbi->pseudo_palette;
 
 	/*
@@ -3637,7 +3640,7 @@ init_fbinfo_failed:
 	return ret;
 }
 
-static int mxcfb_remove(struct platform_device *pdev)
+static void mxcfb_remove(struct platform_device *pdev)
 {
 	struct fb_info *fbi = platform_get_drvdata(pdev);
 	struct mxcfb_info *mxc_fbi = fbi->par;
@@ -3661,7 +3664,6 @@ static int mxcfb_remove(struct platform_device *pdev)
 	ipu_clear_usage(mxc_fbi->ipu_id, mxc_fbi->ipu_di);
 	fb_dealloc_cmap(&fbi->cmap);
 	framebuffer_release(fbi);
-	return 0;
 }
 
 static const struct of_device_id imx_mxcfb_dt_ids[] = {
@@ -3683,25 +3685,7 @@ static struct platform_driver mxcfb_driver = {
 	.resume = mxcfb_resume,
 };
 
-/*!
- * Main entry function for the framebuffer. The function registers the power
- * management callback functions with the kernel and also registers the MXCFB
- * callback functions with the core Linux framebuffer driver \b fbmem.c
- *
- * @return      Error code indicating success or failure
- */
-int __init mxcfb_init(void)
-{
-	return platform_driver_register(&mxcfb_driver);
-}
-
-void mxcfb_exit(void)
-{
-	platform_driver_unregister(&mxcfb_driver);
-}
-
-module_init(mxcfb_init);
-module_exit(mxcfb_exit);
+module_platform_driver(mxcfb_driver);
 
 MODULE_AUTHOR("Freescale Semiconductor, Inc.");
 MODULE_DESCRIPTION("MXC framebuffer driver");

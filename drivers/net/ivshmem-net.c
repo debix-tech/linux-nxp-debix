@@ -996,7 +996,7 @@ static int ivshm_net_probe(struct pci_dev *pdev,
 	if (ret)
 		goto err_wq;
 
-	ret = pci_alloc_irq_vectors(pdev, 1, 2, PCI_IRQ_LEGACY | PCI_IRQ_MSIX);
+	ret = pci_alloc_irq_vectors(pdev, 1, 2, PCI_IRQ_INTX | PCI_IRQ_MSIX);
 	if (ret < 0)
 		goto err_alloc_irq;
 

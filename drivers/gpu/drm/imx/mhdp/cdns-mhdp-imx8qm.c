@@ -125,8 +125,13 @@ static void imx8qm_pixel_link_sync_disable(u32 dual_mode)
 void imx8qm_phy_reset(u8 reset)
 {
 	struct imx_sc_ipc *handle;
+	int ret = 0;
 
-	imx_scu_get_handle(&handle);
+	ret = imx_scu_get_handle(&handle);
+	if (ret) {
+		DRM_ERROR("Failed to get scu ipc handle (%d)\n", ret);
+		return;
+	}
 
 	/* set the pixel link mode and pixel type */
 	imx_sc_misc_set_control(handle, IMX_SC_R_HDMI, IMX_SC_C_PHY_RESET, reset);
@@ -135,8 +140,13 @@ void imx8qm_phy_reset(u8 reset)
 static void imx8qm_clk_mux(u8 is_dp)
 {
 	struct imx_sc_ipc *handle;
+	int ret = 0;
 
-	imx_scu_get_handle(&handle);
+	ret = imx_scu_get_handle(&handle);
+	if (ret) {
+		DRM_ERROR("Failed to get scu ipc handle (%d)\n", ret);
+		return;
+	}
 
 	if (is_dp)
 		/* Enable the 24MHz for HDP PHY */
@@ -145,7 +155,7 @@ static void imx8qm_clk_mux(u8 is_dp)
 		imx_sc_misc_set_control(handle, IMX_SC_R_HDMI, IMX_SC_C_MODE, 0);
 }
 
-int imx8qm_clocks_init(struct imx_mhdp_device *imx_mhdp)
+static int imx8qm_clocks_init(struct imx_mhdp_device *imx_mhdp)
 {
 	struct device *dev = imx_mhdp->mhdp.dev;
 	struct imx_hdp_clks *clks = &imx_mhdp->clks;
@@ -578,8 +588,8 @@ void cdns_mhdp_pclk_rate_imx8qm(struct cdns_mhdp_device *mhdp)
 	imx8qm_pixel_link_mux(imx_mhdp);
 }
 
-int cdns_mhdp_firmware_write_section(struct imx_mhdp_device *imx_mhdp,
-					const u8 *data, int size, int addr)
+static int cdns_mhdp_firmware_write_section(struct imx_mhdp_device *imx_mhdp,
+					    const u8 *data, int size, int addr)
 {
 	int i;
 

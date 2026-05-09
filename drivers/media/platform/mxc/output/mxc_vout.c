@@ -289,14 +289,10 @@ static int alloc_dma_buf(struct mxc_vout_output *vout, struct dma_mem *buf)
 static ipu_channel_t get_ipu_channel(struct fb_info *fbi)
 {
 	ipu_channel_t ipu_ch = CHAN_NONE;
-	mm_segment_t old_fs;
 
 	if (fbi->fbops->fb_ioctl) {
-		old_fs = get_fs();
-		set_fs(KERNEL_DS);
 		fbi->fbops->fb_ioctl(fbi, MXCFB_GET_FB_IPU_CHAN,
 				(unsigned long)&ipu_ch);
-		set_fs(old_fs);
 	}
 
 	return ipu_ch;
@@ -304,15 +300,11 @@ static ipu_channel_t get_ipu_channel(struct fb_info *fbi)
 
 static unsigned int get_ipu_fmt(struct fb_info *fbi)
 {
-	mm_segment_t old_fs;
 	unsigned int fb_fmt = 0;
 
 	if (fbi->fbops->fb_ioctl) {
-		old_fs = get_fs();
-		set_fs(KERNEL_DS);
 		fbi->fbops->fb_ioctl(fbi, MXCFB_GET_DIFMT,
 				(unsigned long)&fb_fmt);
-		set_fs(old_fs);
 	}
 
 	return fb_fmt;
@@ -393,7 +385,7 @@ static int update_setting_from_fbi(struct mxc_vout_output *vout,
 		mutex_unlock(&gfbi_mutex);
 		return -EINVAL;
 	}
-	strlcpy(vout->vfd->name, fbi->fix.id, sizeof(vout->vfd->name));
+	strscpy(vout->vfd->name, fbi->fix.id, sizeof(vout->vfd->name));
 
 	memset(&vout->task, 0, sizeof(struct ipu_task));
 
@@ -1031,8 +1023,8 @@ static int mxc_vidioc_querycap(struct file *file, void *fh,
 {
 	struct mxc_vout_output *vout = fh;
 
-	strlcpy(cap->driver, VOUT_NAME, sizeof(cap->driver));
-	strlcpy(cap->card, vout->vfd->name, sizeof(cap->card));
+	strscpy(cap->driver, VOUT_NAME, sizeof(cap->driver));
+	strscpy(cap->card, vout->vfd->name, sizeof(cap->card));
 	cap->bus_info[0] = '\0';
 	cap->device_caps = V4L2_CAP_STREAMING | V4L2_CAP_VIDEO_OUTPUT;
 	cap->capabilities = cap->device_caps | V4L2_CAP_DEVICE_CAPS;
@@ -1046,7 +1038,7 @@ static int mxc_vidioc_enum_fmt_vid_out(struct file *file, void *fh,
 	if (fmt->index >= NUM_MXC_VOUT_FORMATS)
 		return -EINVAL;
 
-	strlcpy(fmt->description, mxc_formats[fmt->index].description,
+	strscpy(fmt->description, mxc_formats[fmt->index].description,
 			sizeof(fmt->description));
 	fmt->pixelformat = mxc_formats[fmt->index].pixelformat;
 
@@ -1794,15 +1786,11 @@ static int set_window_position(struct mxc_vout_output *vout,
 				struct mxcfb_pos *pos)
 {
 	struct fb_info *fbi = vout->fbi;
-	mm_segment_t old_fs;
 	int ret = 0;
 
 	if (vout->disp_support_windows) {
-		old_fs = get_fs();
-		set_fs(KERNEL_DS);
 		ret = fbi->fbops->fb_ioctl(fbi, MXCFB_SET_OVERLAY_POS,
 				(unsigned long)pos);
-		set_fs(old_fs);
 	}
 
 	return ret;
@@ -1960,14 +1948,10 @@ err:
 static inline void wait_for_vsync(struct mxc_vout_output *vout)
 {
 	struct fb_info *fbi = vout->fbi;
-	mm_segment_t old_fs;
 
 	if (fbi->fbops->fb_ioctl) {
-		old_fs = get_fs();
-		set_fs(KERNEL_DS);
 		fbi->fbops->fb_ioctl(fbi, MXCFB_WAIT_FOR_VSYNC,
 				(unsigned long)NULL);
-		set_fs(old_fs);
 	}
 
 	return;
@@ -2183,7 +2167,7 @@ static int mxc_vout_setup_output(struct mxc_vout_dev *dev)
 		mutex_init(&vout->task_lock);
 		mutex_init(&vout->accs_lock);
 
-		strlcpy(vout->vfd->name, fbi->fix.id, sizeof(vout->vfd->name));
+		strscpy(vout->vfd->name, fbi->fix.id, sizeof(vout->vfd->name));
 
 		video_set_drvdata(vout->vfd, vout);
 
@@ -2242,7 +2226,7 @@ free_dev:
 	return ret;
 }
 
-static int mxc_vout_remove(struct platform_device *pdev)
+static void mxc_vout_remove(struct platform_device *pdev)
 {
 	struct v4l2_device *v4l2_dev = platform_get_drvdata(pdev);
 	struct mxc_vout_dev *dev = container_of(v4l2_dev, struct
@@ -2251,7 +2235,6 @@ static int mxc_vout_remove(struct platform_device *pdev)
 	mxc_vout_free_output(dev);
 	v4l2_device_unregister(v4l2_dev);
 	kfree(dev);
-	return 0;
 }
 
 static const struct of_device_id mxc_v4l2_dt_ids[] = {

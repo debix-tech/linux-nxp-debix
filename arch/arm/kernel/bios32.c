@@ -12,13 +12,10 @@
 #include <linux/slab.h>
 #include <linux/init.h>
 #include <linux/io.h>
-#include <linux/of_irq.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/map.h>
 #include <asm/mach/pci.h>
-
-#include "../../../drivers/pci/pcie/portdrv.h"
 
 static int debug_pci;
 
@@ -65,47 +62,6 @@ void pcibios_report_status(u_int status_mask, int warn)
 
 	list_for_each_entry(bus, &pci_root_buses, node)
 		pcibios_bus_report_status(bus, status_mask, warn);
-}
-
-/*
- * Check device tree if the service interrupts are there
- */
-int pcibios_check_service_irqs(struct pci_dev *dev, int *irqs, int mask)
-{
-	int ret, count = 0;
-	struct device_node *np = NULL;
-
-	if (dev->bus->dev.of_node)
-		np = dev->bus->dev.of_node;
-
-	if (np == NULL)
-		return 0;
-
-	if (!IS_ENABLED(CONFIG_OF_IRQ))
-		return 0;
-
-	/* If root port doesn't support MSI/MSI-X/INTx in RC mode,
-	 * request irq for aer
-	 */
-	if (mask & PCIE_PORT_SERVICE_AER) {
-		ret = of_irq_get_byname(np, "aer");
-		if (ret > 0) {
-			irqs[PCIE_PORT_SERVICE_AER_SHIFT] = ret;
-			count++;
-		}
-	}
-
-	if (mask & PCIE_PORT_SERVICE_PME) {
-		ret = of_irq_get_byname(np, "pme");
-		if (ret > 0) {
-			irqs[PCIE_PORT_SERVICE_PME_SHIFT] = ret;
-			count++;
-		}
-	}
-
-	/* TODO: add more service interrupts if there it is in the device tree*/
-
-	return count;
 }
 
 /*
@@ -186,15 +142,15 @@ DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_WINBOND2, PCI_DEVICE_ID_WINBOND2_89C940F,
  */
 static void pci_fixup_dec21285(struct pci_dev *dev)
 {
-	int i;
-
 	if (dev->devfn == 0) {
+		struct resource *r;
+
 		dev->class &= 0xff;
 		dev->class |= PCI_CLASS_BRIDGE_HOST << 8;
-		for (i = 0; i < PCI_NUM_RESOURCES; i++) {
-			dev->resource[i].start = 0;
-			dev->resource[i].end   = 0;
-			dev->resource[i].flags = 0;
+		pci_dev_for_each_resource(dev, r) {
+			r->start = 0;
+			r->end = 0;
+			r->flags = 0;
 		}
 	}
 }
@@ -206,13 +162,11 @@ DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_DEC, PCI_DEVICE_ID_DEC_21285, pci_fixup_d
 static void pci_fixup_ide_bases(struct pci_dev *dev)
 {
 	struct resource *r;
-	int i;
 
 	if ((dev->class >> 8) != PCI_CLASS_STORAGE_IDE)
 		return;
 
-	for (i = 0; i < PCI_NUM_RESOURCES; i++) {
-		r = dev->resource + i;
+	pci_dev_for_each_resource(dev, r) {
 		if ((r->start & ~0x80) == 0x374) {
 			r->start |= 2;
 			r->end = r->start;

@@ -48,11 +48,9 @@
 #include "fm_common.h"
 #include "fm_ipc.h"
 #include "fm.h"
-#ifndef CONFIG_FMAN_ARM
-#include <linux/fsl/svr.h>
-#endif
 #include "fsl_fman.h"
 
+#define __ERR_MODULE__  MODULE_FM
 
 /****************************************/
 /*       static functions               */
@@ -93,12 +91,6 @@ static t_Error CheckFmParameters(t_Fm *p_Fm)
 {
     if (IsFmanCtrlCodeLoaded(p_Fm) && !p_Fm->resetOnInit)
         RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("Old FMan CTRL code is loaded; FM must be reset!"));
-#if (DPAA_VERSION < 11)
-    if (!p_Fm->p_FmDriverParam->dma_axi_dbg_num_of_beats ||
-        (p_Fm->p_FmDriverParam->dma_axi_dbg_num_of_beats > DMA_MODE_MAX_AXI_DBG_NUM_OF_BEATS))
-        RETURN_ERROR(MAJOR, E_INVALID_VALUE,
-                     ("axiDbgNumOfBeats has to be in the range 1 - %d", DMA_MODE_MAX_AXI_DBG_NUM_OF_BEATS));
-#endif /* (DPAA_VERSION < 11) */
     if (p_Fm->p_FmDriverParam->dma_cam_num_of_entries % DMA_CAM_UNITS)
         RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("dma_cam_num_of_entries has to be divisble by %d", DMA_CAM_UNITS));
 //    if (!p_Fm->p_FmDriverParam->dma_cam_num_of_entries || (p_Fm->p_FmDriverParam->dma_cam_num_of_entries > DMA_MODE_MAX_CAM_NUM_OF_ENTRIES))
@@ -109,20 +101,6 @@ static t_Error CheckFmParameters(t_Fm *p_Fm)
         RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("dma_comm_qtsh_clr_emer can not be larger than %d", DMA_THRESH_MAX_COMMQ));
     if (p_Fm->p_FmDriverParam->dma_comm_qtsh_clr_emer >= p_Fm->p_FmDriverParam->dma_comm_qtsh_asrt_emer)
         RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("dma_comm_qtsh_clr_emer must be smaller than dma_comm_qtsh_asrt_emer"));
-#if (DPAA_VERSION < 11)
-    if (p_Fm->p_FmDriverParam->dma_read_buf_tsh_asrt_emer > DMA_THRESH_MAX_BUF)
-        RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("dma_read_buf_tsh_asrt_emer can not be larger than %d", DMA_THRESH_MAX_BUF));
-    if (p_Fm->p_FmDriverParam->dma_read_buf_tsh_clr_emer > DMA_THRESH_MAX_BUF)
-        RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("dma_read_buf_tsh_clr_emer can not be larger than %d", DMA_THRESH_MAX_BUF));
-    if (p_Fm->p_FmDriverParam->dma_read_buf_tsh_clr_emer >= p_Fm->p_FmDriverParam->dma_read_buf_tsh_asrt_emer)
-        RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("dma_read_buf_tsh_clr_emer must be smaller than dma_read_buf_tsh_asrt_emer"));
-    if (p_Fm->p_FmDriverParam->dma_write_buf_tsh_asrt_emer > DMA_THRESH_MAX_BUF)
-        RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("dma_write_buf_tsh_asrt_emer can not be larger than %d", DMA_THRESH_MAX_BUF));
-    if (p_Fm->p_FmDriverParam->dma_write_buf_tsh_clr_emer > DMA_THRESH_MAX_BUF)
-        RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("dma_write_buf_tsh_clr_emer can not be larger than %d", DMA_THRESH_MAX_BUF));
-    if (p_Fm->p_FmDriverParam->dma_write_buf_tsh_clr_emer >= p_Fm->p_FmDriverParam->dma_write_buf_tsh_asrt_emer)
-        RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("dma_write_buf_tsh_clr_emer must be smaller than dma_write_buf_tsh_asrt_emer"));
-#else /* (DPAA_VERSION >= 11) */
     if ((p_Fm->p_FmDriverParam->dma_dbg_cnt_mode == E_FMAN_DMA_DBG_CNT_INT_READ_EM)||
             (p_Fm->p_FmDriverParam->dma_dbg_cnt_mode == E_FMAN_DMA_DBG_CNT_INT_WRITE_EM) ||
             (p_Fm->p_FmDriverParam->dma_dbg_cnt_mode == E_FMAN_DMA_DBG_CNT_RAW_WAR_PROT))
@@ -138,7 +116,6 @@ static t_Error CheckFmParameters(t_Fm *p_Fm)
 #endif /* FM_AID_MODE_NO_TNUM_SW005 */
     if (p_Fm->p_FmDriverParam->dma_axi_dbg_num_of_beats)
         RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("dma_axi_dbg_num_of_beats not supported by this integration."));
-#endif /* (DPAA_VERSION < 11) */
 
     if (!p_Fm->p_FmStateStruct->fmClkFreq)
         RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("fmClkFreq must be set."));
@@ -146,10 +123,8 @@ static t_Error CheckFmParameters(t_Fm *p_Fm)
         RETURN_ERROR(MAJOR, E_INVALID_VALUE,
                      ("dma_watchdog depends on FM clock. dma_watchdog(in microseconds) * clk (in Mhz), may not exceed %u", DMA_MAX_WATCHDOG));
 
-#if (DPAA_VERSION >= 11)
     if ((p_Fm->partVSPBase + p_Fm->partNumOfVSPs) > FM_VSP_MAX_NUM_OF_ENTRIES)
         RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("partVSPBase+partNumOfVSPs out of range!!!"));
-#endif /* (DPAA_VERSION >= 11) */
 
     if (p_Fm->p_FmStateStruct->totalFifoSize % BMI_FIFO_UNITS)
         RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("totalFifoSize number has to be divisible by %d", BMI_FIFO_UNITS));
@@ -300,11 +275,23 @@ static void    DmaErrEvent(t_Fm *p_Fm)
     {
         com_id = fman_get_dma_com_id(dma_rg);
         hardwarePortId = (uint8_t)(((com_id & DMA_TRANSFER_PORTID_MASK) >> DMA_TRANSFER_PORTID_SHIFT));
-        ASSERT_COND(IN_RANGE(1, hardwarePortId, 63));
+        if (!IN_RANGE(1, hardwarePortId, 63)) {
+            REPORT_ERROR(MAJOR, E_NOT_IN_RANGE,
+                         ("hardwarePortId %u is not in valid [1, 63] range!",
+                         hardwarePortId));
+            return;
+        }
+
         HW_PORT_ID_TO_SW_PORT_ID(relativePortId, hardwarePortId);
         tnum = (uint8_t)((com_id & DMA_TRANSFER_TNUM_MASK) >> DMA_TRANSFER_TNUM_SHIFT);
         liodn = (uint16_t)(com_id & DMA_TRANSFER_LIODN_MASK);
-        ASSERT_COND(p_Fm->p_FmStateStruct->portsTypes[hardwarePortId] != e_FM_PORT_TYPE_DUMMY);
+
+        if (p_Fm->p_FmStateStruct->portsTypes[hardwarePortId] == e_FM_PORT_TYPE_DUMMY) {
+            REPORT_ERROR(MAJOR, E_INVALID_STATE,
+                         ("hardwarePortId %d in state e_FM_PORT_TYPE_DUMMY",
+                         hardwarePortId));
+            return;
+        }
         p_Fm->f_BusError(p_Fm->h_App,
                          p_Fm->p_FmStateStruct->portsTypes[hardwarePortId],
                          relativePortId,
@@ -608,7 +595,6 @@ do {                                    \
 #endif
 }
 
-#if (DPAA_VERSION >= 11)
 static t_Error SetVSPWindow(t_Handle  h_Fm,
                             uint8_t   hardwarePortId,
                             uint8_t   baseStorageProfile,
@@ -781,7 +767,6 @@ static void FreeVSPsForPartition(t_Handle  h_Fm, uint8_t base, uint8_t numOfProf
             DBG(WARNING, ("Request for freeing storage profile window which wasn't allocated to this partition"));
     }
 }
-#endif /* (DPAA_VERSION >= 11) */
 
 static t_Error FmGuestHandleIpcMsgCB(t_Handle  h_Fm,
                                      uint8_t   *p_Msg,
@@ -974,7 +959,6 @@ static t_Error FmHandleIpcMsgCB(t_Handle  h_Fm,
                 REPORT_ERROR(MINOR, err, NO_MSG);
             break;
         }
-#if (DPAA_VERSION >= 11)
         case (FM_VSP_ALLOC) :
         {
             t_FmIpcResourceAllocParams  ipcAllocParams;
@@ -1011,7 +995,6 @@ static t_Error FmHandleIpcMsgCB(t_Handle  h_Fm,
                                                   fmIpcSetCongestionGroupPfcPriority.priorityBitMap);
             return err;
         }
-#endif /* (DPAA_VERSION >= 11) */
 
         case (FM_FREE_PORT):
         {
@@ -1096,8 +1079,8 @@ static t_Error FmHandleIpcMsgCB(t_Handle  h_Fm,
         }
         case (FM_GET_COUNTER):
         {
-            e_FmCounters    inCounter;
-            uint32_t        outCounter;
+            enum fman_counters inCounter;
+            uint32_t outCounter;
 
             memcpy((uint8_t*)&inCounter, p_IpcMsg->msgBody, sizeof(uint32_t));
             outCounter = FM_GetCounter(h_Fm, inCounter);
@@ -1395,7 +1378,6 @@ uintptr_t FmGetPcdPlcrBaseAddr(t_Handle h_Fm)
     return (p_Fm->baseAddr + FM_MM_PLCR);
 }
 
-#if (DPAA_VERSION >= 11)
 uintptr_t FmGetVSPBaseAddr(t_Handle h_Fm)
 {
     t_Fm        *p_Fm = (t_Fm*)h_Fm;
@@ -1404,7 +1386,6 @@ uintptr_t FmGetVSPBaseAddr(t_Handle h_Fm)
 
     return p_Fm->vspBaseAddr;
 }
-#endif /* (DPAA_VERSION >= 11) */
 
 t_Handle FmGetMuramHandle(t_Handle h_Fm)
 {
@@ -1467,7 +1448,6 @@ void FmGetPhysicalMuramBase(t_Handle h_Fm, t_FmPhysAddr *p_FmPhysAddr)
                      ("running in guest-mode without neither IPC nor mapped register!"));
 }
 
-#if (DPAA_VERSION >= 11)
 t_Error FmVSPAllocForPort (t_Handle        h_Fm,
                            e_FmPortType    portType,
                            uint8_t         portId,
@@ -1582,7 +1562,6 @@ t_Error FmVSPFreeForPort(t_Handle        h_Fm,
 
     return E_OK;
 }
-#endif /* (DPAA_VERSION >= 11) */
 
 t_Error FmAllocFmanCtrlEventReg(t_Handle h_Fm, uint8_t *p_EventId)
 {
@@ -2377,11 +2356,9 @@ t_Error FmResetMac(t_Handle h_Fm, e_FmMacType type, uint8_t macId)
     t_Error             err;
     struct fman_fpm_regs *fpm_rg = p_Fm->p_FmFpmRegs;
 
-#if (DPAA_VERSION >= 11)
     if (p_Fm->p_FmStateStruct->revInfo.majorRev >= 6)
         RETURN_ERROR(MINOR, E_NOT_SUPPORTED,
                      ("FMan MAC reset!"));
-#endif /*(DPAA_VERSION >= 11)*/
 
     if ((p_Fm->guestId != NCSW_MASTER_ID) &&
         !p_Fm->baseAddr &&
@@ -2923,7 +2900,6 @@ t_Error FmSetNumOfOpenDmas(t_Handle h_Fm,
     return E_OK;
 }
 
-#if (DPAA_VERSION >= 11)
 t_Error FmVSPCheckRelativeProfile(t_Handle        h_Fm,
                                   e_FmPortType    portType,
                                   uint8_t         portId,
@@ -2986,7 +2962,6 @@ t_Error FmVSPGetAbsoluteProfileId(t_Handle        h_Fm,
 
     return E_OK;
 }
-#endif /* (DPAA_VERSION >= 11) */
 
 static t_Error InitFmDma(t_Fm *p_Fm)
 {
@@ -3152,11 +3127,9 @@ static t_Error InitGuestMode(t_Fm *p_Fm)
         }
     }
 
-#if (DPAA_VERSION >= 11)
     p_Fm->partVSPBase = AllocVSPsForPartition(p_Fm, p_Fm->partVSPBase, p_Fm->partNumOfVSPs, p_Fm->guestId);
     if (p_Fm->partVSPBase == (uint8_t)(ILLEGAL_BASE))
         DBG(WARNING, ("partition VSPs allocation is FAILED"));
-#endif /* (DPAA_VERSION >= 11) */
 
     /* General FM driver initialization */
     if (p_Fm->baseAddr)
@@ -3350,7 +3323,6 @@ t_Handle FM_Config(t_FmParams *p_FmParam)
     }
     memset(p_Fm->p_FmDriverParam, 0, sizeof(struct fman_cfg));
 
-#if (DPAA_VERSION >= 11)
     p_Fm->p_FmSp = (t_FmSp *)XX_Malloc(sizeof(t_FmSp));
     if (!p_Fm->p_FmSp)
     {
@@ -3364,7 +3336,6 @@ t_Handle FM_Config(t_FmParams *p_FmParam)
 
     for (i=0; i<FM_VSP_MAX_NUM_OF_ENTRIES; i++)
         p_Fm->p_FmSp->profiles[i].profilesMng.ownerId = (uint8_t)ILLEGAL_BASE;
-#endif /* (DPAA_VERSION >= 11) */
 
     /* Initialize FM parameters which will be kept by the driver */
     p_Fm->p_FmStateStruct->fmId                 = p_FmParam->fmId;
@@ -3387,9 +3358,7 @@ t_Handle FM_Config(t_FmParams *p_FmParam)
 
     p_Fm->h_Spinlock = XX_InitSpinlock();
 	if (!p_Fm->h_Spinlock) {
-#if (DPAA_VERSION >= 11)
 		XX_Free(p_Fm->p_FmSp);
-#endif /* (DPAA_VERSION >= 11) */
 		XX_Free(p_Fm->p_FmDriverParam);
 		XX_Free(p_Fm->p_FmStateStruct);
 		XX_Free(p_Fm);
@@ -3397,11 +3366,9 @@ t_Handle FM_Config(t_FmParams *p_FmParam)
 		return NULL;
 	}
 
-#if (DPAA_VERSION >= 11)
     p_Fm->partVSPBase   = p_FmParam->partVSPBase;
     p_Fm->partNumOfVSPs = p_FmParam->partNumOfVSPs;
     p_Fm->vspBaseAddr = p_FmParam->vspBaseAddr;
-#endif /* (DPAA_VERSION >= 11) */
 
     fman_defconfig(p_Fm->p_FmDriverParam,
                   !!(p_Fm->guestId == NCSW_MASTER_ID));
@@ -3414,12 +3381,12 @@ t_Handle FM_Config(t_FmParams *p_FmParam)
     p_Fm->p_FmDriverParam->qmi_deq_option_support = TRUE;
 #endif /* !FM_QMI_NO_DEQ_OPTIONS_SUPPORT */
 
-    p_Fm->p_FmStateStruct->ramsEccEnable        = FALSE;
-    p_Fm->p_FmStateStruct->extraFifoPoolSize    = 0;
-    p_Fm->p_FmStateStruct->exceptions           = DEFAULT_exceptions;
-    p_Fm->resetOnInit                          = DEFAULT_resetOnInit;
-    p_Fm->f_ResetOnInitOverride                = DEFAULT_resetOnInitOverrideCallback;
-    p_Fm->fwVerify                             = DEFAULT_VerifyUcode;
+    p_Fm->p_FmStateStruct->ramsEccEnable = FALSE;
+    p_Fm->p_FmStateStruct->extraFifoPoolSize = 0;
+    p_Fm->p_FmStateStruct->exceptions = FM_EXCEPTIONS;
+    p_Fm->resetOnInit = FM_RESET_ON_INIT;
+    p_Fm->f_ResetOnInitOverride = FM_RESET_ON_INIT_OVERRIDE_CALLBACK;
+    p_Fm->fwVerify = FM_VERIFY_UCODE;
     p_Fm->firmware.size                        = p_FmParam->firmware.size;
     if (p_Fm->firmware.size)
     {
@@ -3427,9 +3394,7 @@ t_Handle FM_Config(t_FmParams *p_FmParam)
         if (!p_Fm->firmware.p_Code)
         {
             XX_FreeSpinlock(p_Fm->h_Spinlock);
-#if (DPAA_VERSION >= 11)
 			XX_Free(p_Fm->p_FmSp);
-#endif /* (DPAA_VERSION >= 11) */
             XX_Free(p_Fm->p_FmStateStruct);
             XX_Free(p_Fm->p_FmDriverParam);
             XX_Free(p_Fm);
@@ -3450,7 +3415,7 @@ t_Handle FM_Config(t_FmParams *p_FmParam)
 
 #ifdef FM_AID_MODE_NO_TNUM_SW005
     if (p_Fm->p_FmStateStruct->revInfo.majorRev >= 6)
-        p_Fm->p_FmDriverParam->dma_aid_mode = e_FM_DMA_AID_OUT_PORT_ID;
+        p_Fm->p_FmDriverParam->dma_aid_mode = E_FMAN_DMA_AID_OUT_PORT_ID;
 #endif /* FM_AID_MODE_NO_TNUM_SW005 */
 #ifndef FM_QMI_NO_DEQ_OPTIONS_SUPPORT
    if (p_Fm->p_FmStateStruct->revInfo.majorRev != 4)
@@ -3465,16 +3430,6 @@ t_Handle FM_Config(t_FmParams *p_FmParam)
 #ifdef FM_HAS_TOTAL_DMAS
         p_Fm->p_FmStateStruct->maxNumOfOpenDmas     = BMI_MAX_NUM_OF_DMAS;
 #endif /* FM_HAS_TOTAL_DMAS */
-#if (DPAA_VERSION < 11)
-        p_Fm->p_FmDriverParam->dma_comm_qtsh_clr_emer        = DEFAULT_dmaCommQLow;
-        p_Fm->p_FmDriverParam->dma_comm_qtsh_asrt_emer       = DEFAULT_dmaCommQHigh;
-        p_Fm->p_FmDriverParam->dma_cam_num_of_entries        = DEFAULT_dmaCamNumOfEntries;
-        p_Fm->p_FmDriverParam->dma_read_buf_tsh_clr_emer      = DEFAULT_dmaReadIntBufLow;
-        p_Fm->p_FmDriverParam->dma_read_buf_tsh_asrt_emer     = DEFAULT_dmaReadIntBufHigh;
-        p_Fm->p_FmDriverParam->dma_write_buf_tsh_clr_emer     = DEFAULT_dmaWriteIntBufLow;
-        p_Fm->p_FmDriverParam->dma_write_buf_tsh_asrt_emer    = DEFAULT_dmaWriteIntBufHigh;
-        p_Fm->p_FmDriverParam->dma_axi_dbg_num_of_beats       = DEFAULT_axiDbgNumOfBeats;
-#endif /* (DPAA_VERSION < 11) */
 #ifdef FM_NO_TNUM_AGING
     p_Fm->p_FmDriverParam->tnum_aging_period = 0;
 #endif
@@ -3594,20 +3549,9 @@ t_Error FM_Init(t_Handle h_Fm)
     }
 #endif /* FM_UCODE_NOT_RESET_ERRATA_BUGZILLA6173 */
 
-#ifdef FM_CAPWAP_SUPPORT
-    /* save first 256 byte in MURAM */
-    p_Fm->resAddr = PTR_TO_UINT(FM_MURAM_AllocMem(p_Fm->h_FmMuram, 256, 0));
-    if (!p_Fm->resAddr)
-        RETURN_ERROR(MAJOR, E_NO_MEMORY, ("MURAM alloc for reserved Area failed"));
-
-    WRITE_BLOCK(UINT_TO_PTR(p_Fm->resAddr), 0, 256);
-#endif /* FM_CAPWAP_SUPPORT */
-
-#if (DPAA_VERSION >= 11)
     p_Fm->partVSPBase = AllocVSPsForPartition(h_Fm, p_Fm->partVSPBase, p_Fm->partNumOfVSPs, p_Fm->guestId);
     if (p_Fm->partVSPBase == (uint8_t)(ILLEGAL_BASE))
         DBG(WARNING, ("partition VSPs allocation is FAILED"));
-#endif /* (DPAA_VERSION >= 11) */
 
     /* General FM driver initialization */
     p_Fm->fmMuramPhysBaseAddr =
@@ -3746,7 +3690,6 @@ t_Error FM_Free(t_Handle h_Fm)
 
     if (p_Fm->guestId != NCSW_MASTER_ID)
     {
-#if (DPAA_VERSION >= 11)
         FreeVSPsForPartition(h_Fm, p_Fm->partVSPBase, p_Fm->partNumOfVSPs, p_Fm->guestId);
 
         if (p_Fm->p_FmSp)
@@ -3754,7 +3697,6 @@ t_Error FM_Free(t_Handle h_Fm)
             XX_Free(p_Fm->p_FmSp);
             p_Fm->p_FmSp = NULL;
         }
-#endif /* (DPAA_VERSION >= 11) */
 
         if (p_Fm->fmModuleName[0] != 0)
             XX_IpcUnregisterMsgHandler(p_Fm->fmModuleName);
@@ -3786,7 +3728,6 @@ t_Error FM_Free(t_Handle h_Fm)
         }
     }
 
-#if (DPAA_VERSION >= 11)
     FreeVSPsForPartition(h_Fm, p_Fm->partVSPBase, p_Fm->partNumOfVSPs, p_Fm->guestId);
 
     if (p_Fm->p_FmSp)
@@ -3794,7 +3735,6 @@ t_Error FM_Free(t_Handle h_Fm)
         XX_Free(p_Fm->p_FmSp);
         p_Fm->p_FmSp = NULL;
     }
-#endif /* (DPAA_VERSION >= 11) */
 
     if (p_Fm->h_Spinlock)
         XX_FreeSpinlock(p_Fm->h_Spinlock);
@@ -3860,19 +3800,18 @@ t_Error FM_ConfigTotalFifoSize(t_Handle h_Fm, uint32_t totalFifoSize)
     return E_OK;
 }
 
-t_Error FM_ConfigDmaCacheOverride(t_Handle h_Fm, e_FmDmaCacheOverride cacheOverride)
+t_Error FM_ConfigDmaCacheOverride(t_Handle h_Fm,
+				  enum fman_dma_cache_override cache_override)
 {
-    t_Fm                            *p_Fm = (t_Fm*)h_Fm;
-    enum fman_dma_cache_override    fsl_cache_override;
+	t_Fm *p_Fm = (t_Fm*)h_Fm;
 
-    SANITY_CHECK_RETURN_ERROR(p_Fm, E_INVALID_HANDLE);
-    SANITY_CHECK_RETURN_ERROR(p_Fm->p_FmDriverParam, E_INVALID_HANDLE);
-    SANITY_CHECK_RETURN_ERROR((p_Fm->guestId == NCSW_MASTER_ID), E_NOT_SUPPORTED);
+	SANITY_CHECK_RETURN_ERROR(p_Fm, E_INVALID_HANDLE);
+	SANITY_CHECK_RETURN_ERROR(p_Fm->p_FmDriverParam, E_INVALID_HANDLE);
+	SANITY_CHECK_RETURN_ERROR((p_Fm->guestId == NCSW_MASTER_ID), E_NOT_SUPPORTED);
 
-    FMAN_CACHE_OVERRIDE_TRANS(fsl_cache_override, cacheOverride)
-    p_Fm->p_FmDriverParam->dma_cache_override = fsl_cache_override;
+	p_Fm->p_FmDriverParam->dma_cache_override = cache_override;
 
-    return E_OK;
+	return E_OK;
 }
 
 t_Error FM_ConfigDmaAidOverride(t_Handle h_Fm, bool aidOverride)
@@ -3888,138 +3827,17 @@ t_Error FM_ConfigDmaAidOverride(t_Handle h_Fm, bool aidOverride)
     return E_OK;
 }
 
-t_Error FM_ConfigDmaAidMode(t_Handle h_Fm, e_FmDmaAidMode aidMode)
+t_Error FM_ConfigDmaAidMode(t_Handle h_Fm, enum fman_dma_aid_mode aid_mode)
 {
-    t_Fm                    *p_Fm = (t_Fm*)h_Fm;
-    enum fman_dma_aid_mode  fsl_aid_mode;
+	t_Fm *p_Fm = (t_Fm *)h_Fm;
 
-    SANITY_CHECK_RETURN_ERROR(p_Fm, E_INVALID_HANDLE);
-    SANITY_CHECK_RETURN_ERROR(p_Fm->p_FmDriverParam, E_INVALID_HANDLE);
-    SANITY_CHECK_RETURN_ERROR((p_Fm->guestId == NCSW_MASTER_ID), E_NOT_SUPPORTED);
+	SANITY_CHECK_RETURN_ERROR(p_Fm, E_INVALID_HANDLE);
+	SANITY_CHECK_RETURN_ERROR(p_Fm->p_FmDriverParam, E_INVALID_HANDLE);
+	SANITY_CHECK_RETURN_ERROR((p_Fm->guestId == NCSW_MASTER_ID), E_NOT_SUPPORTED);
 
-    FMAN_AID_MODE_TRANS(fsl_aid_mode, aidMode);
-    p_Fm->p_FmDriverParam->dma_aid_mode = fsl_aid_mode;
+	p_Fm->p_FmDriverParam->dma_aid_mode = aid_mode;
 
-    return E_OK;
-}
-
-t_Error FM_ConfigDmaAxiDbgNumOfBeats(t_Handle h_Fm, uint8_t axiDbgNumOfBeats)
-{
-    t_Fm *p_Fm = (t_Fm*)h_Fm;
-
-    SANITY_CHECK_RETURN_ERROR(p_Fm, E_INVALID_HANDLE);
-    SANITY_CHECK_RETURN_ERROR(p_Fm->p_FmDriverParam, E_INVALID_HANDLE);
-    SANITY_CHECK_RETURN_ERROR((p_Fm->guestId == NCSW_MASTER_ID), E_NOT_SUPPORTED);
-
-#if (DPAA_VERSION >= 11)
-    RETURN_ERROR(MINOR, E_NOT_SUPPORTED, ("Not available for this FM revision!"));
-#else
-    p_Fm->p_FmDriverParam->dma_axi_dbg_num_of_beats = axiDbgNumOfBeats;
-
-    return E_OK;
-#endif /* (DPAA_VERSION >= 11) */
-}
-
-t_Error FM_ConfigDmaCamNumOfEntries(t_Handle h_Fm, uint8_t numOfEntries)
-{
-    t_Fm *p_Fm = (t_Fm*)h_Fm;
-
-    SANITY_CHECK_RETURN_ERROR(p_Fm, E_INVALID_HANDLE);
-    SANITY_CHECK_RETURN_ERROR(p_Fm->p_FmDriverParam, E_INVALID_HANDLE);
-    SANITY_CHECK_RETURN_ERROR((p_Fm->guestId == NCSW_MASTER_ID), E_NOT_SUPPORTED);
-
-    p_Fm->p_FmDriverParam->dma_cam_num_of_entries = numOfEntries;
-
-    return E_OK;
-}
-
-t_Error FM_ConfigDmaDbgCounter(t_Handle h_Fm, e_FmDmaDbgCntMode fmDmaDbgCntMode)
-{
-    t_Fm                        *p_Fm = (t_Fm*)h_Fm;
-    enum fman_dma_dbg_cnt_mode  fsl_dma_dbg_cnt;
-
-    SANITY_CHECK_RETURN_ERROR(p_Fm, E_INVALID_HANDLE);
-    SANITY_CHECK_RETURN_ERROR(p_Fm->p_FmDriverParam, E_INVALID_HANDLE);
-    SANITY_CHECK_RETURN_ERROR((p_Fm->guestId == NCSW_MASTER_ID), E_NOT_SUPPORTED);
-
-    FMAN_DMA_DBG_CNT_TRANS(fsl_dma_dbg_cnt, fmDmaDbgCntMode);
-    p_Fm->p_FmDriverParam->dma_dbg_cnt_mode = fsl_dma_dbg_cnt;
-
-    return E_OK;
-}
-
-t_Error FM_ConfigDmaStopOnBusErr(t_Handle h_Fm, bool stop)
-{
-    t_Fm *p_Fm = (t_Fm*)h_Fm;
-
-    SANITY_CHECK_RETURN_ERROR(p_Fm, E_INVALID_HANDLE);
-    SANITY_CHECK_RETURN_ERROR(p_Fm->p_FmDriverParam, E_INVALID_HANDLE);
-    SANITY_CHECK_RETURN_ERROR((p_Fm->guestId == NCSW_MASTER_ID), E_NOT_SUPPORTED);
-
-    p_Fm->p_FmDriverParam->dma_stop_on_bus_error = stop;
-
-    return E_OK;
-}
-
-t_Error FM_ConfigDmaEmergency(t_Handle h_Fm, t_FmDmaEmergency *p_Emergency)
-{
-    t_Fm                            *p_Fm = (t_Fm*)h_Fm;
-    enum fman_dma_emergency_level   fsl_dma_emer;
-
-    SANITY_CHECK_RETURN_ERROR(p_Fm, E_INVALID_HANDLE);
-    SANITY_CHECK_RETURN_ERROR(p_Fm->p_FmDriverParam, E_INVALID_HANDLE);
-    SANITY_CHECK_RETURN_ERROR((p_Fm->guestId == NCSW_MASTER_ID), E_NOT_SUPPORTED);
-
-    FMAN_DMA_EMER_TRANS(fsl_dma_emer, p_Emergency->emergencyLevel);
-    p_Fm->p_FmDriverParam->dma_en_emergency = TRUE;
-    p_Fm->p_FmDriverParam->dma_emergency_bus_select = (uint32_t)p_Emergency->emergencyBusSelect;
-    p_Fm->p_FmDriverParam->dma_emergency_level = fsl_dma_emer;
-
-    return E_OK;
-}
-
-t_Error FM_ConfigDmaEmergencySmoother(t_Handle h_Fm, uint32_t emergencyCnt)
-{
-    t_Fm *p_Fm = (t_Fm*)h_Fm;
-
-    SANITY_CHECK_RETURN_ERROR(p_Fm, E_INVALID_HANDLE);
-    SANITY_CHECK_RETURN_ERROR(p_Fm->p_FmDriverParam, E_INVALID_HANDLE);
-    SANITY_CHECK_RETURN_ERROR((p_Fm->guestId == NCSW_MASTER_ID), E_NOT_SUPPORTED);
-
-    p_Fm->p_FmDriverParam->dma_en_emergency_smoother = TRUE;
-    p_Fm->p_FmDriverParam->dma_emergency_switch_counter = emergencyCnt;
-
-    return E_OK;
-}
-
-t_Error FM_ConfigDmaErr(t_Handle h_Fm, e_FmDmaErr dmaErr)
-{
-    t_Fm                *p_Fm = (t_Fm*)h_Fm;
-    enum fman_dma_err   fsl_dma_err;
-
-    SANITY_CHECK_RETURN_ERROR(p_Fm, E_INVALID_HANDLE);
-    SANITY_CHECK_RETURN_ERROR(p_Fm->p_FmDriverParam, E_INVALID_HANDLE);
-    SANITY_CHECK_RETURN_ERROR((p_Fm->guestId == NCSW_MASTER_ID), E_NOT_SUPPORTED);
-
-    FMAN_DMA_ERR_TRANS(fsl_dma_err, dmaErr);
-    p_Fm->p_FmDriverParam->dma_err = fsl_dma_err;
-
-    return E_OK;
-}
-
-t_Error FM_ConfigCatastrophicErr(t_Handle h_Fm, e_FmCatastrophicErr catastrophicErr)
-{
-    t_Fm                        *p_Fm = (t_Fm*)h_Fm;
-    enum fman_catastrophic_err  fsl_catastrophic_err;
-
-    SANITY_CHECK_RETURN_ERROR(p_Fm, E_INVALID_HANDLE);
-    SANITY_CHECK_RETURN_ERROR(p_Fm->p_FmDriverParam, E_INVALID_HANDLE);
-    SANITY_CHECK_RETURN_ERROR((p_Fm->guestId == NCSW_MASTER_ID), E_NOT_SUPPORTED);
-
-    FMAN_CATASTROPHIC_ERR_TRANS(fsl_catastrophic_err, catastrophicErr);
-    p_Fm->p_FmDriverParam->catastrophic_err = fsl_catastrophic_err;
-
-    return E_OK;
+	return E_OK;
 }
 
 t_Error FM_ConfigEnableMuramTestMode(t_Handle h_Fm)
@@ -4092,7 +3910,7 @@ t_Error FM_ConfigException(t_Handle h_Fm, e_FmExceptions exception, bool enable)
     SANITY_CHECK_RETURN_ERROR(p_Fm->p_FmDriverParam, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR((p_Fm->guestId == NCSW_MASTER_ID), E_NOT_SUPPORTED);
 
-    GET_EXCEPTION_FLAG(bitMask, exception);
+    FM_GET_EXCEPTION_FLAG(bitMask, exception);
     if (bitMask)
     {
         if (enable)
@@ -4180,14 +3998,7 @@ t_Error FM_ConfigDmaWriteBufThresholds(t_Handle h_Fm, t_FmDmaThresholds *p_FmDma
     SANITY_CHECK_RETURN_ERROR(p_Fm->p_FmDriverParam, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR((p_Fm->guestId == NCSW_MASTER_ID), E_NOT_SUPPORTED);
 
-#if (DPAA_VERSION >= 11)
     RETURN_ERROR(MINOR, E_NOT_SUPPORTED, ("Not available for this FM revision!"));
-#else
-    p_Fm->p_FmDriverParam->dma_write_buf_tsh_asrt_emer = p_FmDmaThresholds->assertEmergency;
-    p_Fm->p_FmDriverParam->dma_write_buf_tsh_clr_emer  = p_FmDmaThresholds->clearEmergency;
-
-    return E_OK;
-#endif
 }
 
 t_Error FM_ConfigDmaCommQThresholds(t_Handle h_Fm, t_FmDmaThresholds *p_FmDmaThresholds)
@@ -4212,14 +4023,7 @@ t_Error FM_ConfigDmaReadBufThresholds(t_Handle h_Fm, t_FmDmaThresholds *p_FmDmaT
     SANITY_CHECK_RETURN_ERROR(p_Fm->p_FmDriverParam, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR((p_Fm->guestId == NCSW_MASTER_ID), E_NOT_SUPPORTED);
 
-#if (DPAA_VERSION >= 11)
     RETURN_ERROR(MINOR, E_NOT_SUPPORTED, ("Not available for this FM revision!"));
-#else
-    p_Fm->p_FmDriverParam->dma_read_buf_tsh_clr_emer   = p_FmDmaThresholds->clearEmergency;
-    p_Fm->p_FmDriverParam->dma_read_buf_tsh_asrt_emer  = p_FmDmaThresholds->assertEmergency;
-
-    return E_OK;
-#endif
 }
 
 t_Error FM_ConfigDmaWatchdog(t_Handle h_Fm, uint32_t watchdogValue)
@@ -4231,17 +4035,6 @@ t_Error FM_ConfigDmaWatchdog(t_Handle h_Fm, uint32_t watchdogValue)
     SANITY_CHECK_RETURN_ERROR((p_Fm->guestId == NCSW_MASTER_ID), E_NOT_SUPPORTED);
 
     p_Fm->p_FmDriverParam->dma_watchdog = watchdogValue;
-
-    return E_OK;
-}
-
-t_Error FM_ConfigEnableCounters(t_Handle h_Fm)
-{
-    t_Fm                *p_Fm = (t_Fm*)h_Fm;
-
-    SANITY_CHECK_RETURN_ERROR(p_Fm, E_INVALID_HANDLE);
-    SANITY_CHECK_RETURN_ERROR(p_Fm->p_FmDriverParam, E_INVALID_HANDLE);
-UNUSED(p_Fm);
 
     return E_OK;
 }
@@ -4673,7 +4466,7 @@ t_Error FM_SetException(t_Handle h_Fm, e_FmExceptions exception, bool enable)
     fman_rg.fpm_rg = p_Fm->p_FmFpmRegs;
     fman_rg.dma_rg = p_Fm->p_FmDmaRegs;
 
-    GET_EXCEPTION_FLAG(bitMask, exception);
+    FM_GET_EXCEPTION_FLAG(bitMask, exception);
     if (bitMask)
     {
         if (enable)
@@ -4756,13 +4549,12 @@ t_Error FM_GetFmanCtrlCodeRevision(t_Handle h_Fm, t_FmCtrlCodeRevisionInfo *p_Re
     return E_OK;
 }
 
-uint32_t FM_GetCounter(t_Handle h_Fm, e_FmCounters counter)
+uint32_t FM_GetCounter(t_Handle h_Fm, enum fman_counters counter)
 {
     t_Fm        *p_Fm = (t_Fm*)h_Fm;
     t_Error     err;
     uint32_t    counterValue;
     struct fman_rg       fman_rg;
-    enum fman_counters fsl_counter;
 
     SANITY_CHECK_RETURN_VALUE(p_Fm, E_INVALID_HANDLE, 0);
     SANITY_CHECK_RETURN_VALUE(!p_Fm->p_FmDriverParam, E_INVALID_STATE, 0);
@@ -4816,10 +4608,9 @@ uint32_t FM_GetCounter(t_Handle h_Fm, e_FmCounters counter)
     check that counters are enabled */
     switch (counter)
     {
-        case (e_FM_COUNTERS_DEQ_1):
-        case (e_FM_COUNTERS_DEQ_2):
-            fallthrough;
-        case (e_FM_COUNTERS_DEQ_3):
+        case E_FMAN_COUNTERS_DEQ_1:
+        case E_FMAN_COUNTERS_DEQ_2:
+        case E_FMAN_COUNTERS_DEQ_3:
             if ((p_Fm->p_FmStateStruct->revInfo.majorRev == 4) ||
                 (p_Fm->p_FmStateStruct->revInfo.majorRev >= 6))
             {
@@ -4827,14 +4618,13 @@ uint32_t FM_GetCounter(t_Handle h_Fm, e_FmCounters counter)
                 return 0;
             }
             fallthrough;
-        case (e_FM_COUNTERS_ENQ_TOTAL_FRAME):
-        case (e_FM_COUNTERS_DEQ_TOTAL_FRAME):
-        case (e_FM_COUNTERS_DEQ_0):
-        case (e_FM_COUNTERS_DEQ_FROM_DEFAULT):
-        case (e_FM_COUNTERS_DEQ_FROM_CONTEXT):
-        case (e_FM_COUNTERS_DEQ_FROM_FD):
-            fallthrough;
-        case (e_FM_COUNTERS_DEQ_CONFIRM):
+        case E_FMAN_COUNTERS_ENQ_TOTAL_FRAME:
+        case E_FMAN_COUNTERS_DEQ_TOTAL_FRAME:
+        case E_FMAN_COUNTERS_DEQ_0:
+        case E_FMAN_COUNTERS_DEQ_FROM_DEFAULT:
+        case E_FMAN_COUNTERS_DEQ_FROM_CONTEXT:
+        case E_FMAN_COUNTERS_DEQ_FROM_FD:
+        case E_FMAN_COUNTERS_DEQ_CONFIRM:
             if (!(GET_UINT32(p_Fm->p_FmQmiRegs->fmqm_gc) & QMI_CFG_EN_COUNTERS))
             {
                 REPORT_ERROR(MAJOR, E_INVALID_STATE, ("Requested counter was not enabled"));
@@ -4845,15 +4635,13 @@ uint32_t FM_GetCounter(t_Handle h_Fm, e_FmCounters counter)
             break;
     }
 
-    FMAN_COUNTERS_TRANS(fsl_counter, counter);
-    return fman_get_counter(&fman_rg, fsl_counter);
+    return fman_get_counter(&fman_rg, counter);
 }
 
-t_Error FM_ModifyCounter(t_Handle h_Fm, e_FmCounters counter, uint32_t val)
+t_Error FM_ModifyCounter(t_Handle h_Fm, enum fman_counters counter, uint32_t val)
 {
     t_Fm *p_Fm = (t_Fm*)h_Fm;
     struct fman_rg          fman_rg;
-    enum fman_counters fsl_counter;
 
     SANITY_CHECK_RETURN_ERROR(p_Fm, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(!p_Fm->p_FmDriverParam, E_INVALID_STATE);
@@ -4863,8 +4651,7 @@ t_Error FM_ModifyCounter(t_Handle h_Fm, e_FmCounters counter, uint32_t val)
    fman_rg.fpm_rg = p_Fm->p_FmFpmRegs;
    fman_rg.dma_rg = p_Fm->p_FmDmaRegs;
 
-   FMAN_COUNTERS_TRANS(fsl_counter, counter);
-   return  (t_Error)fman_modify_counter(&fman_rg, fsl_counter, val);
+   return (t_Error)fman_modify_counter(&fman_rg, counter, val);
 }
 
 void FM_SetDmaEmergency(t_Handle h_Fm, e_FmDmaMuramPort muramPort, bool enable)
@@ -5211,27 +4998,3 @@ t_Handle FmGetPcd(t_Handle h_Fm)
 {
 	return ((t_Fm*)h_Fm)->h_Pcd;
 }
-#if (DPAA_VERSION >= 11)
-extern void *g_MemacRegs;
-void fm_clk_down(void);
-uint32_t fman_memac_get_event(void *regs, uint32_t ev_mask);
-void FM_ChangeClock(t_Handle h_Fm, int hardwarePortId)
-{
-	int macId;
-	uint32_t    event, rcr;
-	t_Fm *p_Fm = (t_Fm*)h_Fm;
-	rcr = GET_UINT32(p_Fm->p_FmFpmRegs->fm_rcr);
-	rcr |= 0x04000000;
-	WRITE_UINT32(p_Fm->p_FmFpmRegs->fm_rcr, rcr);
-
-	HW_PORT_ID_TO_SW_PORT_ID(macId, hardwarePortId);
-	do
-	{
-		event = fman_memac_get_event(g_MemacRegs, 0xFFFFFFFF);
-	} while ((event & 0x00000020) == 0);
-	fm_clk_down();
-	rcr = GET_UINT32(p_Fm->p_FmFpmRegs->fm_rcr);
-	rcr &= ~0x04000000;
-	WRITE_UINT32(p_Fm->p_FmFpmRegs->fm_rcr, rcr);
-}
-#endif

@@ -108,9 +108,9 @@ struct ufs_dev_quirk {
 #define UFS_DEVICE_QUIRK_DELAY_AFTER_LPM        (1 << 11)
 
 /*
- * Some UFS devices require L2P entry should be swapped before being sent to the
- * UFS device for HPB READ command.
+ * Some ufs devices may need more time to be in hibern8 before exiting.
+ * Enable this quirk to give it an additional 100us.
  */
-#define UFS_DEVICE_QUIRK_SWAP_L2P_ENTRY_FOR_HPB_READ (1 << 12)
+#define UFS_DEVICE_QUIRK_PA_HIBER8TIME          (1 << 12)
 
 #endif /* UFS_QUIRKS_H_ */

@@ -1,6 +1,6 @@
 /*
  * Copyright 2005-2015 Freescale Semiconductor, Inc. All Rights Reserved.
- * Copyright 2019 NXP
+ * Copyright 2019,2024 NXP
  */
 
 /*
@@ -462,9 +462,9 @@ static struct dp_csc_param_t dp_csc_array[CSC_NUM][CSC_NUM] = {
 }
 };
 
-void __ipu_dp_csc_setup(struct ipu_soc *ipu,
-		int dp, struct dp_csc_param_t dp_csc_param,
-		bool srm_mode_update)
+static void __ipu_dp_csc_setup(struct ipu_soc *ipu,
+			       int dp, struct dp_csc_param_t dp_csc_param,
+			       bool srm_mode_update)
 {
 	u32 reg;
 	const int (*coeff)[5][3];
@@ -935,7 +935,7 @@ void _ipu_init_dc_mappings(struct ipu_soc *ipu)
 	_ipu_dc_map_link(ipu, 14, 0, 2, 0, 1, 0, 0);
 }
 
-int _ipu_pixfmt_to_map(uint32_t fmt)
+static int _ipu_pixfmt_to_map(uint32_t fmt)
 {
 	switch (fmt) {
 	case IPU_PIX_FMT_GENERIC:
@@ -1008,9 +1008,10 @@ EXPORT_SYMBOL(ipu_set_csc_coefficients);
  * This function is called to adapt synchronous LCD panel to IPU restriction.
  *
  */
-void adapt_panel_to_ipu_restricitions(struct ipu_soc *ipu, uint16_t *v_start_width,
-					uint16_t *v_sync_width,
-					uint16_t *v_end_width)
+static void adapt_panel_to_ipu_restricitions(struct ipu_soc *ipu,
+					     uint16_t *v_start_width,
+					     uint16_t *v_sync_width,
+					     uint16_t *v_end_width)
 {
 	if (*v_end_width < 2) {
 		uint16_t diff = 2 - *v_end_width;

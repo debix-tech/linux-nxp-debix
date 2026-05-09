@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 //
-// Copyright(c) 2020 Intel Corporation. All rights reserved.
+// Copyright(c) 2020 Intel Corporation
 //
 // Author: Cezary Rojewski <cezary.rojewski@intel.com>
 //
@@ -293,7 +293,7 @@ static int catpt_acpi_probe(struct platform_device *pdev)
 	return catpt_probe_components(cdev);
 }
 
-static int catpt_acpi_remove(struct platform_device *pdev)
+static void catpt_acpi_remove(struct platform_device *pdev)
 {
 	struct catpt_dev *cdev = platform_get_drvdata(pdev);
 
@@ -305,8 +305,6 @@ static int catpt_acpi_remove(struct platform_device *pdev)
 
 	catpt_sram_free(&cdev->iram);
 	catpt_sram_free(&cdev->dram);
-
-	return 0;
 }
 
 static struct snd_soc_acpi_mach lpt_machines[] = {

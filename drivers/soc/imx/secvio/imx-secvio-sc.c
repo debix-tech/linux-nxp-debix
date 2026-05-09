@@ -29,6 +29,7 @@
 #include <linux/fs.h>
 #include <linux/uaccess.h>
 #include <linux/of_device.h>
+#include <linux/of_platform.h>
 #include <linux/platform_device.h>
 #include <linux/nvmem-consumer.h>
 #include <linux/miscdevice.h>
@@ -137,7 +138,7 @@ inline int imx_secvio_sc_get_state(struct secvio_sc_notifier_info *info)
 }
 EXPORT_SYMBOL(imx_secvio_sc_get_state);
 
-int int_imx_secvio_sc_check_state(struct device *dev)
+static int int_imx_secvio_sc_check_state(struct device *dev)
 {
 	struct secvio_sc_notifier_info info = {0};
 	int ret = 0;
@@ -456,7 +457,7 @@ exit:
 	return ret;
 }
 
-const static struct file_operations imx_secvio_sc_fops = {
+static const struct file_operations imx_secvio_sc_fops = {
 	.owner = THIS_MODULE,
 	.open = imx_secvio_sc_open,
 	.unlocked_ioctl = imx_secvio_sc_ioctl,

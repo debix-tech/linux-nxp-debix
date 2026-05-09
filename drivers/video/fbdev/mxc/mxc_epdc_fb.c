@@ -1817,7 +1817,7 @@ static int mxc_epdc_fb_check_var(struct fb_var_screeninfo *var,
 	return 0;
 }
 
-void mxc_epdc_fb_set_waveform_modes(struct mxcfb_waveform_modes *modes,
+static void mxc_epdc_fb_set_waveform_modes(struct mxcfb_waveform_modes *modes,
 	struct fb_info *info)
 {
 	struct mxc_epdc_fb_data *fb_data = info ?
@@ -1833,7 +1833,6 @@ void mxc_epdc_fb_set_waveform_modes(struct mxcfb_waveform_modes *modes,
 
 	mutex_unlock(&fb_data->queue_mutex);
 }
-EXPORT_SYMBOL(mxc_epdc_fb_set_waveform_modes);
 
 static int mxc_epdc_fb_get_temp_index(struct mxc_epdc_fb_data *fb_data, int temp)
 {
@@ -1866,7 +1865,7 @@ static int mxc_epdc_fb_get_temp_index(struct mxc_epdc_fb_data *fb_data, int temp
 	return index;
 }
 
-int mxc_epdc_fb_set_temperature(int temperature, struct fb_info *info)
+static int mxc_epdc_fb_set_temperature(int temperature, struct fb_info *info)
 {
 	struct mxc_epdc_fb_data *fb_data = info ?
 		(struct mxc_epdc_fb_data *)info:g_fb_data;
@@ -1878,9 +1877,8 @@ int mxc_epdc_fb_set_temperature(int temperature, struct fb_info *info)
 
 	return 0;
 }
-EXPORT_SYMBOL(mxc_epdc_fb_set_temperature);
 
-int mxc_epdc_fb_set_auto_update(u32 auto_mode, struct fb_info *info)
+static int mxc_epdc_fb_set_auto_update(u32 auto_mode, struct fb_info *info)
 {
 	struct mxc_epdc_fb_data *fb_data = info ?
 		(struct mxc_epdc_fb_data *)info:g_fb_data;
@@ -1897,9 +1895,8 @@ int mxc_epdc_fb_set_auto_update(u32 auto_mode, struct fb_info *info)
 
 	return 0;
 }
-EXPORT_SYMBOL(mxc_epdc_fb_set_auto_update);
 
-int mxc_epdc_fb_set_upd_scheme(u32 upd_scheme, struct fb_info *info)
+static int mxc_epdc_fb_set_upd_scheme(u32 upd_scheme, struct fb_info *info)
 {
 	struct mxc_epdc_fb_data *fb_data = info ?
 		(struct mxc_epdc_fb_data *)info:g_fb_data;
@@ -1923,7 +1920,6 @@ int mxc_epdc_fb_set_upd_scheme(u32 upd_scheme, struct fb_info *info)
 
 	return 0;
 }
-EXPORT_SYMBOL(mxc_epdc_fb_set_upd_scheme);
 
 static void copy_before_process(struct mxc_epdc_fb_data *fb_data,
 	struct update_data_list *upd_data_list)
@@ -3078,7 +3074,7 @@ static int mxc_epdc_fb_send_single_update(struct mxcfb_update_data *upd_data,
 	return 0;
 }
 
-int mxc_epdc_fb_send_update(struct mxcfb_update_data *upd_data,
+static int mxc_epdc_fb_send_update(struct mxcfb_update_data *upd_data,
 				   struct fb_info *info)
 {
 	struct mxc_epdc_fb_data *fb_data = info ?
@@ -3134,9 +3130,8 @@ int mxc_epdc_fb_send_update(struct mxcfb_update_data *upd_data,
 		return mxc_epdc_fb_send_single_update(upd_data, info);
 	}
 }
-EXPORT_SYMBOL(mxc_epdc_fb_send_update);
 
-int mxc_epdc_fb_wait_update_complete(struct mxcfb_update_marker_data *marker_data,
+static int mxc_epdc_fb_wait_update_complete(struct mxcfb_update_marker_data *marker_data,
 						struct fb_info *info)
 {
 	struct mxc_epdc_fb_data *fb_data = info ?
@@ -3194,9 +3189,8 @@ int mxc_epdc_fb_wait_update_complete(struct mxcfb_update_marker_data *marker_dat
 
 	return ret;
 }
-EXPORT_SYMBOL(mxc_epdc_fb_wait_update_complete);
 
-int mxc_epdc_fb_set_pwrdown_delay(u32 pwrdown_delay,
+static int mxc_epdc_fb_set_pwrdown_delay(u32 pwrdown_delay,
 					    struct fb_info *info)
 {
 	struct mxc_epdc_fb_data *fb_data = info ?
@@ -3206,16 +3200,14 @@ int mxc_epdc_fb_set_pwrdown_delay(u32 pwrdown_delay,
 
 	return 0;
 }
-EXPORT_SYMBOL(mxc_epdc_fb_set_pwrdown_delay);
 
-int mxc_epdc_get_pwrdown_delay(struct fb_info *info)
+static int mxc_epdc_get_pwrdown_delay(struct fb_info *info)
 {
 	struct mxc_epdc_fb_data *fb_data = info ?
 		(struct mxc_epdc_fb_data *)info:g_fb_data;
 
 	return fb_data->pwrdown_delay;
 }
-EXPORT_SYMBOL(mxc_epdc_get_pwrdown_delay);
 
 static int mxc_epdc_fb_ioctl(struct fb_info *info, unsigned int cmd,
 			     unsigned long arg)
@@ -4493,7 +4485,7 @@ static const struct of_device_id imx_epdc_dt_ids[] = {
 };
 MODULE_DEVICE_TABLE(of, imx_epdc_dt_ids);
 
-int mxc_epdc_fb_probe(struct platform_device *pdev)
+static int mxc_epdc_fb_probe(struct platform_device *pdev)
 {
 	int ret = 0;
 	struct pinctrl *pinctrl;
@@ -4730,7 +4722,6 @@ int mxc_epdc_fb_probe(struct platform_device *pdev)
 	info->var.activate = FB_ACTIVATE_NOW;
 	info->pseudo_palette = fb_data->pseudo_palette;
 	info->screen_size = info->fix.smem_len;
-	info->flags = FBINFO_FLAG_DEFAULT;
 
 	mxc_epdc_fb_set_fix(info);
 
@@ -5114,7 +5105,7 @@ out:
 	return ret;
 }
 
-static int mxc_epdc_fb_remove(struct platform_device *pdev)
+static void mxc_epdc_fb_remove(struct platform_device *pdev)
 {
 	struct update_data_list *plist, *temp_list;
 	struct mxc_epdc_fb_data *fb_data = platform_get_drvdata(pdev);
@@ -5166,8 +5157,6 @@ static int mxc_epdc_fb_remove(struct platform_device *pdev)
 
 	framebuffer_release(&fb_data->info);
 	platform_set_drvdata(pdev, NULL);
-
-	return 0;
 }
 
 #ifdef CONFIG_PM_SLEEP

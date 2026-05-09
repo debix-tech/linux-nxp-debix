@@ -24,7 +24,14 @@
 #include <video/dpu.h>
 #include "dpu-crtc.h"
 #include "dpu-plane.h"
-#include "../imx-drm.h"
+#include "imx-drm.h"
+
+static const lb_prim_sel_t cf_stages[] = {LB_PRIM_SEL__CONSTFRAME0,
+					  LB_PRIM_SEL__CONSTFRAME1};
+static const lb_prim_sel_t stages[] = {LB_PRIM_SEL__LAYERBLEND0,
+				       LB_PRIM_SEL__LAYERBLEND1,
+				       LB_PRIM_SEL__LAYERBLEND2,
+				       LB_PRIM_SEL__LAYERBLEND3};
 
 static struct drm_plane_state **
 dpu_atomic_alloc_tmp_planes_per_crtc(struct drm_device *dev)
@@ -186,7 +193,7 @@ dpu_atomic_assign_plane_source_per_crtc(struct drm_plane_state **states,
 	int i, j, k = 0, m;
 	int total_asrc_num;
 	int s0_layer_cnt = 0, s1_layer_cnt = 0;
-	int s0_n = 0, s1_n = 0;
+	int s1_n = 0;
 	u32 src_a_mask, cap_mask, fe_mask, hs_mask, vs_mask;
 	bool need_fetcheco, need_hscaler, need_vscaler;
 	bool fmt_is_yuv;
@@ -196,14 +203,10 @@ dpu_atomic_assign_plane_source_per_crtc(struct drm_plane_state **states,
 		for (i = 0; i < n; i++) {
 			dpstate = to_dpu_plane_state(states[i]);
 
-			if (dpstate->left_src_w)
-				s0_n++;
-
 			if (dpstate->right_src_w)
 				s1_n++;
 		}
 	} else {
-		s0_n = n;
 		s1_n = n;
 	}
 

@@ -145,6 +145,10 @@ static irqreturn_t dw_hdmi_cec_hardirq(int irq, void *data)
 		cec->tx_status = CEC_TX_STATUS_NACK;
 		cec->tx_done = true;
 		ret = IRQ_WAKE_THREAD;
+	} else if (stat & CEC_STAT_ARBLOST) {
+		cec->tx_status = CEC_TX_STATUS_ARB_LOST;
+		cec->tx_done = true;
+		ret = IRQ_WAKE_THREAD;
 	}
 
 	if (stat & CEC_STAT_EOM) {
@@ -209,7 +213,7 @@ static int dw_hdmi_cec_enable(struct cec_adapter *adap, bool enable)
 		cec->ops->enable(cec->hdmi);
 
 		irqs = CEC_STAT_ERROR_INIT | CEC_STAT_NACK | CEC_STAT_EOM |
-		       CEC_STAT_DONE;
+		       CEC_STAT_ARBLOST | CEC_STAT_DONE;
 		dw_hdmi_write(cec, irqs, HDMI_CEC_POLARITY);
 		dw_hdmi_write(cec, ~irqs, HDMI_CEC_MASK);
 		dw_hdmi_write(cec, ~irqs, HDMI_IH_MUTE_CEC_STAT0);
@@ -229,6 +233,48 @@ static void dw_hdmi_cec_del(void *data)
 
 	cec_delete_adapter(cec->adap);
 }
+
+static ssize_t eom_delay_show(struct device *dev,
+			      struct device_attribute *attr, char *buf)
+{
+	u32 eom_delay;
+	struct platform_device *pdev = to_platform_device(dev);
+	struct dw_hdmi_cec *cec = platform_get_drvdata(pdev);
+	struct cec_adapter *adap = cec->adap;
+
+	mutex_lock(&adap->lock);
+	eom_delay = adap->eom_delay;
+	mutex_unlock(&adap->lock);
+
+	return sprintf(buf, "%u\n", eom_delay);
+}
+
+static ssize_t eom_delay_store(struct device *dev,
+			       struct device_attribute *attr,
+			       const char *buf, size_t count)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct dw_hdmi_cec *cec = platform_get_drvdata(pdev);
+	struct cec_adapter *adap = cec->adap;
+	int ret;
+	long eom_delay;
+
+	ret = kstrtol(buf, 0, &eom_delay);
+	if (ret)
+		return ret;
+	if (eom_delay > INT_MAX || eom_delay < 0)
+		return -EINVAL;
+
+	mutex_lock(&adap->lock);
+	adap->eom_delay = eom_delay;
+	mutex_unlock(&adap->lock);
+	dev_info(dev, "Set EOM delay to %ld\n", eom_delay);
+
+	return count;
+}
+
+static DEVICE_ATTR_RW(eom_delay);
+
 
 static int dw_hdmi_cec_probe(struct platform_device *pdev)
 {
@@ -291,6 +337,14 @@ static int dw_hdmi_cec_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	/* Set default value for eom_delay, user can adjust in Factory HDMI page */
+	cec->adap->eom_delay = 9000;
+	ret = device_create_file(&pdev->dev, &dev_attr_eom_delay);
+	if (ret) {
+		dev_err(&pdev->dev, "Failed to create sysfs file for eom_delay\n");
+		return ret;
+	}
+
 	/*
 	 * CEC documentation says we must not call cec_delete_adapter
 	 * after a successful call to cec_register_adapter().
@@ -300,14 +354,13 @@ static int dw_hdmi_cec_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int dw_hdmi_cec_remove(struct platform_device *pdev)
+static void dw_hdmi_cec_remove(struct platform_device *pdev)
 {
 	struct dw_hdmi_cec *cec = platform_get_drvdata(pdev);
 
 	cec_notifier_cec_adap_unregister(cec->notify, cec->adap);
 	cec_unregister_adapter(cec->adap);
-
-	return 0;
+	device_remove_file(&pdev->dev, &dev_attr_eom_delay);
 }
 
 static int __maybe_unused dw_hdmi_cec_resume(struct device *dev)
@@ -318,7 +371,7 @@ static int __maybe_unused dw_hdmi_cec_resume(struct device *dev)
 	dw_hdmi_write(cec, cec->addresses & 255, HDMI_CEC_ADDR_L);
 	dw_hdmi_write(cec, cec->addresses >> 8, HDMI_CEC_ADDR_H);
 
-	/* Restore interrupt status/mask register */
+	/* Restore interrupt status/mask registers */
 	dw_hdmi_write(cec, cec->regs_polarity, HDMI_CEC_POLARITY);
 	dw_hdmi_write(cec, cec->regs_mask, HDMI_CEC_MASK);
 	dw_hdmi_write(cec, cec->regs_mute_stat0, HDMI_IH_MUTE_CEC_STAT0);
@@ -330,7 +383,7 @@ static int __maybe_unused dw_hdmi_cec_suspend(struct device *dev)
 {
 	struct dw_hdmi_cec *cec = dev_get_drvdata(dev);
 
-	/* store interrupt status/mask register */
+	/* store interrupt status/mask registers */
 	 cec->regs_polarity = dw_hdmi_read(cec, HDMI_CEC_POLARITY);
 	 cec->regs_mask = dw_hdmi_read(cec, HDMI_CEC_MASK);
 	 cec->regs_mute_stat0 = dw_hdmi_read(cec, HDMI_IH_MUTE_CEC_STAT0);
@@ -344,7 +397,7 @@ static const struct dev_pm_ops dw_hdmi_cec_pm = {
 
 static struct platform_driver dw_hdmi_cec_driver = {
 	.probe	= dw_hdmi_cec_probe,
-	.remove	= dw_hdmi_cec_remove,
+	.remove_new = dw_hdmi_cec_remove,
 	.driver = {
 		.name = "dw-hdmi-cec",
 		.pm = &dw_hdmi_cec_pm,

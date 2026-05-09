@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright 2020 NXP
+ * Copyright 2020, 2024 NXP
  *
  * File containing client-side RPC functions for the SECO service. These
  * function are ported to clients that communicate to the SC.
  */
 
 #include <linux/firmware/imx/sci.h>
+#include <linux/io.h>
 
 struct imx_sc_msg_seco_get_build_id {
 	struct imx_sc_rpc_msg hdr;
@@ -247,3 +248,5 @@ int imx_sc_seco_secvio_dgo_config(struct imx_sc_ipc *ipc, u8 id, u8 access,
 	return 0;
 }
 EXPORT_SYMBOL(imx_sc_seco_secvio_dgo_config);
+
+

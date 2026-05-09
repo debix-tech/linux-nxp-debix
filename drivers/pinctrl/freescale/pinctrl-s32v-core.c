@@ -11,16 +11,19 @@
  *	Copyright (C) 2012 Linaro Ltd.
  */
 
+#include <linux/device.h>
 #include <linux/err.h>
 #include <linux/init.h>
 #include <linux/io.h>
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
+#include <linux/platform_device.h>
 #include <linux/pinctrl/machine.h>
 #include <linux/pinctrl/pinconf.h>
 #include <linux/pinctrl/pinctrl.h>
 #include <linux/pinctrl/pinmux.h>
+#include <linux/seq_file.h>
 #include <linux/slab.h>
 
 #include "../core.h"
@@ -516,11 +519,9 @@ int s32v_pinctrl_probe(struct platform_device *pdev,
 	return 0;
 }
 
-int s32v_pinctrl_remove(struct platform_device *pdev)
+void s32v_pinctrl_remove(struct platform_device *pdev)
 {
 	struct s32v_pinctrl *ipctl = platform_get_drvdata(pdev);
 
 	pinctrl_unregister(ipctl->pctl);
-
-	return 0;
 }

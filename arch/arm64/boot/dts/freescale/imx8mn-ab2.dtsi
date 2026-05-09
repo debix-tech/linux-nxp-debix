@@ -11,13 +11,6 @@
 	/delete-node/ sound-micfil;
 	/delete-node/ sound-ak5558;
 
-	ak4458_reset: gpio-reset {
-		compatible = "gpio-reset";
-		reset-gpios = <&pca6416 4 GPIO_ACTIVE_LOW>;
-		#reset-cells = <0>;
-		initially-in-reset;
-	};
-
 	gpio-leds {
 		panel {
 			label = "green:panel";
@@ -117,10 +110,6 @@
 	};
 };
 
-&cameradev {
-	status = "disabled";
-};
-
 &fec1 {
 	mdio {
 		ethphy0: ethernet-phy@0 {
@@ -134,17 +123,13 @@
 
 &i2c2 {
 	/delete-node/ adv7535@3d;
+	/delete-node/ tcpc@50;
 
 	pca6408_2: gpio@20 {
 		compatible = "ti,tca6408";
 		reg = <0x20>;
 		gpio-controller;
 		#gpio-cells = <2>;
-	};
-
-	ptn5110: tcpc@50 {
-		status = "disabled";
-		/delete-node/ port;
 	};
 
 	ptn5150: tcpc@1d {
@@ -170,7 +155,7 @@
 &i2c3 {
 	/delete-node/ ak5558@13;
 	/delete-node/ ak4497@11;
-	/delete-node/ ov5640_mipi@3c;
+	/delete-node/ camera@3c;
 
 	pca6416: gpio@20 {
 		compatible = "ti,tca6416";
@@ -184,7 +169,7 @@
 		sound-name-prefix = "0";
 		compatible = "asahi-kasei,ak4458";
 		reg = <0x10>;
-		resets = <&ak4458_reset>;
+		reset-gpios = <&pca6416 4 GPIO_ACTIVE_LOW>;
 		AVDD-supply = <&reg_dac_avdd_5v0>;
 		DVDD-supply = <&reg_dac_dvdd_3v3>;
 		status = "okay";
@@ -195,7 +180,7 @@
 		sound-name-prefix = "1";
 		compatible = "asahi-kasei,ak4458";
 		reg = <0x12>;
-		resets = <&ak4458_reset>;
+		reset-gpios = <&pca6416 4 GPIO_ACTIVE_LOW>;
 		AVDD-supply = <&reg_dac_avdd_5v0>;
 		DVDD-supply = <&reg_dac_dvdd_3v3>;
 		status = "disabled";
@@ -206,7 +191,7 @@
 		sound-name-prefix = "2";
 		compatible = "asahi-kasei,ak4458";
 		reg = <0x11>;
-		resets = <&ak4458_reset>;
+		reset-gpios = <&pca6416 4 GPIO_ACTIVE_LOW>;
 		AVDD-supply = <&reg_dac_avdd_5v0>;
 		DVDD-supply = <&reg_dac_dvdd_3v3>;
 		status = "disabled";
@@ -287,21 +272,18 @@
 	};
 };
 
-&isi_0 {
+&isi {
 	status = "disabled";
-
-	cap_device {
-		status = "disabled";
-	};
+	/delete-node/ ports;
 };
 
 &micfil {
 	status = "disabled";
 };
 
-&mipi_csi_1 {
+&mipi_csi {
 	status = "disabled";
-	/delete-node/ port@0;
+	/delete-node/ ports;
 };
 
 &mipi_dsi {

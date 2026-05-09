@@ -453,6 +453,11 @@ struct qm_dqrr_entry {
 #define QM_DQRR_STAT_UNSCHEDULED	0x02	/* Unscheduled dequeue */
 #define QM_DQRR_STAT_DQCR_EXPIRED	0x01	/* VDQCR or PDQCR expired*/
 
+/* 'fqid' is a 24-bit field in every h/w descriptor */
+#define QM_FQID_MASK	GENMASK(23, 0)
+#define qm_fqid_set(p, v) ((p)->fqid = cpu_to_be32((v) & QM_FQID_MASK))
+#define qm_fqid_get(p)    (be32_to_cpu((p)->fqid) & QM_FQID_MASK)
+
 /* See 1.5.8.3: "ERN Message Response" */
 /* See 1.5.8.4: "FQ State Change Notification" */
 struct qm_mr_entry {
@@ -2115,11 +2120,9 @@ const cpumask_t *qman_affine_cpus(void);
  * qman_affine_channel - return the channel ID of an portal
  * @cpu: the cpu whose affine portal is the subject of the query
  *
- * If @cpu is -1, the affine portal for the current CPU will be used. It is a
- * bug to call this function for any value of @cpu (other than -1) that is not a
- * member of the mask returned from qman_affine_cpus().
+ * Returns: channel ID.
  */
-u16 qman_affine_channel(int cpu);
+u16 qman_affine_channel(unsigned int cpu);
 
 /**
  * qman_get_affine_portal - return the portal pointer affine to cpu

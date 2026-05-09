@@ -1,30 +1,66 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 /*
- * Copyright 2023 NXP
+ * Copyright 2023-2025 NXP
  */
 
 #include <linux/dma-mapping.h>
-#include <linux/firmware/imx/ele_fw_api.h>
+#include <linux/firmware/imx/se_api.h>
 
-#include "ele_mu.h"
+#include "ele_common.h"
+#include "ele_fw_api.h"
 
-/* Fill a command message header with a given command ID and length in bytes. */
-static int plat_fill_cmd_msg_hdr(struct mu_hdr *hdr, uint8_t cmd, uint32_t len)
+struct ele_rng_msg_data {
+	u16 rsv;
+	u16 flags;
+	u32 data[2];
+};
+
+int ele_init_fw(struct se_if_priv *priv)
 {
-	struct ele_mu_priv *priv = NULL;
-	int err = 0;
+	struct se_api_msg *tx_msg __free(kfree) = NULL;
+	struct se_api_msg *rx_msg __free(kfree) = NULL;
+	int ret = 0;
 
-	err = get_ele_mu_priv(&priv);
-	if (err) {
-		pr_err("Error: iMX EdgeLock Enclave MU is not probed successfully.\n");
-		return err;
+	if (!priv) {
+		ret = -EINVAL;
+		goto exit;
 	}
-	hdr->tag = priv->cmd_tag;
-	hdr->ver = MESSAGING_VERSION_7;
-	hdr->command = cmd;
-	hdr->size = (uint8_t)(len / sizeof(uint32_t));
 
-	return err;
+	tx_msg = kzalloc(ELE_INIT_FW_REQ_SZ, GFP_KERNEL);
+	if (!tx_msg) {
+		ret = -ENOMEM;
+		goto exit;
+	}
+
+	rx_msg = kzalloc(ELE_INIT_FW_RSP_SZ, GFP_KERNEL);
+	if (!rx_msg) {
+		ret = -ENOMEM;
+		goto exit;
+	}
+
+	ret = se_fill_cmd_msg_hdr(priv,
+				  (struct se_msg_hdr *)&tx_msg->header,
+				  ELE_INIT_FW_REQ,
+				  ELE_INIT_FW_REQ_SZ,
+				  false);
+	if (ret)
+		goto exit;
+
+	ret = ele_msg_send_rcv(priv->priv_dev_ctx,
+			       tx_msg,
+			       ELE_INIT_FW_REQ_SZ,
+			       rx_msg,
+			       ELE_INIT_FW_RSP_SZ);
+	if (ret < 0)
+		goto exit;
+
+	ret = se_val_rsp_hdr_n_status(priv,
+				      rx_msg,
+				      ELE_INIT_FW_REQ,
+				      ELE_INIT_FW_RSP_SZ,
+				      false);
+exit:
+	return ret;
 }
 
 /*
@@ -33,80 +69,85 @@ static int plat_fill_cmd_msg_hdr(struct mu_hdr *hdr, uint8_t cmd, uint32_t len)
  *
  * returns:  size of the rondom number generated
  */
-int ele_get_random(struct hwrng *rng, void *data, size_t len, bool wait)
+int ele_get_random(struct se_if_priv *priv,
+		   void *data, size_t len)
 {
-	struct ele_mu_priv *priv;
-	unsigned int tag, command, size, ver, status;
+	struct se_api_msg *tx_msg __free(kfree) = NULL;
+	struct se_api_msg *rx_msg __free(kfree) = NULL;
+	struct ele_rng_msg_data *rng_msg_data;
 	dma_addr_t dst_dma;
-	u8 *buf;
+	u8 *buf = NULL;
 	int ret;
 
-	/* access ele_mu_priv data structure pointer*/
-	ret = get_ele_mu_priv(&priv);
-	if (ret)
-		return ret;
-
-	buf = dmam_alloc_coherent(priv->dev, len, &dst_dma, GFP_KERNEL);
-	if (!buf) {
-		dev_err(priv->dev, "Failed to map destination buffer memory\n");
-		return -ENOMEM;
+	if (!priv) {
+		ret = -EINVAL;
+		goto exit;
 	}
 
-	ret = plat_fill_cmd_msg_hdr((struct mu_hdr *)&priv->tx_msg.header, ELE_GET_RANDOM_REQ, 16);
+	tx_msg = kzalloc(ELE_GET_RANDOM_REQ_SZ, GFP_KERNEL);
+	if (!tx_msg) {
+		ret = -ENOMEM;
+		goto exit;
+	}
+
+	rx_msg = kzalloc(ELE_GET_RANDOM_RSP_SZ, GFP_KERNEL);
+	if (!rx_msg) {
+		ret = -ENOMEM;
+		goto exit;
+	}
+
+	/* As per RBG3(RS) construction mentioned in NIST SP800-90C,
+	 * CTR_DRBG generates 128(full entropy) bits after reseeding
+	 * the CTR_DRBG with 256 bits of entropy. so splitting the
+	 * user rng request in multiple of 128 bits & enforce reseed
+	 * for every iteration.
+	 */
+	len = ELE_RNG_MAX_SIZE;
+	buf = dma_alloc_coherent(priv->dev, len, &dst_dma, GFP_KERNEL);
+	if (!buf) {
+		dev_err(priv->dev, "Failed to map destination buffer memory.\n");
+		ret = -ENOMEM;
+		goto exit;
+	}
+
+	ret = se_fill_cmd_msg_hdr(priv,
+				  (struct se_msg_hdr *)&tx_msg->header,
+				  ELE_GET_RANDOM_REQ,
+				  ELE_GET_RANDOM_REQ_SZ,
+				  false);
 	if (ret)
 		goto exit;
 
-	priv->tx_msg.data[0] = 0x0;
-	priv->tx_msg.data[1] = dst_dma;
-	priv->tx_msg.data[2] = len;
-	ret = imx_ele_msg_send_rcv(priv);
+	rng_msg_data = (struct ele_rng_msg_data *)tx_msg->data;
+	/* bit 1(blocking reseed): wait for trng entropy,
+	 * then reseed rng context.
+	 */
+	if (get_se_soc_id(priv) != SOC_ID_OF_IMX95 &&
+	    get_se_soc_id(priv) != SOC_ID_OF_IMX94)
+		rng_msg_data->flags = BIT(1);
+
+	rng_msg_data->data[0] = dst_dma;
+	rng_msg_data->data[1] = len;
+
+	ret = ele_msg_send_rcv(priv->priv_dev_ctx,
+			       tx_msg,
+			       ELE_GET_RANDOM_REQ_SZ,
+			       rx_msg,
+			       ELE_GET_RANDOM_RSP_SZ);
 	if (ret < 0)
 		goto exit;
 
-	tag = MSG_TAG(priv->rx_msg.header);
-	command = MSG_COMMAND(priv->rx_msg.header);
-	size = MSG_SIZE(priv->rx_msg.header);
-	ver = MSG_VER(priv->rx_msg.header);
-	status = RES_STATUS(priv->rx_msg.data[0]);
-	if (tag == 0xe1 && command == ELE_GET_RANDOM_REQ && size == 0x02 &&
-	    ver == 0x07 && status == 0xd6) {
+	ret = se_val_rsp_hdr_n_status(priv,
+				      rx_msg,
+				      ELE_GET_RANDOM_REQ,
+				      ELE_GET_RANDOM_RSP_SZ,
+				      false);
+	if (!ret) {
 		memcpy(data, buf, len);
 		ret = len;
-	} else
-		ret = -EINVAL;
-
+	}
 exit:
-	dmam_free_coherent(priv->dev, len, buf, dst_dma);
+	if (buf)
+		dma_free_coherent(priv->dev, len, buf, dst_dma);
 	return ret;
-}
-
-int ele_init_fw(void)
-{
-	struct ele_mu_priv *priv;
-	int ret;
-	unsigned int tag, command, size, ver, status;
-
-	ret = get_ele_mu_priv(&priv);
-	if (ret)
-		return ret;
-
-	ret = plat_fill_cmd_msg_hdr((struct mu_hdr *)&priv->tx_msg.header, ELE_INIT_FW_REQ, 4);
-	if (ret)
-		return ret;
-
-	ret = imx_ele_msg_send_rcv(priv);
-	if (ret < 0)
-		return ret;
-
-	tag = MSG_TAG(priv->rx_msg.header);
-	command = MSG_COMMAND(priv->rx_msg.header);
-	size = MSG_SIZE(priv->rx_msg.header);
-	ver = MSG_VER(priv->rx_msg.header);
-	status = RES_STATUS(priv->rx_msg.data[0]);
-
-	if (tag == 0xe1 && command == ELE_INIT_FW_REQ && size == 0x02 &&
-	    ver == 0x06 && status == 0xd6)
-		return 0;
-
-	return -EINVAL;
 }

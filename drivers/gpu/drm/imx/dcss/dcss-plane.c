@@ -300,7 +300,6 @@ static int dcss_plane_atomic_check(struct drm_plane *plane,
 	struct drm_framebuffer *fb = new_plane_state->fb;
 	struct drm_gem_dma_object *dma_obj;
 	struct drm_crtc_state *crtc_state;
-	int hdisplay, vdisplay;
 	int min, max;
 	int ret;
 
@@ -312,9 +311,6 @@ static int dcss_plane_atomic_check(struct drm_plane *plane,
 
 	crtc_state = drm_atomic_get_existing_crtc_state(state,
 							new_plane_state->crtc);
-
-	hdisplay = crtc_state->adjusted_mode.hdisplay;
-	vdisplay = crtc_state->adjusted_mode.vdisplay;
 
 	if (!dcss_plane_is_source_size_allowed(new_plane_state->src_w >> 16,
 					       new_plane_state->src_h >> 16,
@@ -523,7 +519,7 @@ static bool dcss_plane_needs_setup(struct drm_plane_state *state,
 	       state->scaling_filter != old_state->scaling_filter;
 }
 
-static void dcss_plane_setup_hdr10_pipes(struct drm_plane *plane)
+static void dcss_plane_setup_hdr10_pipes(struct drm_plane *plane, u32 format)
 {
 	struct dcss_dev *dcss = plane->dev->dev_private;
 	struct dcss_plane *dcss_plane = to_dcss_plane(plane);
@@ -534,7 +530,7 @@ static void dcss_plane_setup_hdr10_pipes(struct drm_plane *plane)
 				      &ipipe_cfg, &opipe_cfg);
 
 	dcss_hdr10_setup(dcss->hdr10, dcss_plane->ch_num,
-			 &ipipe_cfg, &opipe_cfg);
+			 &ipipe_cfg, &opipe_cfg, format);
 }
 
 static void dcss_plane_atomic_update(struct drm_plane *plane,
@@ -614,7 +610,7 @@ static void dcss_plane_atomic_update(struct drm_plane *plane,
 			  dst_w, dst_h,
 			  drm_mode_vrefresh(&crtc_state->mode));
 
-	dcss_plane_setup_hdr10_pipes(plane);
+	dcss_plane_setup_hdr10_pipes(plane, fb->format->format);
 
 	dcss_dtg_plane_pos_set(dcss->dtg, dcss_plane->ch_num,
 			       dst.x1, dst.y1, dst_w, dst_h);

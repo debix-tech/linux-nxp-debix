@@ -41,6 +41,7 @@
 #include "idmap.h"
 #include "nfsd.h"
 #include "netns.h"
+#include "vfs.h"
 
 /*
  * Turn off idmapping when using AUTH_SYS.
@@ -239,8 +240,8 @@ idtoname_parse(struct cache_detail *cd, char *buf, int buflen)
 		goto out;
 
 	/* expiry */
-	ent.h.expiry_time = get_expiry(&buf);
-	if (ent.h.expiry_time == 0)
+	error = get_expiry(&buf, &ent.h.expiry_time);
+	if (error)
 		goto out;
 
 	error = -ENOMEM;
@@ -407,8 +408,8 @@ nametoid_parse(struct cache_detail *cd, char *buf, int buflen)
 	memcpy(ent.name, buf1, sizeof(ent.name));
 
 	/* expiry */
-	ent.h.expiry_time = get_expiry(&buf);
-	if (ent.h.expiry_time == 0)
+	error = get_expiry(&buf, &ent.h.expiry_time);
+	if (error)
 		goto out;
 
 	/* ID */
@@ -580,6 +581,7 @@ static __be32 idmap_id_to_name(struct xdr_stream *xdr,
 		.id = id,
 		.type = type,
 	};
+	__be32 status = nfs_ok;
 	__be32 *p;
 	int ret;
 	struct nfsd_net *nn = net_generic(SVC_NET(rqstp), nfsd_net_id);
@@ -592,12 +594,16 @@ static __be32 idmap_id_to_name(struct xdr_stream *xdr,
 		return nfserrno(ret);
 	ret = strlen(item->name);
 	WARN_ON_ONCE(ret > IDMAP_NAMESZ);
+
 	p = xdr_reserve_space(xdr, ret + 4);
-	if (!p)
-		return nfserr_resource;
-	p = xdr_encode_opaque(p, item->name, ret);
+	if (unlikely(!p)) {
+		status = nfserr_resource;
+		goto out_put;
+	}
+	xdr_encode_opaque(p, item->name, ret);
+out_put:
 	cache_put(&item->h, nn->idtoname_cache);
-	return 0;
+	return status;
 }
 
 static bool

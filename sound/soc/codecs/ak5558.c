@@ -9,7 +9,7 @@
 #include <linux/gpio/consumer.h>
 #include <linux/i2c.h>
 #include <linux/module.h>
-#include <linux/of_device.h>
+#include <linux/of.h>
 #include <linux/pm_runtime.h>
 #include <linux/regmap.h>
 #include <linux/regulator/consumer.h>
@@ -324,7 +324,7 @@ static void ak5558_reset(struct ak5558_priv *ak5558, bool active)
 		return;
 
 	gpiod_set_value_cansleep(ak5558->reset_gpiod, active);
-	usleep_range(1000, 2000);
+	usleep_range(5000, 6000);
 }
 
 static int ak5558_probe(struct snd_soc_component *component)
@@ -372,7 +372,14 @@ static int __maybe_unused ak5558_runtime_resume(struct device *dev)
 	regcache_cache_only(ak5558->regmap, false);
 	regcache_mark_dirty(ak5558->regmap);
 
-	return regcache_sync(ak5558->regmap);
+	ret = regcache_sync(ak5558->regmap);
+	if (ret) {
+		regulator_bulk_disable(ARRAY_SIZE(ak5558->supplies),
+				       ak5558->supplies);
+		return ret;
+	}
+
+	return 0;
 }
 
 static const struct dev_pm_ops ak5558_pm = {
@@ -473,13 +480,13 @@ static int ak5558_i2c_probe(struct i2c_client *i2c)
 		return ret;
 	}
 
-	/* toggle the reset gpio */
+	/* tog the reset gpio */
 	ak5558_reset(ak5558, true);
 	ak5558_reset(ak5558, false);
 
 	/* Check if first register can be read or not */
-	reg = i2c_smbus_read_byte_data(i2c, AK5558_00_POWER_MANAGEMENT1);
-	if (reg < 0)
+	ret = regmap_read_bypassed(ak5558->regmap, AK5558_02_CONTROL1, &reg);
+	if (ret < 0)
 		return -ENODEV;
 
 	pm_runtime_enable(&i2c->dev);
@@ -506,7 +513,7 @@ static struct i2c_driver ak5558_i2c_driver = {
 		.of_match_table = of_match_ptr(ak5558_i2c_dt_ids),
 		.pm = &ak5558_pm,
 	},
-	.probe_new = ak5558_i2c_probe,
+	.probe = ak5558_i2c_probe,
 	.remove = ak5558_i2c_remove,
 };
 

@@ -176,7 +176,7 @@ static int ivshm_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 
 	err = pci_alloc_irq_vectors(pdev, ivshm_dev->vectors,
 				    ivshm_dev->vectors,
-				    PCI_IRQ_LEGACY | PCI_IRQ_MSIX);
+				    PCI_IRQ_INTX | PCI_IRQ_MSIX);
 	if (err < 0)
 		return err;
 

@@ -259,7 +259,7 @@ err_alloc:
 /*
  * pfe_platform_remove -
  */
-static int pfe_platform_remove(struct platform_device *pdev)
+static void pfe_platform_remove(struct platform_device *pdev)
 {
 	struct pfe *pfe = platform_get_drvdata(pdev);
 	int rc;
@@ -275,13 +275,11 @@ static int pfe_platform_remove(struct platform_device *pdev)
 	platform_set_drvdata(pdev, NULL);
 
 	kfree(pfe);
-
-	return rc;
 }
 
 #ifdef CONFIG_PM
 #ifdef CONFIG_PM_SLEEP
-int pfe_platform_suspend(struct device *dev)
+static int pfe_platform_suspend(struct device *dev)
 {
 	struct pfe *pfe = platform_get_drvdata(to_platform_device(dev));
 	struct net_device *netdev;

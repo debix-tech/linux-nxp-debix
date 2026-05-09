@@ -15,15 +15,14 @@
 #include "../clk-fractional-divider.h"
 #include "clk.h"
 
+#define PCG_PR_MASK		BIT(31)
 #define PCG_PCS_SHIFT	24
 #define PCG_PCS_MASK	0x7
 #define PCG_CGC_SHIFT	30
 #define PCG_FRAC_SHIFT	3
 #define PCG_FRAC_WIDTH	1
-#define PCG_FRAC_MASK	BIT(3)
 #define PCG_PCD_SHIFT	0
 #define PCG_PCD_WIDTH	3
-#define PCG_PCD_MASK	0x7
 
 #define SW_RST		BIT(28)
 
@@ -85,7 +84,14 @@ static struct clk_hw *imx_ulp_clk_hw_composite(const char *name,
 	struct clk_gate *gate = NULL;
 	struct clk_mux *mux = NULL;
 	struct clk_hw *hw;
+	unsigned long flags = 0;
 	u32 val;
+
+	val = readl(reg);
+	if (!(val & PCG_PR_MASK)) {
+		pr_info("PCC PR is 0 for clk:%s, bypass\n", name);
+		return NULL;
+	}
 
 	if (mux_present) {
 		mux = kzalloc(sizeof(*mux), GFP_KERNEL);
@@ -97,6 +103,7 @@ static struct clk_hw *imx_ulp_clk_hw_composite(const char *name,
 		mux->mask = PCG_PCS_MASK;
 		if (has_swrst)
 			mux->lock = &imx_ccm_lock;
+		flags |= CLK_SET_PARENT_GATE | CLK_SET_RATE_NO_REPARENT;
 	}
 
 	if (rate_present) {
@@ -109,13 +116,12 @@ static struct clk_hw *imx_ulp_clk_hw_composite(const char *name,
 		fd->reg = reg;
 		fd->mshift = PCG_FRAC_SHIFT;
 		fd->mwidth = PCG_FRAC_WIDTH;
-		fd->mmask  = PCG_FRAC_MASK;
 		fd->nshift = PCG_PCD_SHIFT;
 		fd->nwidth = PCG_PCD_WIDTH;
-		fd->nmask = PCG_PCD_MASK;
 		fd->flags = CLK_FRAC_DIVIDER_ZERO_BASED;
 		if (has_swrst)
 			fd->lock = &imx_ccm_lock;
+		flags |= CLK_SET_RATE_GATE;
 	}
 
 	if (gate_present) {
@@ -147,8 +153,8 @@ static struct clk_hw *imx_ulp_clk_hw_composite(const char *name,
 	hw = clk_hw_register_composite(NULL, name, parent_names, num_parents,
 				       mux_hw, &clk_mux_ops, fd_hw,
 				       &clk_fractional_divider_ops, gate_hw,
-				       has_swrst ? &pcc_gate_ops : &clk_gate_ops, CLK_SET_RATE_GATE |
-				       CLK_SET_PARENT_GATE | CLK_SET_RATE_NO_REPARENT);
+				       has_swrst ? &pcc_gate_ops : &clk_gate_ops,
+				       flags);
 	if (IS_ERR(hw)) {
 		kfree(mux);
 		kfree(fd);

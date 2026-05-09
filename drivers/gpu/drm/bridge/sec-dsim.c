@@ -14,7 +14,6 @@
  * GNU General Public License for more details.
  */
 
-#include <asm/unaligned.h>
 #include <linux/clk.h>
 #include <linux/completion.h>
 #include <linux/delay.h>
@@ -25,6 +24,7 @@
 #include <linux/of.h>
 #include <linux/of_graph.h>
 #include <linux/pm_runtime.h>
+#include <linux/unaligned.h>
 #include <drm/bridge/sec_mipi_dsim.h>
 #include <drm/drm_vblank.h>
 #include <drm/drm_atomic_helper.h>
@@ -318,6 +318,7 @@ struct sec_mipi_dsim {
 	unsigned int p;
 	unsigned int m;
 	unsigned int s;
+	unsigned int pms_delta;
 	unsigned long long lp_data_rate;
 	unsigned long long hs_data_rate;
 	struct videomode vmode;
@@ -1125,7 +1126,7 @@ static void sec_mipi_dsim_set_standby(struct sec_mipi_dsim *dsim,
 	dsim_write(dsim, mdresol, DSIM_MDRESOL);
 }
 
-struct dsim_pll_pms *sec_mipi_dsim_calc_pmsk(struct sec_mipi_dsim *dsim)
+static struct dsim_pll_pms *sec_mipi_dsim_calc_pmsk(struct sec_mipi_dsim *dsim)
 {
 	uint32_t p, m, s;
 	uint32_t best_p = 0, best_m = 0, best_s = 0;
@@ -1231,6 +1232,8 @@ struct dsim_pll_pms *sec_mipi_dsim_calc_pmsk(struct sec_mipi_dsim *dsim)
 		devm_kfree(dev, pll_pms);
 		return ERR_PTR(-EINVAL);
 	}
+
+	dsim->pms_delta = best_delta;
 
 	pll_pms->p = best_p;
 	pll_pms->m = best_m;
@@ -1647,6 +1650,40 @@ static int sec_mipi_dsim_bridge_atomic_check(struct drm_bridge *bridge,
 	return 0;
 }
 
+static enum drm_mode_status
+sec_mipi_dsim_bridge_mode_valid(struct drm_bridge *bridge,
+				const struct drm_display_info *info,
+				const struct drm_display_mode *mode)
+{
+	struct sec_mipi_dsim *dsim = bridge->driver_private;
+	const struct sec_mipi_dsim_plat_data *pdata = dsim->pdata;
+	struct drm_bridge *next_bridge = bridge;
+	int ret;
+
+	/*
+	 * When MIPI2HDMI converter connected such as ADV7535,
+	 * video modes that pixel clock rate are not
+	 * exactly supported by MIPI PHY PLL will be removed.
+	 */
+	while (drm_bridge_get_next_bridge(next_bridge))
+		next_bridge = drm_bridge_get_next_bridge(next_bridge);
+
+	if ((next_bridge->ops & DRM_BRIDGE_OP_DETECT) &&
+	    (next_bridge->ops & DRM_BRIDGE_OP_EDID)) {
+		ret = sec_mipi_dsim_check_pll_out(dsim, mode);
+		if (ret)
+			return MODE_CLOCK_RANGE;
+
+		if (dsim->pms_delta != 0)
+			return MODE_CLOCK_RANGE;
+	}
+
+	if (pdata->mode_valid)
+		return pdata->mode_valid(dsim->encoder, mode);
+
+	return MODE_OK;
+};
+
 static const struct drm_bridge_funcs sec_mipi_dsim_bridge_funcs = {
 	.atomic_check = sec_mipi_dsim_bridge_atomic_check,
 	.atomic_reset = drm_atomic_helper_bridge_reset,
@@ -1657,6 +1694,7 @@ static const struct drm_bridge_funcs sec_mipi_dsim_bridge_funcs = {
 	.atomic_enable	= sec_mipi_dsim_bridge_atomic_enable,
 	.atomic_disable	= sec_mipi_dsim_bridge_atomic_disable,
 	.mode_set   = sec_mipi_dsim_bridge_mode_set,
+	.mode_valid = sec_mipi_dsim_bridge_mode_valid,
 };
 
 void sec_mipi_dsim_suspend(struct device *dev)

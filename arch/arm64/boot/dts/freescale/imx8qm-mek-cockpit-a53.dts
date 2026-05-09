@@ -30,7 +30,7 @@
 		pinctrl-2 = <&pinctrl_wifi>;
 	};
 
-	lvds_backlight0: lvds_backlight@0 {
+	lvds_backlight0: lvds_backlight-0 {
 		compatible = "pwm-backlight";
 		pwms = <&pwm_lvds0 0 100000 0>;
 
@@ -49,7 +49,7 @@
 		status = "disabled";
 	};
 
-	lvds_backlight1: lvds_backlight@1 {
+	lvds_backlight1: lvds_backlight-1 {
 		compatible = "pwm-backlight";
 		pwms = <&pwm_lvds1 0 100000 0>;
 
@@ -65,17 +65,6 @@
 				     90 91 92 93 94 95 96 97 98 99
 				    100>;
 		default-brightness-level = <80>;
-	};
-
-	modem_reset: modem-reset {
-		compatible = "gpio-reset";
-		pinctrl-names = "default", "sleep";
-		pinctrl-0 = <&pinctrl_modem_reset>;
-		pinctrl-1 = <&pinctrl_modem_reset_sleep>;
-		reset-gpios = <&lsio_gpio4 22 GPIO_ACTIVE_LOW>;
-		reset-delay-us = <2000>;
-		reset-post-delay-ms = <40>;
-		#reset-cells = <0>;
 	};
 
 	cbtl04gp {
@@ -160,13 +149,13 @@
 			linux,cma-default;
 		};
 
-		a72_reserved {
+		a72_reserved@c0000000 {
 			no-map;
 			reg = <0 0xc0000000 0 0x40000000>;
 		};
 	};
 
-	epdev_on: fixedregulator@100 {
+	epdev_on: fixedregulator-epdev {
 		compatible = "regulator-fixed";
 		pinctrl-names = "default", "sleep";
 		pinctrl-0 = <&pinctrl_wlreg_on>;
@@ -259,7 +248,7 @@
 		regulator-max-microvolt = <1800000>;
 	};
 
-	reg_audio: fixedregulator@2 {
+	reg_audio: fixedregulator-audio {
 		compatible = "regulator-fixed";
 		regulator-name = "cs42888_supply";
 		regulator-min-microvolt = <3300000>;
@@ -479,12 +468,12 @@
 
 &sai6 {
 	assigned-clocks = <&acm IMX_ADMA_ACM_SAI6_MCLK_SEL>,
-			<&clk IMX_SC_R_AUDIO_PLL_1 IMX_SC_PM_CLK_PLL>,
-			<&clk IMX_SC_R_AUDIO_PLL_1 IMX_SC_PM_CLK_SLV_BUS>,
-			<&clk IMX_SC_R_AUDIO_PLL_1 IMX_SC_PM_CLK_MST_BUS>,
+			<&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_PLL>,
+			<&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_SLV_BUS>,
+			<&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_MST_BUS>,
 			<&sai6_lpcg 0>;
-	assigned-clock-parents = <&aud_pll_div1_lpcg 0>;
-	assigned-clock-rates = <0>, <786432000>, <98304000>, <12288000>, <98304000>;
+	assigned-clock-parents = <&aud_pll_div0_lpcg 0>;
+	assigned-clock-rates = <0>, <786432000>, <49152000>, <12288000>, <49152000>;
 	fsl,sai-asynchronous;
 	fsl,txm-rxs;
 	status = "disabled";
@@ -492,12 +481,12 @@
 
 &sai7 {
 	assigned-clocks = <&acm IMX_ADMA_ACM_SAI7_MCLK_SEL>,
-			<&clk IMX_SC_R_AUDIO_PLL_1 IMX_SC_PM_CLK_PLL>,
-			<&clk IMX_SC_R_AUDIO_PLL_1 IMX_SC_PM_CLK_SLV_BUS>,
-			<&clk IMX_SC_R_AUDIO_PLL_1 IMX_SC_PM_CLK_MST_BUS>,
+			<&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_PLL>,
+			<&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_SLV_BUS>,
+			<&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_MST_BUS>,
 			<&sai7_lpcg 0>;
-	assigned-clock-parents = <&aud_pll_div1_lpcg 0>;
-	assigned-clock-rates = <0>, <786432000>, <98304000>, <12288000>, <98304000>;
+	assigned-clock-parents = <&aud_pll_div0_lpcg 0>;
+	assigned-clock-rates = <0>, <786432000>, <49152000>, <12288000>, <49152000>;
 	fsl,sai-asynchronous;
 	fsl,txm-rxs;
 	status = "disabled";
@@ -560,9 +549,6 @@
 	status = "okay";
 
 	adv_bridge0: adv7535@3d {
-		#address-cells = <1>;
-		#size-cells = <0>;
-
 		compatible = "adi,adv7535";
 		reg = <0x3d>;
 		adi,addr-cec = <0x3b>;
@@ -572,8 +558,7 @@
 		interrupts = <19 IRQ_TYPE_LEVEL_LOW>;
 		status = "okay";
 
-		port@0 {
-			reg = <0>;
+		port {
 			adv7535_0_in: endpoint {
 				remote-endpoint = <&mipi0_adv_out>;
 			};
@@ -607,9 +592,6 @@
 	status = "disabled";
 
 	adv_bridge1: adv7535@3d {
-		#address-cells = <1>;
-		#size-cells = <0>;
-
 		compatible = "adi,adv7535";
 		reg = <0x3d>;
 		adi,addr-cec = <0x3b>;
@@ -619,8 +601,7 @@
 		interrupts = <23 IRQ_TYPE_LEVEL_LOW>;
 		status = "disabled";
 
-		port@0 {
-			reg = <0>;
+		port {
 			adv7535_1_in: endpoint {
 				remote-endpoint = <&mipi1_adv_out>;
 			};
@@ -793,7 +774,6 @@
 &lpuart1 { /* BT */
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpuart1>;
-	resets = <&modem_reset>;
 	status = "disabled";
 };
 
@@ -1113,74 +1093,6 @@
 	};
 };
 
-&isi_0 {
-	status = "disabled";
-
-	cap_device {
-		status = "okay";
-	};
-
-	m2m_device {
-		status = "okay";
-	};
-};
-
-&isi_1 {
-	status = "disabled";
-
-	cap_device {
-		status = "okay";
-	};
-};
-
-&isi_2 {
-	status = "disabled";
-
-	cap_device {
-		status = "okay";
-	};
-};
-
-&isi_3 {
-	status = "disabled";
-
-	cap_device {
-		status = "okay";
-	};
-};
-
-&isi_4 {
-	status = "disabled";
-
-	cap_device {
-		status = "okay";
-	};
-};
-
-&isi_5 {
-	status = "disabled";
-
-	cap_device {
-		status = "okay";
-	};
-};
-
-&isi_6 {
-	status = "disabled";
-
-	cap_device {
-		status = "okay";
-	};
-};
-
-&isi_7 {
-	status = "disabled";
-
-	cap_device {
-		status = "okay";
-	};
-};
-
 &irqsteer_csi0 {
 	status = "okay";
 };
@@ -1190,14 +1102,11 @@
 };
 
 &mipi_csi_0 {
-	#address-cells = <1>;
-	#size-cells = <0>;
 	virtual-channel;
 	status = "okay";
 
 	/* Camera 0  MIPI CSI-2 (CSIS0) */
-	port@0 {
-		reg = <0>;
+	port {
 		mipi_csi0_ep: endpoint {
 			remote-endpoint = <&max9286_0_ep>;
 			data-lanes = <1 2 3 4>;
@@ -1497,18 +1406,6 @@
 	pinctrl_pwm_lvds1: pwmlvds1grp {
 		fsl,pins = <
 			IMX8QM_LVDS1_GPIO00_LVDS1_PWM0_OUT		0x00000020
-		>;
-	};
-
-	pinctrl_modem_reset: modemresetgrp {
-		fsl,pins = <
-			IMX8QM_QSPI1A_DQS_LSIO_GPIO4_IO22		0x06000021
-		>;
-	};
-
-	pinctrl_modem_reset_sleep: modemreset_sleepgrp {
-		fsl,pins = <
-			IMX8QM_QSPI1A_DQS_LSIO_GPIO4_IO22		0x07800021
 		>;
 	};
 
@@ -1829,14 +1726,6 @@
 /delete-node/ &i2c1_lvds1;
 /delete-node/ &irqsteer_csi0;
 /delete-node/ &irqsteer_csi1;
-/delete-node/ &isi_0;
-/delete-node/ &isi_1;
-/delete-node/ &isi_2;
-/delete-node/ &isi_3;
-/delete-node/ &isi_4;
-/delete-node/ &isi_5;
-/delete-node/ &isi_6;
-/delete-node/ &isi_7;
 /delete-node/ &jpegdec;
 /delete-node/ &jpegenc;
 /delete-node/ &ldb2;

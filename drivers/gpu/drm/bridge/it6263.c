@@ -26,6 +26,8 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/of_graph.h>
+#include <linux/of_platform.h>
+#include <linux/platform_device.h>
 #include <linux/regmap.h>
 
 #define REG_VENDOR_ID(n)	(0x00 + (n))	/* n: 0/1 */
@@ -338,6 +340,7 @@ struct it6263 {
 	struct gpio_desc *reset_gpio;
 	bool is_hdmi;
 	bool split_mode;
+	bool de_ssc_enable;
 };
 
 struct it6263_minimode {
@@ -403,7 +406,8 @@ static void it6263_reset(struct it6263 *it6263)
 static void it6263_lvds_reset(struct it6263 *it6263)
 {
 	/* AFE PLL reset */
-	lvds_update_bits(it6263, LVDS_REG_PLL, 0x1, 0x0);
+	lvds_update_bits(it6263, LVDS_REG_PLL,
+			 it6263->de_ssc_enable ? 0x07 : 0x1, 0x0);
 	usleep_range(1000, 2000);
 	lvds_update_bits(it6263, LVDS_REG_PLL, 0x1, 0x1);
 
@@ -414,6 +418,13 @@ static void it6263_lvds_reset(struct it6263 *it6263)
 	lvds_update_bits(it6263, LVDS_REG_SW_RST, SOFT_PCLK_DM_RST, 0x0);
 
 	usleep_range(1000, 2000);
+
+	if (!it6263->de_ssc_enable)
+		return;
+
+	lvds_update_bits(it6263, 0x2c, BIT(6), BIT(6));
+	usleep_range(1000, 2000);
+	lvds_update_bits(it6263, 0x2c, BIT(6), 0);
 }
 
 static void it6263_lvds_set_interface(struct it6263 *it6263)
@@ -447,11 +458,23 @@ static void it6263_lvds_set_afe(struct it6263 *it6263)
 	lvds_update_bits(it6263, LVDS_REG_PLL, 0x07, 0);
 }
 
+static void it6263_lvds_de_ssc_enable(struct it6263 *it6263)
+{
+	if (!it6263->de_ssc_enable)
+		return;
+
+	lvds_update_bits(it6263, LVDS_REG_PLL, 0x07, 0x07);
+	lvds_update_bits(it6263, 0x2c, BIT(6), BIT(6));
+	usleep_range(1000, 2000);
+	lvds_update_bits(it6263, 0x2c, BIT(6), 0);
+}
+
 static void it6263_lvds_config(struct it6263 *it6263)
 {
 	it6263_lvds_reset(it6263);
 	it6263_lvds_set_interface(it6263);
 	it6263_lvds_set_afe(it6263);
+	it6263_lvds_de_ssc_enable(it6263);
 }
 
 static void it6263_hdmi_config(struct it6263 *it6263)
@@ -571,33 +594,26 @@ it6263_read_edid(void *data, u8 *buf, unsigned int block, size_t len)
 	return 0;
 }
 
-static int it6263_get_modes(struct drm_connector *connector)
+static const struct drm_edid *it6263_get_edid(struct it6263 *it6263)
 {
-	struct it6263 *it6263 = connector_to_it6263(connector);
-	u32 bus_format = MEDIA_BUS_FMT_RGB888_1X24;
-	struct edid *edid;
-	int num = 0;
-	int ret;
+	const struct drm_edid *drm_edid;
+	const struct edid *edid;
 
-	edid = drm_do_get_edid(connector, it6263_read_edid, it6263);
-	drm_connector_update_edid_property(connector, edid);
-	if (edid) {
-		num = drm_add_edid_modes(connector, edid);
-		it6263->is_hdmi = drm_detect_hdmi_monitor(edid);
-		kfree(edid);
+	drm_edid = drm_edid_read_custom(&it6263->connector, it6263_read_edid, it6263);
+	if (!drm_edid) {
+		dev_warn(&it6263->hdmi_i2c->dev, "Failed to read EDID\n");
+		return NULL;
 	}
 
-	ret = drm_display_info_set_bus_formats(&connector->display_info,
-					       &bus_format, 1);
-	if (ret)
-		dev_dbg(&it6263->hdmi_i2c->dev,
-			"failed to set the supported bus format %d\n", ret);
+	/* FIXME: This should use connector->display_info.is_hdmi. */
+	edid = drm_edid_raw(drm_edid);
+	it6263->is_hdmi = drm_detect_hdmi_monitor(edid);
 
-	return num;
+	return drm_edid;
 }
 
-static enum drm_mode_status it6263_mode_valid(struct drm_connector *connector,
-					      struct drm_display_mode *mode)
+static enum drm_mode_status
+it6263_mode_valid(struct it6263 *it6263, const struct drm_display_mode *mode)
 {
 	const struct it6263_minimode *m;
 	int i, vrefresh = drm_mode_vrefresh(mode);
@@ -616,10 +632,74 @@ static enum drm_mode_status it6263_mode_valid(struct drm_connector *connector,
 	return MODE_OK;
 }
 
+static int it6263_connector_get_modes(struct drm_connector *connector)
+{
+	struct it6263 *it6263 = connector_to_it6263(connector);
+	u32 bus_format = MEDIA_BUS_FMT_RGB888_1X24;
+	const struct drm_edid *drm_edid;
+	int num = 0;
+	int ret;
+
+	drm_edid = it6263_get_edid(it6263);
+	if (!drm_edid)
+		return 0;
+
+	drm_edid_connector_update(connector, drm_edid);
+	num = drm_edid_connector_add_modes(connector);
+	kfree(drm_edid);
+
+	ret = drm_display_info_set_bus_formats(&connector->display_info,
+					       &bus_format, 1);
+	if (ret)
+		dev_warn(&it6263->hdmi_i2c->dev,
+			 "failed to set the supported bus format %d\n", ret);
+
+	return num;
+}
+
+static enum drm_mode_status
+it6263_connector_mode_valid(struct drm_connector *connector,
+			    struct drm_display_mode *mode)
+{
+	struct it6263 *it6263 = connector_to_it6263(connector);
+
+	return it6263_mode_valid(it6263, mode);
+}
+
 static const struct drm_connector_helper_funcs it6263_connector_helper_funcs = {
-	.get_modes = it6263_get_modes,
-	.mode_valid = it6263_mode_valid,
+	.get_modes = it6263_connector_get_modes,
+	.mode_valid = it6263_connector_mode_valid,
 };
+
+static int it6263_connector_init(struct it6263 *it6263)
+{
+	struct drm_bridge *bridge = &it6263->bridge;
+	struct drm_device *drm = bridge->dev;
+	int ret;
+
+	if (!drm_core_check_feature(drm, DRIVER_ATOMIC)) {
+		dev_err(&it6263->hdmi_i2c->dev,
+			"it6263 driver only copes with atomic updates\n");
+		return -EOPNOTSUPP;
+	}
+
+	it6263->connector.polled = DRM_CONNECTOR_POLL_CONNECT |
+				   DRM_CONNECTOR_POLL_DISCONNECT;
+	ret = drm_connector_init(drm, &it6263->connector,
+				 &it6263_connector_funcs,
+				 DRM_MODE_CONNECTOR_HDMIA);
+	if (ret) {
+		dev_err(&it6263->hdmi_i2c->dev,
+			"Failed to initialize connector with drm\n");
+		return ret;
+	}
+
+	drm_connector_helper_add(&it6263->connector,
+				 &it6263_connector_helper_funcs);
+	drm_connector_attach_encoder(&it6263->connector, bridge->encoder);
+
+	return 0;
+}
 
 static void it6263_bridge_disable(struct drm_bridge *bridge)
 {
@@ -724,36 +804,15 @@ static int it6263_bridge_attach(struct drm_bridge *bridge,
 				enum drm_bridge_attach_flags flags)
 {
 	struct it6263 *it6263 = bridge_to_it6263(bridge);
-	struct drm_device *drm = bridge->dev;
 	int ret;
 
-	if (flags & DRM_BRIDGE_ATTACH_NO_CONNECTOR) {
-		DRM_ERROR("Fix bridge driver to make connector optional!");
-		return -EINVAL;
+	if (!(flags & DRM_BRIDGE_ATTACH_NO_CONNECTOR)) {
+		ret = it6263_connector_init(it6263);
+		if (ret < 0)
+			return ret;
 	}
 
-	if (!drm_core_check_feature(drm, DRIVER_ATOMIC)) {
-		dev_err(&it6263->hdmi_i2c->dev,
-			"it6263 driver only copes with atomic updates\n");
-		return -ENOTSUPP;
-	}
-
-	it6263->connector.polled = DRM_CONNECTOR_POLL_CONNECT |
-				   DRM_CONNECTOR_POLL_DISCONNECT;
-	ret = drm_connector_init(drm, &it6263->connector,
-				 &it6263_connector_funcs,
-				 DRM_MODE_CONNECTOR_HDMIA);
-	if (ret) {
-		dev_err(&it6263->hdmi_i2c->dev,
-				"Failed to initialize connector with drm\n");
-		return ret;
-	}
-
-	drm_connector_helper_add(&it6263->connector,
-				 &it6263_connector_helper_funcs);
-	drm_connector_attach_encoder(&it6263->connector, bridge->encoder);
-
-	return ret;
+	return 0;
 }
 
 static int it6263_bridge_atomic_check(struct drm_bridge *bridge,
@@ -795,16 +854,49 @@ static u32
 	return input_fmts;
 }
 
+static enum drm_connector_status
+it6263_bridge_detect(struct drm_bridge *bridge)
+{
+	struct it6263 *it6263 = bridge_to_it6263(bridge);
+
+	if (it6263_hpd_is_connected(it6263))
+		return connector_status_connected;
+
+	return connector_status_disconnected;
+}
+
+static const struct drm_edid *
+it6263_bridge_edid_read(struct drm_bridge *bridge,
+			struct drm_connector *connector)
+{
+	struct it6263 *it6263 = bridge_to_it6263(bridge);
+
+	return it6263_get_edid(it6263);
+}
+
+static enum drm_mode_status
+it6263_bridge_mode_valid(struct drm_bridge *bridge,
+			 const struct drm_display_info *info,
+			 const struct drm_display_mode *mode)
+{
+	struct it6263 *it6263 = bridge_to_it6263(bridge);
+
+	return it6263_mode_valid(it6263, mode);
+}
+
 static const struct drm_bridge_funcs it6263_bridge_funcs = {
 	.attach = it6263_bridge_attach,
 	.atomic_duplicate_state = drm_atomic_helper_bridge_duplicate_state,
 	.atomic_destroy_state = drm_atomic_helper_bridge_destroy_state,
 	.atomic_reset = drm_atomic_helper_bridge_reset,
 	.mode_set = it6263_bridge_mode_set,
+	.mode_valid = it6263_bridge_mode_valid,
 	.disable = it6263_bridge_disable,
 	.enable = it6263_bridge_enable,
 	.atomic_check = it6263_bridge_atomic_check,
 	.atomic_get_input_bus_fmts = it6263_bridge_atomic_get_input_bus_fmts,
+	.detect = it6263_bridge_detect,
+	.edid_read = it6263_bridge_edid_read,
 };
 
 static int it6263_check_chipid(struct it6263 *it6263)
@@ -908,8 +1000,7 @@ static const struct regmap_config it6263_lvds_regmap_config = {
 	.cache_type = REGCACHE_NONE,
 };
 
-static int it6263_probe(struct i2c_client *client,
-			const struct i2c_device_id *id)
+static int it6263_probe(struct i2c_client *client)
 {
 	struct device *dev = &client->dev;
 	struct device_node *np = dev->of_node;
@@ -960,6 +1051,8 @@ static int it6263_probe(struct i2c_client *client,
 		goto unregister_lvds_i2c;
 	}
 
+	it6263->de_ssc_enable = of_property_read_bool(np, "de-ssc-enable");
+
 	it6263_reset(it6263);
 
 	ret = regmap_write(it6263->hdmi_regmap, HDMI_REG_SW_RST, HDMI_RST_ALL);
@@ -992,6 +1085,9 @@ static int it6263_probe(struct i2c_client *client,
 
 	it6263->bridge.funcs = &it6263_bridge_funcs;
 	it6263->bridge.of_node = np;
+	it6263->bridge.ops = DRM_BRIDGE_OP_DETECT | DRM_BRIDGE_OP_EDID |
+		DRM_BRIDGE_OP_MODES;
+	it6263->bridge.type = DRM_MODE_CONNECTOR_HDMIA;
 	drm_bridge_add(&it6263->bridge);
 
 	i2c_set_clientdata(client, it6263);
@@ -1005,12 +1101,15 @@ unregister_lvds_i2c:
 
 of_reconfig:
 #if IS_ENABLED(CONFIG_OF_DYNAMIC)
-	endpoint = of_graph_get_next_endpoint(dev->of_node, NULL);
-	if (endpoint)
+	endpoint = of_graph_get_endpoint_by_regs(dev->of_node, 0, -1);
+	if (endpoint) {
 		remote_node = of_graph_get_remote_port_parent(endpoint);
+		of_node_put(endpoint);
+	}
 
 	if (remote_node) {
 		int num_endpoints = 0;
+		struct platform_device *pdev;
 
 		/*
 		 * Remote node should have two endpoints (input and output: us)
@@ -1023,6 +1122,22 @@ of_reconfig:
 			num_endpoints++;
 
 		if (num_endpoints > 2) {
+			of_node_put(remote_node);
+			return ret;
+		}
+
+		/*
+		 * If the remote_node is an actual platform device, turning the node status to
+		 * 'disabled' will actually call device_del() which, in turn, will attempt to
+		 * purge all the supplier-consumer device links. However, in this case, since the
+		 * LDB driver is a supplier to IT6263, the device link is in DL_STATE_CONSUMER_PROBE
+		 * and we get a warning. If the remote node is not a supplier (channel@0,
+		 * lvds-channel@0, etc.) then there are no issues. So, only continue disabling the
+		 * nodes that are not resource suppliers for it6263.
+		 */
+		pdev = of_find_device_by_node(remote_node);
+		if (pdev) {
+			platform_device_put(pdev);
 			of_node_put(remote_node);
 			return ret;
 		}

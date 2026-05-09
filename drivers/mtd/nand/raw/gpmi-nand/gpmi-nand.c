@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL- .0+
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Freescale GPMI NAND Flash Driver
  *
@@ -13,7 +13,7 @@
 #include <linux/module.h>
 #include <linux/mtd/partitions.h>
 #include <linux/of.h>
-#include <linux/of_device.h>
+#include <linux/platform_device.h>
 #include <linux/busfreq-imx.h>
 #include <linux/pm_runtime.h>
 #include <linux/debugfs.h>
@@ -154,11 +154,9 @@ static int gpmi_init(struct gpmi_nand_data *this)
 	struct resources *r = &this->resources;
 	int ret = 0;
 
-	ret = pm_runtime_get_sync(this->dev);
-	if (ret < 0) {
-		pm_runtime_put_noidle(this->dev);
+	ret = pm_runtime_resume_and_get(this->dev);
+	if (ret < 0)
 		return ret;
-	}
 
 	ret = gpmi_reset_block(r->gpmi_regs, false);
 	if (ret)
@@ -735,7 +733,7 @@ static int common_nfc_set_geometry(struct gpmi_nand_data *this)
 	return err;
 }
 
-int bch_create_debugfs(struct gpmi_nand_data *this)
+static int bch_create_debugfs(struct gpmi_nand_data *this)
 {
 	struct bch_geometry *bch_geo = &this->bch_geometry;
 	struct dentry *dbg_root;
@@ -1022,8 +1020,7 @@ static int gpmi_setup_interface(struct nand_chip *chip, int chipnr,
 		return PTR_ERR(sdr);
 
 	/* Only MX28/MX6 GPMI controller can reach EDO timings */
-	if (sdr->tRC_min <= 25000 && !GPMI_IS_MX28(this) &&
-	    !(GPMI_IS_MX6(this) || GPMI_IS_MX8(this)))
+	if (sdr->tRC_min <= 25000 && !this->devdata->support_edo_timing)
 		return -ENOTSUPP;
 
 	/* Stop here if this call was just a check */
@@ -1182,6 +1179,7 @@ static const struct gpmi_devdata gpmi_devdata_imx28 = {
 	.type = IS_MX28,
 	.bch_max_ecc_strength = 20,
 	.max_chain_delay = 16000,
+	.support_edo_timing = true,
 	.clks = gpmi_clks_for_mx2x,
 	.clks_count = ARRAY_SIZE(gpmi_clks_for_mx2x),
 };
@@ -1194,6 +1192,7 @@ static const struct gpmi_devdata gpmi_devdata_imx6q = {
 	.type = IS_MX6Q,
 	.bch_max_ecc_strength = 40,
 	.max_chain_delay = 12000,
+	.support_edo_timing = true,
 	.clks = gpmi_clks_for_mx6,
 	.clks_count = ARRAY_SIZE(gpmi_clks_for_mx6),
 };
@@ -1202,6 +1201,7 @@ static const struct gpmi_devdata gpmi_devdata_imx6qp = {
 	.type = IS_MX6QP,
 	.bch_max_ecc_strength = 40,
 	.max_chain_delay = 12000,
+	.support_edo_timing = true,
 	.clks = gpmi_clks_for_mx6,
 	.clks_count = ARRAY_SIZE(gpmi_clks_for_mx6),
 };
@@ -1210,22 +1210,7 @@ static const struct gpmi_devdata gpmi_devdata_imx6sx = {
 	.type = IS_MX6SX,
 	.bch_max_ecc_strength = 62,
 	.max_chain_delay = 12000,
-	.clks = gpmi_clks_for_mx6,
-	.clks_count = ARRAY_SIZE(gpmi_clks_for_mx6),
-};
-
-static const struct gpmi_devdata gpmi_devdata_imx6ul = {
-	.type = IS_MX6UL,
-	.bch_max_ecc_strength = 40,
-	.max_chain_delay = 12000,
-	.clks = gpmi_clks_for_mx6,
-	.clks_count = ARRAY_SIZE(gpmi_clks_for_mx6),
-};
-
-static const struct gpmi_devdata gpmi_devdata_imx6ull = {
-	.type = IS_MX6ULL,
-	.bch_max_ecc_strength = 40,
-	.max_chain_delay = 12000,
+	.support_edo_timing = true,
 	.clks = gpmi_clks_for_mx6,
 	.clks_count = ARRAY_SIZE(gpmi_clks_for_mx6),
 };
@@ -1238,9 +1223,11 @@ static const struct gpmi_devdata gpmi_devdata_imx7d = {
 	.type = IS_MX7D,
 	.bch_max_ecc_strength = 62,
 	.max_chain_delay = 12000,
+	.support_edo_timing = true,
 	.clks = gpmi_clks_for_mx7d,
 	.clks_count = ARRAY_SIZE(gpmi_clks_for_mx7d),
 };
+
 static const char * gpmi_clks_for_mx8qxp[GPMI_CLK_MAX] = {
 	"gpmi_clk", "gpmi_apb_clk", "bch_clk", "bch_apb_clk",
 };
@@ -1249,6 +1236,7 @@ static const struct gpmi_devdata gpmi_devdata_imx8qxp = {
 	.type = IS_MX8QXP,
 	.bch_max_ecc_strength = 62,
 	.max_chain_delay = 12000,
+	.support_edo_timing = true,
 	.clks = gpmi_clks_for_mx8qxp,
 	.clks_count = ARRAY_SIZE(gpmi_clks_for_mx8qxp),
 };
@@ -2578,11 +2566,9 @@ static int gpmi_nfc_exec_op(struct nand_chip *chip,
 	for (i = 0; i < GPMI_MAX_TRANSFERS; i++)
 		this->transfers[i].direction = DMA_NONE;
 
-	ret = pm_runtime_get_sync(this->dev);
-	if (ret < 0) {
-		pm_runtime_put_noidle(this->dev);
+	ret = pm_runtime_resume_and_get(this->dev);
+	if (ret < 0)
 		return ret;
-	}
 
 	/*
 	 * This driver currently supports only one NAND chip. Plus, dies share
@@ -2806,8 +2792,6 @@ static const struct of_device_id gpmi_nand_id_table[] = {
 	{ .compatible = "fsl,imx6qp-gpmi-nand", .data = &gpmi_devdata_imx6qp, },
 	{ .compatible = "fsl,imx6sx-gpmi-nand", .data = &gpmi_devdata_imx6sx, },
 	{ .compatible = "fsl,imx7d-gpmi-nand", .data = &gpmi_devdata_imx7d, },
-	{ .compatible = "fsl,imx6ul-gpmi-nand", .data = &gpmi_devdata_imx6ul, },
-	{ .compatible = "fsl,imx6ull-gpmi-nand", .data = &gpmi_devdata_imx6ull, },
 	{ .compatible = "fsl,imx8qxp-gpmi-nand", .data = &gpmi_devdata_imx8qxp, },
 	{}
 };
@@ -2856,7 +2840,7 @@ exit_acquire_resources:
 	return ret;
 }
 
-static int gpmi_nand_remove(struct platform_device *pdev)
+static void gpmi_nand_remove(struct platform_device *pdev)
 {
 	struct gpmi_nand_data *this = platform_get_drvdata(pdev);
 	struct nand_chip *chip = &this->nand;
@@ -2869,7 +2853,6 @@ static int gpmi_nand_remove(struct platform_device *pdev)
 	nand_cleanup(chip);
 	gpmi_free_dma_buffer(this);
 	release_resources(this);
-	return 0;
 }
 
 #ifdef CONFIG_PM_SLEEP
@@ -2966,7 +2949,7 @@ static struct platform_driver gpmi_nand_driver = {
 		.of_match_table = gpmi_nand_id_table,
 	},
 	.probe   = gpmi_nand_probe,
-	.remove  = gpmi_nand_remove,
+	.remove_new = gpmi_nand_remove,
 };
 module_platform_driver(gpmi_nand_driver);
 

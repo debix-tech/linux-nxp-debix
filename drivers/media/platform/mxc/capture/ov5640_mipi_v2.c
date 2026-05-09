@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2011-2016 Freescale Semiconductor, Inc. All Rights Reserved.
  *
- * Copyright 2018-2019 NXP
+ * Copyright 2018-2025 NXP
  *
  */
 
@@ -419,11 +419,9 @@ static struct ov5640_mode_info ov5640_mode_info_data[2][ov5640_mode_MAX + 1] = {
 static struct regulator *io_regulator;
 static struct regulator *core_regulator;
 static struct regulator *analog_regulator;
-static struct regulator *gpo_regulator;
 static DEFINE_MUTEX(ov5640_mutex);
 
-static int ov5640_probe(struct i2c_client *adapter,
-				const struct i2c_device_id *device_id);
+static int ov5640_probe(struct i2c_client *adapter);
 static void ov5640_remove(struct i2c_client *client);
 
 static s32 ov5640_read_reg(struct ov5640 *sensor, u16 reg, u8 *val);
@@ -636,9 +634,6 @@ static void ov5640_regualtor_disable(void)
 
 	if (io_regulator)
 		regulator_disable(io_regulator);
-
-	if (gpo_regulator)
-		regulator_disable(gpo_regulator);
 }
 
 static s32 ov5640_write_reg(struct ov5640 *sensor, u16 reg, u8 val)
@@ -1222,8 +1217,7 @@ static int ov5640_init_mode(struct ov5640 *sensor,
 	int retval = 0;
 	enum ov5640_downsize_mode dn_mode, orig_dn_mode;
 
-	if ((mode > ov5640_mode_MAX || mode < ov5640_mode_MIN)
-		&& (mode != ov5640_mode_INIT)) {
+	if ((mode > ov5640_mode_MAX) && (mode != ov5640_mode_INIT)) {
 		dev_err(dev, "Wrong ov5640 mode detected!\n");
 		return -1;
 	}
@@ -1294,9 +1288,6 @@ static int ov5640_s_power(struct v4l2_subdev *sd, int on)
 				return -EIO;
 		if (core_regulator)
 			if (regulator_enable(core_regulator) != 0)
-				return -EIO;
-		if (gpo_regulator)
-			if (regulator_enable(gpo_regulator) != 0)
 				return -EIO;
 		if (analog_regulator)
 			if (regulator_enable(analog_regulator) != 0)
@@ -1687,8 +1678,7 @@ static void ov5640_adjust_setting_20mhz(void)
  * @param adapter            struct i2c_adapter *
  * @return  Error code indicating success or failure
  */
-static int ov5640_probe(struct i2c_client *client,
-			const struct i2c_device_id *id)
+static int ov5640_probe(struct i2c_client *client)
 {
 	struct pinctrl *pinctrl;
 	struct device *dev = &client->dev;
@@ -1848,7 +1838,7 @@ static void ov5640_remove(struct i2c_client *client)
 
 	ov5640_power_down(sensor, 1);
 
-	ov5640_regualtor_disable();
+	ov5640_s_power(sd, false);
 }
 
 module_i2c_driver(ov5640_i2c_driver);

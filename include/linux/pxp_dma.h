@@ -48,10 +48,9 @@ struct pxp_channel {
 #define to_tx_desc(tx) container_of(tx, struct pxp_tx_desc, txd)
 #define to_pxp_channel(d) container_of(d, struct pxp_channel, dma_chan)
 
-void pxp_txd_ack(struct dma_async_tx_descriptor *txd,
-		 struct pxp_channel *pxp_chan);
+void pxp_get_collision_info(struct pxp_collision_info *info);
 
-#ifdef CONFIG_MXC_PXP_CLIENT_DEVICE
+#if IS_ENABLED(CONFIG_MXC_PXP_CLIENT_DEVICE)
 int register_pxp_device(void);
 void unregister_pxp_device(void);
 #else

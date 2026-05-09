@@ -3,10 +3,19 @@
  * Archs are free to supply their own linker scripts.  ld will
  * combine them automatically.
  */
+#ifdef CONFIG_UNWIND_TABLES
+#define DISCARD_EH_FRAME
+#else
+#define DISCARD_EH_FRAME	*(.eh_frame)
+#endif
+
+#include <asm-generic/codetag.lds.h>
+
 SECTIONS {
 	/DISCARD/ : {
 		*(.discard)
 		*(.discard.*)
+		*(.export_symbol)
 	}
 
 	__ksymtab		0 : { *(SORT(___ksymtab+*)) }
@@ -41,11 +50,16 @@ SECTIONS {
 	.data : {
 		*(.data .data.[0-9a-zA-Z_]*)
 		*(.data..L*)
+		CODETAG_SECTIONS()
 	}
 
 	.rodata : {
 		*(.rodata .rodata.[0-9a-zA-Z_]*)
 		*(.rodata..L*)
+	}
+#else
+	.data : {
+		CODETAG_SECTIONS()
 	}
 #endif
 }

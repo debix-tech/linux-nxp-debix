@@ -51,7 +51,7 @@
 	};
 
 	wm8524: audio-codec {
-		status = "disabled";
+		clocks = <&clk IMX8MN_CLK_SAI3_ROOT>;
 	};
 
 	rpmsg_audio: rpmsg_audio {
@@ -68,6 +68,7 @@
 			 <&clk IMX8MN_AUDIO_PLL1_OUT>,
 			 <&clk IMX8MN_AUDIO_PLL2_OUT>;
 		clock-names = "ipg", "mclk", "dma", "pll8k", "pll11k";
+		audio-codec = <&wm8524>;
 		status = "okay";
 	};
 
@@ -79,7 +80,8 @@
 		mboxes = <&mu 0 1
 			  &mu 1 1
 			  &mu 3 1>;
-		memory-region = <&vdevbuffer>, <&vdev0vring0>, <&vdev0vring1>, <&rsc_table>;
+		memory-region = <&vdevbuffer>, <&vdev0vring0>, <&vdev0vring1>, <&rsc_table>,
+				<&m_core_reserved>;
 		status = "okay";
 	};
 };

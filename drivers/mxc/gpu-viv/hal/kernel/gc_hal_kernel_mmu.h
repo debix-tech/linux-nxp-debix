@@ -2,7 +2,7 @@
 *
 *    The MIT License (MIT)
 *
-*    Copyright (c) 2014 - 2023 Vivante Corporation
+*    Copyright (c) 2014 - 2024 Vivante Corporation
 *
 *    Permission is hereby granted, free of charge, to any person obtaining a
 *    copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@
 *
 *    The GPL License (GPL)
 *
-*    Copyright (C) 2014 - 2023 Vivante Corporation
+*    Copyright (C) 2014 - 2024 Vivante Corporation
 *
 *    This program is free software; you can redistribute it and/or
 *    modify it under the terms of the GNU General Public License
@@ -52,7 +52,6 @@
 *
 *****************************************************************************/
 
-
 #ifndef _gc_hal_kenrel_mmu_h_
 #define _gc_hal_kenrel_mmu_h_
 
@@ -67,6 +66,18 @@
 #    define gcdENABLE_40BIT_VA      0
 #endif
 #define gcd4G_VA_FM_SIZE            0x40000000
+
+#ifndef gcdCONTEXT_SWITCH_FORCE_USC_RESET
+#define gcdCONTEXT_SWITCH_FORCE_USC_RESET 1
+#endif
+
+#ifndef gcdDEBUG_MMU_SWITCH
+#define gcdDEBUG_MMU_SWITCH         2
+#endif
+
+#ifndef gcdMMU_DESC_SIZE
+#define gcdMMU_DESC_SIZE            (1 << 16)
+#endif
 
 /*******************************************************************************
  ***** New MMU Defination ******************************************************/
@@ -266,6 +277,7 @@ typedef struct _gcsADDRESS_AREA {
     gctUINT32                   mappingEnd;
 
     gctUINT32_PTR               mapLogical;
+    gctUINT32                   usedIndex;
 } gcsADDRESS_AREA;
 
 /* gckMMU object. */
@@ -334,6 +346,7 @@ struct _gckMMU {
     gceMMU_INIT_MODE            initMode;
     gctBOOL                     pageTableOver4G;
 
+    gctBOOL                     flatMapping;
     gcePAGE_TYPE                flatMappingMode;
 
     /* If the stlb is allocated when page size is 16M . */
@@ -341,6 +354,13 @@ struct _gckMMU {
 
     /* The reserve size in page table. */
     gctSIZE_T                   reserveRangeSize;
+    gcsLISTHEAD                 nodeList;
+    gctPOINTER                  nodeListMutex;
+
+    gctUINT32                   descIndex;
+    gctUINT32                   pid;
+
+    gctBOOL                     needRestore;
 };
 
 gceSTATUS
@@ -357,5 +377,35 @@ gckMMU_SetupDynamicSpace(IN gckMMU Mmu);
 
 void
 gckMMU_DumpRecentFreedAddress(IN gckMMU Mmu);
+
+void
+gckMMU_CheckSaftPage(gckMMU Mmu);
+
+void
+gckMMU_DumpAddressSpace(gckMMU Mmu);
+
+gceSTATUS
+gckMMU_DestroyProcessMMU(IN gckMMU Mmu);
+
+gceSTATUS
+gckMMU_ConstructProcessMMU(IN gckKERNEL Kernel, IN gctUINT32 ProcessID, OUT gckMMU *Mmu);
+
+gceSTATUS
+gckMMU_CopyDynamicAreas(IN gckKERNEL Kernel, IN gckMMU dstMMU);
+
+gceSTATUS
+gckMMU_SwitchMtlb(IN gckMMU dstMMU, IN gckMMU srcMMU);
+
+gceSTATUS
+gckMMU_AttachNode(IN gckMMU Mmu, IN gcuVIDMEM_NODE_PTR Node);
+
+gceSTATUS
+gckMMU_DetachNode(IN gckMMU Mmu, IN gcuVIDMEM_NODE_PTR Node);
+
+gceSTATUS
+gckMMU_DestroyMmuCopy(IN gckMMU Mmu);
+
+gceSTATUS
+gckMMU_ConstructMmuCopy(IN gckKERNEL Kernel, OUT gckMMU *MmuCopy);
 
 #endif /* _gc_hal_kernel_mmu_h */

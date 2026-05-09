@@ -17,7 +17,7 @@
 
 #include <drm/drm_fourcc.h>
 #include <video/dpu.h>
-#include "../imx-drm.h"
+#include "imx-drm.h"
 
 #define MAX_DPU_PLANE_GRP	(MAX_CRTC / 2)
 
@@ -60,12 +60,6 @@ struct dpu_plane_state {
 	bool			is_right_top;
 };
 
-static const lb_prim_sel_t cf_stages[] = {LB_PRIM_SEL__CONSTFRAME0,
-					  LB_PRIM_SEL__CONSTFRAME1};
-static const lb_prim_sel_t stages[] = {LB_PRIM_SEL__LAYERBLEND0,
-				       LB_PRIM_SEL__LAYERBLEND1,
-				       LB_PRIM_SEL__LAYERBLEND2,
-				       LB_PRIM_SEL__LAYERBLEND3};
 /* TODO: Add source entries for subsidiary layers. */
 static const lb_sec_sel_t sources[] = {LB_SEC_SEL__FETCHLAYER0,
 				       LB_SEC_SEL__FETCHWARP2,

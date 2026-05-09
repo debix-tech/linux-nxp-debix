@@ -10,8 +10,8 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/dma-map-ops.h>
-#include <linux/of_device.h>
-#include <linux/of_address.h>
+#include <linux/of.h>
+#include <linux/of_platform.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 #include <linux/types.h>
@@ -138,6 +138,7 @@ static int vpu_probe(struct platform_device *pdev)
 	if (ret)
 		goto err_vpu_media;
 	vpu->debugfs = debugfs_create_dir("amphion_vpu", NULL);
+	vpu->recorder = imx_mur_create_node(NULL, "amphion-vpu");
 
 	of_platform_populate(dev->of_node, NULL, NULL, dev);
 
@@ -151,13 +152,13 @@ err_add_decoder:
 	media_device_cleanup(&vpu->mdev);
 	v4l2_device_unregister(&vpu->v4l2_dev);
 err_vpu_deinit:
-	pm_runtime_set_suspended(dev);
 	pm_runtime_disable(dev);
+	pm_runtime_set_suspended(dev);
 
 	return ret;
 }
 
-static int vpu_remove(struct platform_device *pdev)
+static void vpu_remove(struct platform_device *pdev)
 {
 	struct vpu_dev *vpu = platform_get_drvdata(pdev);
 	struct device *dev = &pdev->dev;
@@ -173,8 +174,7 @@ static int vpu_remove(struct platform_device *pdev)
 	media_device_cleanup(&vpu->mdev);
 	v4l2_device_unregister(&vpu->v4l2_dev);
 	mutex_destroy(&vpu->lock);
-
-	return 0;
+	imx_mur_destroy_node(vpu->recorder);
 }
 
 static int __maybe_unused vpu_runtime_resume(struct device *dev)
@@ -229,7 +229,7 @@ MODULE_DEVICE_TABLE(of, vpu_dt_match);
 
 static struct platform_driver amphion_vpu_driver = {
 	.probe = vpu_probe,
-	.remove = vpu_remove,
+	.remove_new = vpu_remove,
 	.driver = {
 		.name = "amphion-vpu",
 		.of_match_table = vpu_dt_match,

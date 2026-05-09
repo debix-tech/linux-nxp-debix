@@ -2,7 +2,7 @@
 *
 *    The MIT License (MIT)
 *
-*    Copyright (c) 2014 - 2023 Vivante Corporation
+*    Copyright (c) 2014 - 2024 Vivante Corporation
 *
 *    Permission is hereby granted, free of charge, to any person obtaining a
 *    copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@
 *
 *    The GPL License (GPL)
 *
-*    Copyright (C) 2014 - 2023 Vivante Corporation
+*    Copyright (C) 2014 - 2024 Vivante Corporation
 *
 *    This program is free software; you can redistribute it and/or
 *    modify it under the terms of the GNU General Public License
@@ -51,7 +51,6 @@
 *    version of this file.
 *
 *****************************************************************************/
-
 
 #include "gc_hal.h"
 #include "gc_hal_kernel.h"
@@ -208,7 +207,9 @@ gckWLFE_WaitLink(IN gckHARDWARE Hardware,
         /* Command buffer address won't beyond 4GB. */
         gcmkSAFECASTVA(address, Address);
 
-        *logical++ = address;
+        *logical = address;
+
+        gcmkONERROR(gckOS_MemoryBarrier(Hardware->os, logical));
 
         gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_HARDWARE, "0x%x: WAIT %u",
                        address, Hardware->waitCount);
@@ -524,6 +525,8 @@ gckWLFE_Link(IN gckHARDWARE Hardware,
     gcmkASSERT(Hardware->wlFE);
 
     if (Logical != gcvNULL) {
+        gctSIZE_T prefetchCount;
+
         if (*Bytes < 8) {
             /* Command queue too small. */
             gcmkONERROR(gcvSTATUS_BUFFER_TOO_SMALL);
@@ -542,12 +545,14 @@ gckWLFE_Link(IN gckHARDWARE Hardware,
         /* Compute number of 64-byte aligned bytes to fetch. */
         bytes = gcmALIGN(address + FetchSize, 64) - address;
 
+        prefetchCount = (Hardware->supportUscReset) ? (bytes >> 3) | 0x100 : (bytes >> 3);
+
         /* Append LINK(bytes / 8), FetchAddress. */
         link = ((((gctUINT32) (0)) & ~(((gctUINT32) (((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) ==
  32) ? ~0U : (~(~0U << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27))) | (((gctUINT32) (0x08 & ((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) ==
  32) ? ~0U : (~(~0U << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27))) |
                     ((((gctUINT32) (0)) & ~(((gctUINT32) (((gctUINT32) ((((1 ? 15:0) - (0 ? 15:0) + 1) ==
- 32) ? ~0U : (~(~0U << ((1 ? 15:0) - (0 ? 15:0) + 1))))))) << (0 ? 15:0))) | (((gctUINT32) ((gctUINT32) (bytes >> 3) & ((gctUINT32) ((((1 ? 15:0) - (0 ? 15:0) + 1) ==
+ 32) ? ~0U : (~(~0U << ((1 ? 15:0) - (0 ? 15:0) + 1))))))) << (0 ? 15:0))) | (((gctUINT32) ((gctUINT32) (prefetchCount) & ((gctUINT32) ((((1 ? 15:0) - (0 ? 15:0) + 1) ==
  32) ? ~0U : (~(~0U << ((1 ? 15:0) - (0 ? 15:0) + 1))))))) << (0 ? 15:0)));
 
         gcmkONERROR(gckOS_WriteMemory(Hardware->os, logical, link));

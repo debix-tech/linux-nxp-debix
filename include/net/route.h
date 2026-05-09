@@ -27,6 +27,7 @@
 #include <net/ip_fib.h>
 #include <net/arp.h>
 #include <net/ndisc.h>
+#include <net/inet_dscp.h>
 #include <linux/in_route.h>
 #include <linux/rtnetlink.h>
 #include <linux/rcupdate.h>
@@ -34,14 +35,6 @@
 #include <linux/ip.h>
 #include <linux/cache.h>
 #include <linux/security.h>
-
-/* IPv4 datagram length is stored into 16bit field (tot_len) */
-#define IP_MAX_MTU	0xFFFFU
-
-#define RTO_ONLINK	0x01
-
-#define RT_CONN_FLAGS(sk)   (RT_TOS(inet_sk(sk)->tos) | sock_flag(sk, SOCK_LOCALROUTE))
-#define RT_CONN_FLAGS_TOS(sk,tos)   (RT_TOS(tos) | sock_flag(sk, SOCK_LOCALROUTE))
 
 static inline __u8 ip_sock_rt_scope(const struct sock *sk)
 {
@@ -53,7 +46,7 @@ static inline __u8 ip_sock_rt_scope(const struct sock *sk)
 
 static inline __u8 ip_sock_rt_tos(const struct sock *sk)
 {
-	return RT_TOS(inet_sk(sk)->tos);
+	return READ_ONCE(inet_sk(sk)->tos) & INET_DSCP_MASK;
 }
 
 struct ip_tunnel_info;
@@ -81,10 +74,18 @@ struct rtable {
 	/* Miscellaneous cached information */
 	u32			rt_mtu_locked:1,
 				rt_pmtu:31;
-
-	struct list_head	rt_uncached;
-	struct uncached_list	*rt_uncached_list;
 };
+
+#define dst_rtable(_ptr) container_of_const(_ptr, struct rtable, dst)
+
+/**
+ * skb_rtable - Returns the skb &rtable
+ * @skb: buffer
+ */
+static inline struct rtable *skb_rtable(const struct sk_buff *skb)
+{
+	return dst_rtable(skb_dst(skb));
+}
 
 static inline bool rt_is_input_route(const struct rtable *rt)
 {
@@ -142,12 +143,6 @@ static inline struct rtable *__ip_route_output_key(struct net *net,
 
 struct rtable *ip_route_output_flow(struct net *, struct flowi4 *flp,
 				    const struct sock *sk);
-struct rtable *ip_route_output_tunnel(struct sk_buff *skb,
-				      struct net_device *dev,
-				      struct net *net, __be32 *saddr,
-				      const struct ip_tunnel_info *info,
-				      u8 protocol, bool use_cache);
-
 struct dst_entry *ipv4_blackhole_route(struct net *net,
 				       struct dst_entry *dst_orig);
 
@@ -156,27 +151,34 @@ static inline struct rtable *ip_route_output_key(struct net *net, struct flowi4 
 	return ip_route_output_flow(net, flp, NULL);
 }
 
+/* Simplistic IPv4 route lookup function.
+ * This is only suitable for some particular use cases: since the flowi4
+ * structure is only partially set, it may bypass some fib-rules.
+ */
 static inline struct rtable *ip_route_output(struct net *net, __be32 daddr,
-					     __be32 saddr, u8 tos, int oif)
+					     __be32 saddr, u8 tos, int oif,
+					     __u8 scope)
 {
 	struct flowi4 fl4 = {
 		.flowi4_oif = oif,
 		.flowi4_tos = tos,
+		.flowi4_scope = scope,
 		.daddr = daddr,
 		.saddr = saddr,
 	};
+
 	return ip_route_output_key(net, &fl4);
 }
 
 static inline struct rtable *ip_route_output_ports(struct net *net, struct flowi4 *fl4,
-						   struct sock *sk,
+						   const struct sock *sk,
 						   __be32 daddr, __be32 saddr,
 						   __be16 dport, __be16 sport,
 						   __u8 proto, __u8 tos, int oif)
 {
-	flowi4_init_output(fl4, oif, sk ? sk->sk_mark : 0, tos,
-			   RT_SCOPE_UNIVERSE, proto,
-			   sk ? inet_sk_flowi_flags(sk) : 0,
+	flowi4_init_output(fl4, oif, sk ? READ_ONCE(sk->sk_mark) : 0, tos,
+			   sk ? ip_sock_rt_scope(sk) : RT_SCOPE_UNIVERSE,
+			   proto, sk ? inet_sk_flowi_flags(sk) : 0,
 			   daddr, saddr, dport, sport, sock_net_uid(net, sk));
 	if (sk)
 		security_sk_classify_flow(sk, flowi4_to_flowi_common(fl4));
@@ -206,12 +208,13 @@ int ip_route_use_hint(struct sk_buff *skb, __be32 dst, __be32 src,
 		      const struct sk_buff *hint);
 
 static inline int ip_route_input(struct sk_buff *skb, __be32 dst, __be32 src,
-				 u8 tos, struct net_device *devin)
+				 dscp_t dscp, struct net_device *devin)
 {
 	int err;
 
 	rcu_read_lock();
-	err = ip_route_input_noref(skb, dst, src, tos, devin);
+	err = ip_route_input_noref(skb, dst, src, inet_dscp_to_dsfield(dscp),
+				   devin);
 	if (!err) {
 		skb_dst_force(skb);
 		if (!skb_dst(skb))
@@ -264,8 +267,6 @@ static inline void ip_rt_put(struct rtable *rt)
 	dst_release(&rt->dst);
 }
 
-#define IPTOS_RT_MASK	(IPTOS_TOS_MASK & ~3)
-
 extern const __u8 ip_tos2prio[16];
 
 static inline char rt_tos2priority(u8 tos)
@@ -304,10 +305,10 @@ static inline void ip_route_connect_init(struct flowi4 *fl4, __be32 dst,
 {
 	__u8 flow_flags = 0;
 
-	if (inet_sk(sk)->transparent)
+	if (inet_test_bit(TRANSPARENT, sk))
 		flow_flags |= FLOWI_FLAG_ANYSRC;
 
-	flowi4_init_output(fl4, oif, sk->sk_mark, ip_sock_rt_tos(sk),
+	flowi4_init_output(fl4, oif, READ_ONCE(sk->sk_mark), ip_sock_rt_tos(sk),
 			   ip_sock_rt_scope(sk), protocol, flow_flags, dst,
 			   src, dport, sport, sk->sk_uid);
 }
@@ -315,7 +316,7 @@ static inline void ip_route_connect_init(struct flowi4 *fl4, __be32 dst,
 static inline struct rtable *ip_route_connect(struct flowi4 *fl4, __be32 dst,
 					      __be32 src, int oif, u8 protocol,
 					      __be16 sport, __be16 dport,
-					      struct sock *sk)
+					      const struct sock *sk)
 {
 	struct net *net = sock_net(sk);
 	struct rtable *rt;
@@ -327,8 +328,7 @@ static inline struct rtable *ip_route_connect(struct flowi4 *fl4, __be32 dst,
 		if (IS_ERR(rt))
 			return rt;
 		ip_rt_put(rt);
-		flowi4_update_output(fl4, oif, fl4->flowi4_tos, fl4->daddr,
-				     fl4->saddr);
+		flowi4_update_output(fl4, oif, fl4->daddr, fl4->saddr);
 	}
 	security_sk_classify_flow(sk, flowi4_to_flowi_common(fl4));
 	return ip_route_output_flow(net, fl4, sk);
@@ -337,14 +337,13 @@ static inline struct rtable *ip_route_connect(struct flowi4 *fl4, __be32 dst,
 static inline struct rtable *ip_route_newports(struct flowi4 *fl4, struct rtable *rt,
 					       __be16 orig_sport, __be16 orig_dport,
 					       __be16 sport, __be16 dport,
-					       struct sock *sk)
+					       const struct sock *sk)
 {
 	if (sport != orig_sport || dport != orig_dport) {
 		fl4->fl4_dport = dport;
 		fl4->fl4_sport = sport;
 		ip_rt_put(rt);
-		flowi4_update_output(fl4, sk->sk_bound_dev_if,
-				     RT_CONN_FLAGS(sk), fl4->daddr,
+		flowi4_update_output(fl4, sk->sk_bound_dev_if, fl4->daddr,
 				     fl4->saddr);
 		security_sk_classify_flow(sk, flowi4_to_flowi_common(fl4));
 		return ip_route_output_flow(sock_net(sk), fl4, sk);
@@ -365,10 +364,15 @@ static inline int inet_iif(const struct sk_buff *skb)
 static inline int ip4_dst_hoplimit(const struct dst_entry *dst)
 {
 	int hoplimit = dst_metric_raw(dst, RTAX_HOPLIMIT);
-	struct net *net = dev_net(dst->dev);
 
-	if (hoplimit == 0)
+	if (hoplimit == 0) {
+		const struct net *net;
+
+		rcu_read_lock();
+		net = dev_net_rcu(dst->dev);
 		hoplimit = READ_ONCE(net->ipv4.sysctl_ip_default_ttl);
+		rcu_read_unlock();
+	}
 	return hoplimit;
 }
 

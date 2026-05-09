@@ -63,15 +63,18 @@ struct ci_hdrc_platform_data {
 #define CI_HDRC_IMX_IS_HSIC		BIT(14)
 #define CI_HDRC_PMQOS			BIT(15)
 #define CI_HDRC_PHY_VBUS_CONTROL	BIT(16)
+#define CI_HDRC_HAS_PORTSC_PEC_MISSED	BIT(17)
+#define CI_HDRC_FORCE_VBUS_ACTIVE_ALWAYS	BIT(18)
+#define	CI_HDRC_HAS_SHORT_PKT_LIMIT	BIT(19)
 /* PHY enter low power mode when bus suspend */
-#define CI_HDRC_HOST_SUSP_PHY_LPM	BIT(17)
-#define CI_HDRC_HAS_PORTSC_PEC_MISSED	BIT(18)
+#define CI_HDRC_HOST_SUSP_PHY_LPM	BIT(20)
 	enum usb_dr_mode	dr_mode;
 #define CI_HDRC_CONTROLLER_RESET_EVENT		0
 #define CI_HDRC_CONTROLLER_STOPPED_EVENT	1
 #define CI_HDRC_IMX_HSIC_ACTIVE_EVENT		2
 #define CI_HDRC_IMX_HSIC_SUSPEND_EVENT		3
 #define CI_HDRC_CONTROLLER_VBUS_EVENT		4
+#define CI_HDRC_CONTROLLER_PULLUP_EVENT		5
 	int	(*notify_event) (struct ci_hdrc *ci, unsigned event);
 	struct regulator	*reg_vbus;
 	struct usb_otg_caps	ci_otg_caps;
@@ -111,6 +114,5 @@ struct platform_device *ci_hdrc_add_device(struct device *dev,
 void ci_hdrc_remove_device(struct platform_device *pdev);
 /* Get current available role */
 enum usb_dr_mode ci_hdrc_query_available_role(struct platform_device *pdev);
-int hw_controller_reset(struct ci_hdrc *ci);
 
 #endif

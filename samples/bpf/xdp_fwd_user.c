@@ -76,9 +76,9 @@ static int do_detach(int ifindex, const char *ifname, const char *app_name)
 		return prog_fd;
 	}
 
-	err = bpf_obj_get_info_by_fd(prog_fd, &prog_info, &info_len);
+	err = bpf_prog_get_info_by_fd(prog_fd, &prog_info, &info_len);
 	if (err) {
-		printf("ERROR: bpf_obj_get_info_by_fd failed (%s)\n",
+		printf("ERROR: bpf_prog_get_info_by_fd failed (%s)\n",
 		       strerror(errno));
 		goto close_out;
 	}
@@ -170,8 +170,9 @@ int main(int argc, char **argv)
 		if (libbpf_get_error(obj))
 			return 1;
 
-		prog = bpf_object__next_program(obj, NULL);
-		bpf_program__set_type(prog, BPF_PROG_TYPE_XDP);
+		bpf_object__for_each_program(pos, obj) {
+			bpf_program__set_type(pos, BPF_PROG_TYPE_XDP);
+		}
 
 		err = bpf_object__load(obj);
 		if (err) {

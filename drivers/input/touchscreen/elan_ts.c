@@ -65,6 +65,7 @@ static struct elan_data {
 static int elan_touch_detect_int_level(void)
 {
 	int v;
+
 	v = gpio_get_value(elan_touch_data.intr_gpio);
 
 	return v;
@@ -104,6 +105,7 @@ static int __hello_packet_handler(struct i2c_client *client)
 		return rc;
 	} else {
 		int i;
+
 		pr_info("hello packet: [0x%02x 0x%02x 0x%02x 0x%02x]\n",
 		       buf_recv[0], buf_recv[1], buf_recv[2], buf_recv[3]);
 
@@ -144,6 +146,7 @@ static inline int elan_touch_parse_xy(uint8_t *data, uint16_t *x,
 static int __elan_touch_init(struct i2c_client *client)
 {
 	int rc;
+
 	rc = __hello_packet_handler(client);
 	if (rc < 0)
 		goto hand_shake_failed;
@@ -269,8 +272,7 @@ static int elan_touch_register_interrupt(struct i2c_client *client)
 	return 0;
 }
 
-static int elan_touch_probe(struct i2c_client *client,
-			    const struct i2c_device_id *id)
+static int elan_touch_probe(struct i2c_client *client)
 {
 	struct device_node *np = client->dev.of_node;
 	int gpio_elan_cs, gpio_elan_rst, err = 0;
@@ -329,7 +331,7 @@ static int elan_touch_probe(struct i2c_client *client,
 	}
 
 	elan_touch_data.client = client;
-	strlcpy(client->name, ELAN_TS_NAME, I2C_NAME_SIZE);
+	strscpy(client->name, ELAN_TS_NAME, I2C_NAME_SIZE);
 
 	INIT_WORK(&elan_touch_data.work, elan_touch_work_func);
 
@@ -426,7 +428,7 @@ static int elan_resume(struct device *dev)
 		/*
 		 * if touch screen during suspend, recv and drop the
 		 * data, then touch interrupt pin will return high after
-		 * receving data.
+		 * receiving data.
 		 */
 		elan_touch_recv_data(elan_touch_data.client, buf);
 	}

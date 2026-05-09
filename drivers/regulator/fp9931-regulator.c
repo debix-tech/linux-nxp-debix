@@ -22,7 +22,7 @@ struct fp9931_data {
 };
 
 /* array size is 0x40 */
-const static int fp9931_vpos_vneg_voltages[] = {
+static const int fp9931_vpos_vneg_voltages[] = {
 	/* in uV */
 	7040000,
 	7040000,
@@ -549,9 +549,8 @@ static int fp9931_regulator_probe(struct platform_device *pdev)
 	return fp9931_config_power_on_delays(fp9931);
 }
 
-static int fp9931_regulator_remove(struct platform_device *pdev)
+static void fp9931_regulator_remove(struct platform_device *pdev)
 {
-	return 0;
 }
 
 static const struct platform_device_id fp9931_pmic_id[] = {

@@ -6,7 +6,7 @@
  *
  * I2C slave address: 0x69
  */
-#include <asm/unaligned.h>
+#include <linux/unaligned.h>
 #include <linux/crc8.h>
 #include <linux/delay.h>
 #include <linux/device.h>
@@ -68,10 +68,10 @@ static int sps30_i2c_command(struct sps30_state *state, u16 cmd, void *arg, size
 	/*
 	 * Internally sensor stores measurements in a following manner:
 	 *
-	 * PM1: upper two bytes, crc8, lower two bytes, crc8
+	 * PM1:   upper two bytes, crc8, lower two bytes, crc8
 	 * PM2P5: upper two bytes, crc8, lower two bytes, crc8
-	 * PM4: upper two bytes, crc8, lower two bytes, crc8
-	 * PM10: upper two bytes, crc8, lower two bytes, crc8
+	 * PM4:   upper two bytes, crc8, lower two bytes, crc8
+	 * PM10:  upper two bytes, crc8, lower two bytes, crc8
 	 *
 	 * What follows next are number concentration measurements and
 	 * typical particle size measurement which we omit.
@@ -249,7 +249,7 @@ static struct i2c_driver sps30_i2c_driver = {
 		.of_match_table = sps30_i2c_of_match,
 	},
 	.id_table = sps30_i2c_id,
-	.probe_new = sps30_i2c_probe,
+	.probe = sps30_i2c_probe,
 };
 module_i2c_driver(sps30_i2c_driver);
 

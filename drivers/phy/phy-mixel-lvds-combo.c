@@ -194,7 +194,7 @@ static int mixel_lvds_combo_phy_init(struct phy *phy)
 	mutex_lock(&lvds_phy->lock);
 	val = phy_csr_read(phy, PHY_CTRL);
 	val &= ~(CCM_MASK | CA_MASK);
-	val |= (CCM(0x5) | CA(0x4) | RFB);
+	val |= (CCM(0x6) | CA(0x4) | RFB);
 	phy_csr_write(phy, PHY_CTRL, val);
 
 	val = phy_csr_read(phy, DPI);
@@ -316,11 +316,9 @@ static int mixel_lvds_combo_phy_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int mixel_lvds_combo_phy_remove(struct platform_device *pdev)
+static void mixel_lvds_combo_phy_remove(struct platform_device *pdev)
 {
 	pm_runtime_disable(&pdev->dev);
-
-	return 0;
 }
 
 static const struct of_device_id mixel_lvds_combo_phy_of_match[] = {

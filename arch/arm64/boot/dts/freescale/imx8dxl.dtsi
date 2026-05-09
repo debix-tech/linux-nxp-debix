@@ -71,6 +71,8 @@
 
 		A35_L2: l2-cache0 {
 			compatible = "cache";
+			cache-level = <2>;
+			cache-unified;
 		};
 	};
 
@@ -92,24 +94,18 @@
 		};
 	};
 
-	cm4 {
-		#address-cells = <1>;
-		#size-cells = <0>;
-		compatible = "simple-bus";
-
-		imx8dxl_cm4: imx8dxl_cm4@0 {
-			compatible = "fsl,imx8qxp-cm4";
-			rsc-da = <0x90000000>;
-			mbox-names = "tx", "rx", "rxdb";
-			mboxes = <&lsio_mu5 0 1
-				  &lsio_mu5 1 1
-				  &lsio_mu5 3 1>;
-			fsl,resource-id = <IMX_SC_R_M4_0_PID0>;
-			fsl,entry-address = <0x34fe0000>;
-			status = "disabled";
-			power-domains = <&pd IMX_SC_R_M4_0_PID0>,
-					<&pd IMX_SC_R_M4_0_MU_1A>;
-		};
+	imx8dxl_cm4: imx8dxl_cm4 {
+		compatible = "fsl,imx8qxp-cm4";
+		rsc-da = <0x90000000>;
+		mbox-names = "tx", "rx", "rxdb";
+		mboxes = <&lsio_mu5 0 1
+			  &lsio_mu5 1 1
+			  &lsio_mu5 3 1>;
+		fsl,resource-id = <IMX_SC_R_M4_0_PID0>;
+		fsl,entry-address = <0x34fe0000>;
+		status = "disabled";
+		power-domains = <&pd IMX_SC_R_M4_0_PID0>,
+				<&pd IMX_SC_R_M4_0_MU_1A>;
 	};
 
 	gic: interrupt-controller@51a00000 {
@@ -152,15 +148,19 @@
 			  &lsio_mu1 3 3>;
 
 		pd: power-controller {
-			compatible = "fsl,scu-pd";
+			compatible = "fsl,imx8dl-scu-pd", "fsl,scu-pd";
 			#power-domain-cells = <1>;
-			wakeup-irq = <160 163 235 236 237 228 229 230 231 238
-				     239 240 166 169>;
 		};
 
 		clk: clock-controller {
 			compatible = "fsl,imx8dxl-clk", "fsl,scu-clk";
 			#clock-cells = <2>;
+		};
+
+		scu_gpio: gpio {
+			compatible = "fsl,imx8qxp-sc-gpio";
+			gpio-controller;
+			#gpio-cells = <2>;
 		};
 
 		iomuxc: pinctrl {
@@ -185,6 +185,11 @@
 			compatible = "fsl,imx8qxp-sc-rtc";
 		};
 
+		secvio: secvio {
+			compatible = "fsl,imx-sc-secvio";
+			nvmem = <&ocotp>;
+		};
+
 		sc_pwrkey: keys {
 			compatible = "fsl,imx8qxp-sc-key", "fsl,imx-sc-key";
 			linux,keycodes = <KEY_POWER>;
@@ -192,12 +197,12 @@
 		};
 
 		watchdog {
-			compatible = "fsl,imx-sc-wdt";
+			compatible = "fsl,imx8dxl-sc-wdt", "fsl,imx-sc-wdt";
 			timeout-sec = <60>;
 		};
 
 		tsens: thermal-sensor {
-			compatible = "fsl,imx-sc-thermal";
+			compatible = "fsl,imx8dxl-sc-thermal", "fsl,imx-sc-thermal";
 			#thermal-sensor-cells = <1>;
 		};
 	};
@@ -211,7 +216,7 @@
 	};
 
 	thermal_zones: thermal-zones {
-		cpu-thermal0 {
+		cpu-thermal {
 			polling-delay-passive = <250>;
 			polling-delay = <2000>;
 			thermal-sensors = <&tsens IMX_SC_R_SYSTEM>;

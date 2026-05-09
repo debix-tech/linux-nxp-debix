@@ -116,8 +116,6 @@ typedef enum e_FmMacStatisticsLevel {
     e_FM_MAC_FULL_STATISTICS            /**< All counters available; Not optimized for performance */
 } e_FmMacStatisticsLevel;
 
-
-#if (DPAA_VERSION >= 11)
 /**************************************************************************//**
  @Description   Priority Flow Control Parameters
 *//***************************************************************************/
@@ -130,7 +128,6 @@ typedef struct t_FmMacPfcParams {
 
 
 } t_FmMacPfcParams;
-#endif /* (DPAA_VERSION >= 11) */
 
 /**************************************************************************//**
  @Function      t_FmMacExceptionCallback
@@ -251,6 +248,7 @@ typedef struct t_FmMacParams {
     t_FmMacExceptionCallback    *f_Exception;       /**< Exception Callback Routine         */
     t_Handle                    h_App;              /**< A handle to an application layer object; This handle will
                                                          be passed by the driver upon calling the above callbacks */
+    bool                        fixed;              /**< Specifies whether MAC has a fixed-link */
 } t_FmMacParams;
 
 

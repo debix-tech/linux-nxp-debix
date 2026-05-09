@@ -2,7 +2,7 @@
 *
 *    The MIT License (MIT)
 *
-*    Copyright (c) 2014 - 2023 Vivante Corporation
+*    Copyright (c) 2014 - 2024 Vivante Corporation
 *
 *    Permission is hereby granted, free of charge, to any person obtaining a
 *    copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@
 *
 *    The GPL License (GPL)
 *
-*    Copyright (C) 2014 - 2023 Vivante Corporation
+*    Copyright (C) 2014 - 2024 Vivante Corporation
 *
 *    This program is free software; you can redistribute it and/or
 *    modify it under the terms of the GNU General Public License
@@ -51,7 +51,6 @@
 *    version of this file.
 *
 *****************************************************************************/
-
 
 #if gcdENABLE_DRM
 
@@ -114,7 +113,7 @@ struct dma_buf *viv_gem_prime_export(struct drm_device *drm, struct drm_gem_obje
     return dmabuf;
 }
 
-struct drm_gem_object *viv_gem_prime_import(struct drm_device *drm, struct dma_buf *dmabuf)
+static struct drm_gem_object *viv_gem_prime_import(struct drm_device *drm, struct dma_buf *dmabuf)
 {
     struct drm_gem_object *gem_obj = gcvNULL;
     struct viv_gem_object *viv_obj;
@@ -184,7 +183,6 @@ void viv_gem_free_object(struct drm_gem_object *gem_obj)
 
 static int viv_ioctl_gem_create(struct drm_device *drm, void *data, struct drm_file *file)
 {
-    int                        ret     = 0;
     struct drm_viv_gem_create *args    = (struct drm_viv_gem_create *)data;
     struct drm_gem_object     *gem_obj = gcvNULL;
     struct viv_gem_object     *viv_obj = gcvNULL;
@@ -217,6 +215,8 @@ static int viv_ioctl_gem_create(struct drm_device *drm, void *data, struct drm_f
     if (args->flags & DRM_VIV_GEM_CMA_LIMIT)
         flags |= gcvALLOC_FLAG_CMA_LIMIT;
 
+    flags |= gcvALLOC_FLAG_FROM_USER;
+
     gckOS_ZeroMemory(&iface, sizeof(iface));
     iface.command      = gcvHAL_ALLOCATE_LINEAR_VIDEO_MEMORY;
     iface.hardwareType = device->defaultHwType;
@@ -239,7 +239,7 @@ static int viv_ioctl_gem_create(struct drm_device *drm, void *data, struct drm_f
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 11, 0)
     gem_obj->funcs = &viv_gem_object_funcs;
 #    endif
-    ret = drm_gem_handle_create(file, gem_obj, &args->handle);
+    drm_gem_handle_create(file, gem_obj, &args->handle);
 
     viv_obj              = container_of(gem_obj, struct viv_gem_object, base);
     viv_obj->node_handle = iface.u.AllocateLinearVideoMemory.node;
@@ -741,7 +741,7 @@ static const struct drm_ioctl_desc viv_ioctls[] = {
     DRM_IOCTL_DEF_DRV(VIV_GEM_REF_NODE,      viv_ioctl_gem_ref_node,   DRM_AUTH | DRM_RENDER_ALLOW),
 };
 
-int viv_drm_open(struct drm_device *drm, struct drm_file *file)
+static int viv_drm_open(struct drm_device *drm, struct drm_file *file)
 {
     gctINT       i, dev_index;
     gctUINT32    pid     = _GetProcessID();
@@ -757,13 +757,14 @@ int viv_drm_open(struct drm_device *drm, struct drm_file *file)
                 gcmkONERROR(gckKERNEL_AttachProcessEx(device->kernels[i], gcvTRUE, pid));
         }
     }
+
     file->driver_priv = gcmINT2PTR(pid);
 
 OnError:
     return gcmIS_ERROR(status) ? -ENODEV : 0;
 }
 
-void viv_drm_postclose(struct drm_device *drm, struct drm_file *file)
+static void viv_drm_postclose(struct drm_device *drm, struct drm_file *file)
 {
     gctINT       i, dev_index;
     gctUINT32    pid     = gcmPTR2SIZE(file->driver_priv);
@@ -790,7 +791,12 @@ static const struct file_operations viv_drm_fops = {
 #    endif
     .poll               = drm_poll,
     .read               = drm_read,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
     .llseek             = no_llseek,
+#endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
+    .fop_flags          = FOP_UNSIGNED_OFFSET,
+#endif
 };
 
 static struct drm_driver viv_drm_driver = {
@@ -808,8 +814,10 @@ static struct drm_driver viv_drm_driver = {
     .gem_free_object            = viv_gem_free_object,
 #        endif
 #    endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 4, 0)
     .prime_handle_to_fd = drm_gem_prime_handle_to_fd,
     .prime_fd_to_handle = drm_gem_prime_fd_to_handle,
+#    endif
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0)
     .gem_prime_export   = viv_gem_prime_export,
 #    endif
@@ -819,7 +827,9 @@ static struct drm_driver viv_drm_driver = {
     .fops               = &viv_drm_fops,
     .name               = "vivante",
     .desc               = "vivante DRM",
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
     .date               = "20170808",
+#    endif
     .major              = 1,
     .minor              = 0,
 };

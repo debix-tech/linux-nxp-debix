@@ -22,7 +22,9 @@ Video4Linux devices
     v4l2-mem2mem
     v4l2-async
     v4l2-fwnode
+    v4l2-cci
     v4l2-rect
     v4l2-tuner
     v4l2-common
     v4l2-tveeprom
+    v4l2-jpeg

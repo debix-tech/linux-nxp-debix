@@ -39,7 +39,6 @@ static int lcdifv3_plane_atomic_check(struct drm_plane *plane,
 	struct drm_framebuffer *fb = plane_state->fb;
 	struct drm_framebuffer *old_fb = old_state->fb;
 	struct drm_crtc_state *crtc_state;
-	struct drm_display_mode *mode;
 
 	/* 'fb' should also be NULL which has been checked in
 	 * the core sanity check function 'drm_atomic_plane_check()'
@@ -55,7 +54,6 @@ static int lcdifv3_plane_atomic_check(struct drm_plane *plane,
 
 	crtc_state = drm_atomic_get_existing_crtc_state(state,
 							plane_state->crtc);
-	mode = &crtc_state->adjusted_mode;
 
 	ret = drm_atomic_helper_check_plane_state(plane_state, crtc_state,
 						  DRM_PLANE_NO_SCALING,

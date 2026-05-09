@@ -2,7 +2,7 @@
 *
 *    The MIT License (MIT)
 *
-*    Copyright (c) 2014 - 2023 Vivante Corporation
+*    Copyright (c) 2014 - 2024 Vivante Corporation
 *
 *    Permission is hereby granted, free of charge, to any person obtaining a
 *    copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@
 *
 *    The GPL License (GPL)
 *
-*    Copyright (C) 2014 - 2023 Vivante Corporation
+*    Copyright (C) 2014 - 2024 Vivante Corporation
 *
 *    This program is free software; you can redistribute it and/or
 *    modify it under the terms of the GNU General Public License
@@ -51,7 +51,6 @@
 *    version of this file.
 *
 *****************************************************************************/
-
 
 #include <gc_hal.h>
 #include <gc_feature_database.h>
@@ -145,7 +144,7 @@ _AllocateVideoMemory(IN gckKERNEL Kernel, IN gceVIDMEM_TYPE Type, IN gctUINT32 A
 OnError:
     if (bufferNode) {
         if (bufferAddress)
-            gcmkVERIFY_OK(gckVIDMEM_NODE_Unlock(Kernel, bufferNode, 0, gcvNULL));
+            gcmkVERIFY_OK(gckVIDMEM_NODE_Unlock(Kernel, bufferNode, Kernel->mmu, gcvNULL));
 
         if (bufferLogical)
             gcmkVERIFY_OK(gckVIDMEM_NODE_UnlockCPU(Kernel, bufferNode, 0, gcvFALSE, gcvFALSE));
@@ -164,7 +163,7 @@ _FreeVideoMemory(IN gckKERNEL Kernel, IN gckVIDMEM_NODE Node)
     if (!Node)
         gcmkONERROR(gcvSTATUS_INVALID_ARGUMENT);
 
-    gcmkVERIFY_OK(gckVIDMEM_NODE_Unlock(Kernel, Node, 0, gcvNULL));
+    gcmkVERIFY_OK(gckVIDMEM_NODE_Unlock(Kernel, Node, Kernel->mmu, gcvNULL));
 
     gcmkVERIFY_OK(gckVIDMEM_NODE_UnlockCPU(Kernel, Node, 0, gcvFALSE, gcvFALSE));
 
@@ -778,7 +777,7 @@ gckPPU_GetPixel(IN gctUINT32 Format)
     return pixel;
 }
 
-gceSTATUS
+static gceSTATUS
 gckPPU_SetEVIS(IN gctUINT32 Start, IN gctUINT32 End,
                IN gctUINT32 Evis, IN OUT gctUINT32_PTR Inst)
 {
@@ -919,7 +918,7 @@ OnError:
     return status;
 }
 
-gceSTATUS
+static gceSTATUS
 gckPPU_SetTempReg(IN gctUINT32 Where, IN gctUINT32 Address, IN gctUINT32 Swizzle,
                   IN gctUINT32 Modifiers, OUT gctUINT32_PTR Inst)
 {

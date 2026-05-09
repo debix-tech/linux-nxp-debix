@@ -511,7 +511,6 @@ static int pxp_clear_wb_work_func(struct mxc_epdc_fb_data *fb_data);
 static int epdc_working_buffer_update(struct mxc_epdc_fb_data *fb_data,
 				      struct update_data_list *upd_data_list,
 				      struct mxcfb_rect *update_region);
-extern void pxp_get_collision_info(struct pxp_collision_info *info);
 
 #ifdef DEBUG
 static void dump_pxp_config(struct mxc_epdc_fb_data *fb_data,
@@ -5037,7 +5036,6 @@ static int mxc_epdc_fb_probe(struct platform_device *pdev)
 	phandle phandle;
 	u32 out_val[3];
 	int enable_gpio;
-	enum of_gpio_flags flag;
 	unsigned short *wk_p;
 
 	if (!np)
@@ -5077,7 +5075,7 @@ static int mxc_epdc_fb_probe(struct platform_device *pdev)
 	}
 
 	if (of_find_property(np, "en-gpios", NULL)) {
-		enable_gpio = of_get_named_gpio_flags(np, "en-gpios", 0, &flag);
+		enable_gpio = of_get_named_gpio(np, "en-gpios", 0);
 		if (enable_gpio == -EPROBE_DEFER) {
 			dev_info(&pdev->dev, "GPIO requested is not"
 				"here yet, deferring the probe\n");
@@ -5089,8 +5087,6 @@ static int mxc_epdc_fb_probe(struct platform_device *pdev)
 
 			ret = devm_gpio_request_one(&pdev->dev,
 						    enable_gpio,
-						    (flag & OF_GPIO_ACTIVE_LOW)
-						    ? GPIOF_OUT_INIT_LOW :
 						    GPIOF_OUT_INIT_HIGH,
 						    "en_pins");
 			if (ret) {
@@ -5312,7 +5308,6 @@ static int mxc_epdc_fb_probe(struct platform_device *pdev)
 	info->var.activate = FB_ACTIVATE_NOW;
 	info->pseudo_palette = fb_data->pseudo_palette;
 	info->screen_size = info->fix.smem_len;
-	info->flags = FBINFO_FLAG_DEFAULT;
 
 	mxc_epdc_fb_set_fix(info);
 
@@ -5775,7 +5770,7 @@ out:
 	return ret;
 }
 
-static int mxc_epdc_fb_remove(struct platform_device *pdev)
+static void mxc_epdc_fb_remove(struct platform_device *pdev)
 {
 	struct update_data_list *plist, *temp_list;
 	struct mxc_epdc_fb_data *fb_data = platform_get_drvdata(pdev);
@@ -5830,8 +5825,6 @@ static int mxc_epdc_fb_remove(struct platform_device *pdev)
 		regmap_update_bits(fb_data->gpr, fb_data->req_gpr,
 			1 << fb_data->req_bit, 1 << fb_data->req_bit);
 	platform_set_drvdata(pdev, NULL);
-
-	return 0;
 }
 
 #ifdef CONFIG_PM_SLEEP

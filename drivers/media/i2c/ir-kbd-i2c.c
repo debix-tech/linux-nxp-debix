@@ -35,7 +35,7 @@
  *	Copyright (C) 2011 Andy Walls <awalls@md.metrocast.net>
  */
 
-#include <asm/unaligned.h>
+#include <linux/unaligned.h>
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/kernel.h>
@@ -757,8 +757,9 @@ static int zilog_tx_duty_cycle(struct rc_dev *dev, u32 duty_cycle)
 	return 0;
 }
 
-static int ir_probe(struct i2c_client *client, const struct i2c_device_id *id)
+static int ir_probe(struct i2c_client *client)
 {
+	const struct i2c_device_id *id = i2c_client_get_device_id(client);
 	char *ir_codes = NULL;
 	const char *name = NULL;
 	u64 rc_proto = RC_PROTO_BIT_UNKNOWN;

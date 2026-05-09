@@ -92,14 +92,12 @@ free_dev:
 	return ret;
 }
 
-static int ethosu_pdev_remove(struct platform_device *pdev)
+static void ethosu_pdev_remove(struct platform_device *pdev)
 {
 	struct ethosu_device *edev = platform_get_drvdata(pdev);
 
 	clear_bit(MINOR(edev->devt), minors);
 	ethosu_dev_deinit(edev);
-
-	return 0;
 }
 
 int ethosu_suspend(struct device *dev)
@@ -155,7 +153,7 @@ static int __init ethosu_init(void)
 {
 	int ret;
 
-	ethosu_class = class_create(THIS_MODULE, ETHOSU_DRIVER_NAME);
+	ethosu_class = class_create(ETHOSU_DRIVER_NAME);
 	if (IS_ERR(ethosu_class)) {
 		printk("Failed to create class '%s'.\n", ETHOSU_DRIVER_NAME);
 

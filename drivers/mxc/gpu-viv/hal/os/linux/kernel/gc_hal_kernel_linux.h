@@ -2,7 +2,7 @@
 *
 *    The MIT License (MIT)
 *
-*    Copyright (c) 2014 - 2023 Vivante Corporation
+*    Copyright (c) 2014 - 2024 Vivante Corporation
 *
 *    Permission is hereby granted, free of charge, to any person obtaining a
 *    copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@
 *
 *    The GPL License (GPL)
 *
-*    Copyright (C) 2014 - 2023 Vivante Corporation
+*    Copyright (C) 2014 - 2024 Vivante Corporation
 *
 *    This program is free software; you can redistribute it and/or
 *    modify it under the terms of the GNU General Public License
@@ -51,7 +51,6 @@
 *    version of this file.
 *
 *****************************************************************************/
-
 
 #ifndef __gc_hal_kernel_linux_h_
 #define __gc_hal_kernel_linux_h_
@@ -188,6 +187,10 @@
 #    define gcdUSE_LINUX_SG_TABLE_API   0
 #endif
 
+#ifndef gcdWAR_WC
+#define gcdWAR_WC 1
+#endif
+
 /******************************************************************************
  ********************************** Structures ********************************
  *****************************************************************************/
@@ -279,6 +282,8 @@ struct _gckOS {
     int                         dumpTarget;
     char                        dumpFileName[256];
     gcsDEBUGFS_DIR              dumpDebugfsDir;
+
+    atomic_t                   nodeID;
 };
 
 typedef struct _gcsSIGNAL *gcsSIGNAL_PTR;
@@ -350,6 +355,29 @@ _GetProcessID(void)
 #endif
 }
 
+#if gcdENABLE_GPU_WORK_PERIOD_TRACE
+static inline gctUINT32
+_GetUserID(IN gctUINT32 Pid)
+{
+    struct task_struct *task;
+    gctUINT32 uid = -1;
+
+    task = FIND_TASK_BY_PID(Pid);
+
+    if (task) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 5, 0)
+        uid = from_kuid_munged(current_user_ns(), task_uid(task));
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)
+        uid = task_uid(task);
+#else
+        uid = task->uid;
+#endif
+    }
+
+    return uid;
+}
+#endif
+
 static inline void
 _MemoryBarrier(void)
 {
@@ -382,5 +410,12 @@ gckIOMMU_Destory(IN gckOS Os, IN gckIOMMU Iommu);
 
 gceSTATUS
 gckIOMMU_Construct(IN gckOS Os, OUT gckIOMMU *Iommu);
+
+/* Drm init and destroy */
+#if gcdENABLE_DRM
+int viv_drm_probe(struct device *dev);
+
+int viv_drm_remove(struct device *dev);
+#endif
 
 #endif /* __gc_hal_kernel_linux_h_ */

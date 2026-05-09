@@ -117,6 +117,8 @@ fail:
  */
 void sctp_transport_free(struct sctp_transport *transport)
 {
+	transport->dead = 1;
+
 	/* Try to delete the heartbeat timer.  */
 	if (del_timer(&transport->hb_timer))
 		sctp_transport_put(transport);
@@ -197,7 +199,7 @@ void sctp_transport_reset_hb_timer(struct sctp_transport *transport)
 	/* When a data chunk is sent, reset the heartbeat interval.  */
 	expires = jiffies + sctp_transport_timeout(transport);
 	if (!mod_timer(&transport->hb_timer,
-		       expires + prandom_u32_max(transport->rto)))
+		       expires + get_random_u32_below(transport->rto)))
 		sctp_transport_hold(transport);
 }
 

@@ -15,17 +15,16 @@
 #include <linux/printk.h>
 #include <linux/uts.h>
 #include <linux/utsname.h>
-#include <generated/utsrelease.h>
 #include <linux/proc_ns.h>
 
 static int __init early_hostname(char *arg)
 {
 	size_t bufsize = sizeof(init_uts_ns.name.nodename);
 	size_t maxlen  = bufsize - 1;
-	size_t arglen;
+	ssize_t arglen;
 
-	arglen = strlcpy(init_uts_ns.name.nodename, arg, bufsize);
-	if (arglen > maxlen) {
+	arglen = strscpy(init_uts_ns.name.nodename, arg, bufsize);
+	if (arglen < 0) {
 		pr_warn("hostname parameter exceeds %zd characters and will be truncated",
 			maxlen);
 	}
@@ -33,21 +32,10 @@ static int __init early_hostname(char *arg)
 }
 early_param("hostname", early_hostname);
 
-//John_gao set linux version
-#define polyhex_version "Debix Model C V0.1.9"
-
-#if 1
-const char linux_proc_banner[] =
-	"%s version %s"
-	" (" polyhex_version ")"
-	" (" LINUX_COMPILER ") %s\n";
-#else
 const char linux_proc_banner[] =
 	"%s version %s"
 	" (" LINUX_COMPILE_BY "@" LINUX_COMPILE_HOST ")"
 	" (" LINUX_COMPILER ") %s\n";
-
-#endif
 
 BUILD_SALT;
 BUILD_LTO_INFO;

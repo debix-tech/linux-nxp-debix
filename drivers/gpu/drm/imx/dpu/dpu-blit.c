@@ -38,7 +38,7 @@ static LIST_HEAD(imx_drm_dpu_bliteng_list);
 
 static int imx_dpu_num;
 
-int dpu_be_get(struct dpu_bliteng *dpu_be);
+void dpu_be_get(struct dpu_bliteng *dpu_be);
 void dpu_be_put(struct dpu_bliteng *dpu_be);
 s32 dpu_bliteng_get_id(struct dpu_bliteng *dpu_be);
 void dpu_be_configure_prefetch(struct dpu_bliteng *dpu_be,
@@ -56,7 +56,7 @@ int dpu_bliteng_init(struct dpu_bliteng *dpu_bliteng);
 void dpu_bliteng_fini(struct dpu_bliteng *dpu_bliteng);
 int dpu_be_blit(struct dpu_bliteng *dpu_be,
     u32 *cmdlist, u32 cmdnum);
-int dpu_be_get_fence(struct dpu_bliteng *dpu_be);
+int dpu_be_get_fence(struct dpu_bliteng *dpu_be, int dpu_num);
 int dpu_be_set_fence(struct dpu_bliteng *dpu_be, int fd);
 
 static struct imx_drm_dpu_bliteng *imx_drm_dpu_bliteng_find_by_id(s32 id)
@@ -113,7 +113,7 @@ static int imx_drm_dpu_set_cmdlist_ioctl(struct drm_device *drm_dev, void *data,
 
 	dpu_be = bliteng->dpu_be;
 
-	ret = dpu_be_get(dpu_be);
+	dpu_be_get(dpu_be);
 
 	cmd_nr = req->cmd_nr;
 	cmd = (u32 *)(unsigned long)req->cmd;
@@ -147,7 +147,6 @@ static int imx_drm_dpu_wait_ioctl(struct drm_device *drm_dev, void *data,
 	struct dpu_bliteng *dpu_be;
 	void *user_data;
 	s32 id = 0;
-	int ret;
 
 	wait = data;
 	user_data = (void *)(unsigned long)wait->user_data;
@@ -167,13 +166,13 @@ static int imx_drm_dpu_wait_ioctl(struct drm_device *drm_dev, void *data,
 
 	dpu_be = bliteng->dpu_be;
 
-	ret = dpu_be_get(dpu_be);
+	dpu_be_get(dpu_be);
 
 	dpu_be_wait(dpu_be);
 
 	dpu_be_put(dpu_be);
 
-	return ret;
+	return 0;
 }
 
 static int imx_drm_dpu_get_param_ioctl(struct drm_device *drm_dev, void *data,
@@ -197,10 +196,10 @@ static int imx_drm_dpu_get_param_ioctl(struct drm_device *drm_dev, void *data,
 			}
 
 			dpu_be = bliteng->dpu_be;
-			ret = dpu_be_get(dpu_be);
+			dpu_be_get(dpu_be);
 
 			if (fd == -1)
-				fd = dpu_be_get_fence(dpu_be);
+				fd = dpu_be_get_fence(dpu_be, imx_dpu_num);
 
 			dpu_be_set_fence(dpu_be, fd);
 			dpu_be_put(dpu_be);
@@ -271,6 +270,7 @@ const struct drm_ioctl_desc imx_drm_dpu_ioctls[4] = {
 	DRM_IOCTL_DEF_DRV(IMX_DPU_SYNC_DMABUF, imx_drm_dpu_sync_dmabuf_ioctl,
 			DRM_RENDER_ALLOW),
 };
+EXPORT_SYMBOL_GPL(imx_drm_dpu_ioctls);
 
 static int dpu_bliteng_bind(struct device *dev, struct device *master,
 			    void *data)
@@ -339,22 +339,20 @@ static int dpu_bliteng_probe(struct platform_device *pdev)
 	return component_add(dev, &dpu_bliteng_ops);
 }
 
-static int dpu_bliteng_remove(struct platform_device *pdev)
+static void dpu_bliteng_remove(struct platform_device *pdev)
 {
 	component_del(&pdev->dev, &dpu_bliteng_ops);
-	return 0;
 }
 
 #ifdef CONFIG_PM_SLEEP
 static int dpu_bliteng_suspend(struct device *dev)
 {
 	struct dpu_bliteng *dpu_bliteng = dev_get_drvdata(dev);
-	int ret;
 
 	if (dpu_bliteng == NULL)
 		return 0;
 
-	ret = dpu_be_get(dpu_bliteng);
+	dpu_be_get(dpu_bliteng);
 
 	dpu_be_wait(dpu_bliteng);
 

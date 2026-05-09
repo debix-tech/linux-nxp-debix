@@ -152,6 +152,9 @@ static int skl_int3472_tps68470_probe(struct i2c_client *client)
 	int ret;
 	int i;
 
+	if (!adev)
+		return -ENODEV;
+
 	n_consumers = skl_int3472_fill_clk_pdata(&client->dev, &clk_pdata);
 	if (n_consumers < 0)
 		return n_consumers;
@@ -250,7 +253,7 @@ static struct i2c_driver int3472_tps68470 = {
 		.name = "int3472-tps68470",
 		.acpi_match_table = int3472_device_id,
 	},
-	.probe_new = skl_int3472_tps68470_probe,
+	.probe = skl_int3472_tps68470_probe,
 	.remove = skl_int3472_tps68470_remove,
 };
 module_i2c_driver(int3472_tps68470);

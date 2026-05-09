@@ -36,6 +36,7 @@
 
  @Description   FM PCD Storage profile  ...
 *//***************************************************************************/
+#define __ERR_MODULE__  MODULE_FM_SP
 
 #include "std_ext.h"
 #include "error_ext.h"
@@ -48,8 +49,6 @@
 #include "fm_common.h"
 #include "fsl_fman_sp.h"
 
-
-#if (DPAA_VERSION >= 11)
 static t_Error CheckParamsGeneratedInternally(t_FmVspEntry *p_FmVspEntry)
 {
     t_Error err = E_OK;
@@ -86,8 +85,6 @@ static t_Error CheckParams(t_FmVspEntry *p_FmVspEntry)
 
     return err;
 }
-#endif /* (DPAA_VERSION >= 11) */
-
 
 /*****************************************************************************/
 /*              Inter-module API routines                                    */
@@ -376,15 +373,7 @@ t_Error FmSpBuildBufferStructure(t_FmSpIntContextDataCopy   *p_FmSpIntContextDat
     if (p_BufferPrefixContent->manipExtraSpace)
     {
         uint8_t extraSpace;
-#ifdef FM_CAPWAP_SUPPORT
-        if ((p_BufferPrefixContent->manipExtraSpace + CAPWAP_FRAG_EXTRA_SPACE) >= 256)
-            RETURN_ERROR(MAJOR, E_INVALID_VALUE,
-                         ("p_BufferPrefixContent->manipExtraSpace should be less than %d",
-                          256-CAPWAP_FRAG_EXTRA_SPACE));
-        extraSpace = (uint8_t)(p_BufferPrefixContent->manipExtraSpace + CAPWAP_FRAG_EXTRA_SPACE);
-#else
         extraSpace = p_BufferPrefixContent->manipExtraSpace;
-#endif /* FM_CAPWAP_SUPPORT */
         p_FmSpBufferOffsets->manipOffset = p_FmSpBufMargins->startMargins;
         p_FmSpBufMargins->startMargins += extraSpace;
         *internalBufferOffset = extraSpace;
@@ -400,8 +389,6 @@ t_Error FmSpBuildBufferStructure(t_FmSpIntContextDataCopy   *p_FmSpIntContextDat
 }
 /*********************** End of inter-module routines ************************/
 
-
-#if (DPAA_VERSION >= 11)
 /*****************************************************************************/
 /*              API routines                                                 */
 /*****************************************************************************/
@@ -427,10 +414,14 @@ t_Handle FM_VSP_Config(t_FmVspParams *p_FmVspParams)
     }
     memset(p_FmVspEntry->p_FmVspEntryDriverParams, 0, sizeof(t_FmVspEntryDriverParams));
     fman_vsp_defconfig(&fm_vsp_params);
-    p_FmVspEntry->p_FmVspEntryDriverParams->dmaHeaderCacheAttr = fm_vsp_params.header_cache_attr;
-    p_FmVspEntry->p_FmVspEntryDriverParams->dmaIntContextCacheAttr = fm_vsp_params.int_context_cache_attr;
-    p_FmVspEntry->p_FmVspEntryDriverParams->dmaScatterGatherCacheAttr = fm_vsp_params.scatter_gather_cache_attr;
-    p_FmVspEntry->p_FmVspEntryDriverParams->dmaSwapData = fm_vsp_params.dma_swap_data;
+	p_FmVspEntry->p_FmVspEntryDriverParams->dmaHeaderCacheAttr =
+		(e_FmDmaCacheOption)fm_vsp_params.header_cache_attr;
+	p_FmVspEntry->p_FmVspEntryDriverParams->dmaIntContextCacheAttr =
+		(e_FmDmaCacheOption)fm_vsp_params.int_context_cache_attr;
+	p_FmVspEntry->p_FmVspEntryDriverParams->dmaScatterGatherCacheAttr =
+		(e_FmDmaCacheOption)fm_vsp_params.scatter_gather_cache_attr;
+	p_FmVspEntry->p_FmVspEntryDriverParams->dmaSwapData =
+		(e_FmDmaSwapOption)fm_vsp_params.dma_swap_data;
     p_FmVspEntry->p_FmVspEntryDriverParams->dmaWriteOptimize = fm_vsp_params.dma_write_optimize;
     p_FmVspEntry->p_FmVspEntryDriverParams->noScatherGather = fm_vsp_params.no_scather_gather;
     p_FmVspEntry->p_FmVspEntryDriverParams->bufferPrefixContent.privDataSize = DEFAULT_FM_SP_bufferPrefixContent_privDataSize;
@@ -504,10 +495,10 @@ t_Error FM_VSP_Init(t_Handle h_FmVsp)
 
     /* on user responsibility to fill it according requirement */
     memset(&fm_vsp_params, 0, sizeof(struct fm_storage_profile_params));
-    fm_vsp_params.dma_swap_data              = p_FmVspEntry->p_FmVspEntryDriverParams->dmaSwapData;
-    fm_vsp_params.int_context_cache_attr     = p_FmVspEntry->p_FmVspEntryDriverParams->dmaIntContextCacheAttr;
-    fm_vsp_params.header_cache_attr          = p_FmVspEntry->p_FmVspEntryDriverParams->dmaHeaderCacheAttr;
-    fm_vsp_params.scatter_gather_cache_attr  = p_FmVspEntry->p_FmVspEntryDriverParams->dmaScatterGatherCacheAttr;
+	fm_vsp_params.dma_swap_data = (enum fman_dma_swap_option)p_FmVspEntry->p_FmVspEntryDriverParams->dmaSwapData;
+	fm_vsp_params.int_context_cache_attr = (enum fman_dma_cache_option)p_FmVspEntry->p_FmVspEntryDriverParams->dmaIntContextCacheAttr;
+	fm_vsp_params.header_cache_attr = (enum fman_dma_cache_option)p_FmVspEntry->p_FmVspEntryDriverParams->dmaHeaderCacheAttr;
+	fm_vsp_params.scatter_gather_cache_attr = (enum fman_dma_cache_option)p_FmVspEntry->p_FmVspEntryDriverParams->dmaScatterGatherCacheAttr;
     fm_vsp_params.dma_write_optimize         = p_FmVspEntry->p_FmVspEntryDriverParams->dmaWriteOptimize;
     fm_vsp_params.liodn_offset               = p_FmVspEntry->p_FmVspEntryDriverParams->liodnOffset;
     fm_vsp_params.no_scather_gather          = p_FmVspEntry->p_FmVspEntryDriverParams->noScatherGather;
@@ -525,7 +516,7 @@ t_Error FM_VSP_Init(t_Handle h_FmVsp)
     }
     else
         fm_vsp_params.buf_pool_depletion.buf_pool_depletion_enabled = FALSE;
- 
+
     if (p_FmVspEntry->p_FmVspEntryDriverParams->p_BackupBmPools)
     {
         fm_vsp_params.backup_pools.num_backup_pools = p_FmVspEntry->p_FmVspEntryDriverParams->p_BackupBmPools->numOfBackupPools;
@@ -753,5 +744,3 @@ uint8_t * FM_VSP_GetBufferHashResult(t_Handle h_FmVsp, char *p_Data)
 
     return (uint8_t *)PTR_MOVE(p_Data, p_FmVspEntry->bufferOffsets.hashResultOffset);
 }
-
-#endif /* (DPAA_VERSION >= 11) */

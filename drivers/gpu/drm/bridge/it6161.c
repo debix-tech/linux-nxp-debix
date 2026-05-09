@@ -1,9 +1,10 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
+// SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright (C) 2021 NXP
+ * Copyright 2021-2024 NXP
  */
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_bridge.h>
+#include <drm/drm_edid.h>
 #include <drm/drm_mipi_dsi.h>
 #include <drm/drm_print.h>
 #include <drm/drm_probe_helper.h>
@@ -744,13 +745,12 @@ static void hdmi_tx_generate_blank_timing(struct it6161 *it6161)
 static void it6161_hdmi_tx_abort_ddc(struct it6161 *it6161)
 {
 	struct device *dev = &it6161->i2c_hdmi_tx->dev;
-	u8 sw_reset, ddc_master, retry = 2;
+	u8 sw_reset, retry = 2;
 	u8 uc, timeout, i;
 
 	DRM_DEV_DEBUG_DRIVER(dev, "ddc abort\n");
 	/* save the sw reset, ddc master and cp desire setting */
 	sw_reset = it6161_hdmi_tx_read(it6161, REG_TX_SW_RST);
-	ddc_master = it6161_hdmi_tx_read(it6161, REG_TX_DDC_MASTER_CTRL);
 
 	it6161_hdmi_tx_write(it6161, REG_TX_SW_RST, sw_reset | B_TX_HDCP_RST_HDMITX);
 	it6161_hdmi_tx_write(it6161, REG_TX_DDC_MASTER_CTRL, B_TX_MASTERDDC | B_TX_MASTERHOST);
@@ -893,7 +893,7 @@ static int it6161_get_edid_block(void *data, u8 *buf, u32 block_num, size_t len)
 	return 0;
 }
 
-static void hdmi_tx_set_capability_from_edid_parse(struct it6161 *it6161, struct edid *edid)
+static void hdmi_tx_set_capability_from_edid_parse(struct it6161 *it6161, const struct edid *edid)
 {
 	struct device *dev = &it6161->i2c_hdmi_tx->dev;
 	struct drm_display_info *info = &it6161->connector.display_info;
@@ -937,46 +937,48 @@ static void it6161_variable_config(struct it6161 *it6161)
 	it6161->mipi_rx_lane_count = MIPI_RX_LANE_COUNT;
 }
 
-static struct edid *it6161_get_edid(struct it6161 *it6161)
+static const struct drm_edid *it6161_get_edid(struct it6161 *it6161)
 {
 	struct device *dev = &it6161->i2c_hdmi_tx->dev;
-	struct edid *edid;
+	const struct drm_edid *drm_edid;
+	const struct edid *edid;
 
-	edid = drm_do_get_edid(&it6161->connector, it6161_get_edid_block, it6161);
-	if (!edid) {
+	drm_edid = drm_edid_read_custom(&it6161->connector, it6161_get_edid_block, it6161);
+	if (!drm_edid) {
 		DRM_DEV_ERROR(dev, "Failed to read EDID\n");
 		return 0;
 	}
 
+	edid = drm_edid_raw(drm_edid);
 	hdmi_tx_set_capability_from_edid_parse(it6161, edid);
 
-	return edid;
+	return drm_edid;
 }
 
 static int it6161_get_modes(struct drm_connector *connector)
 {
 	struct it6161 *it6161 = connector_to_it6161(connector);
 	int err, num_modes = 0;
-	struct edid *edid;
+	const struct drm_edid *drm_edid;
 	struct device *dev = &it6161->i2c_mipi_rx->dev;
 
 	mutex_lock(&it6161->mode_lock);
 
-	edid = it6161_get_edid(it6161);
-	if (!edid) {
+	drm_edid = it6161_get_edid(it6161);
+	if (!drm_edid) {
 		DRM_DEV_ERROR(dev, "Failed to read EDID\n");
 		return 0;
 	}
 
-	err = drm_connector_update_edid_property(connector, edid);
+	err = drm_edid_connector_update(connector, drm_edid);
 	if (err) {
-		DRM_DEV_ERROR(dev, "Failed to update EDID property: %d", err);
+		DRM_DEV_ERROR(dev, "Failed to update connector from EDID: %d", err);
 		goto unlock;
 	}
 
-	num_modes = drm_add_edid_modes(connector, edid);
+	num_modes = drm_edid_connector_add_modes(connector);
 
-	kfree(edid);
+	kfree(drm_edid);
 unlock:
 	DRM_DEV_DEBUG_DRIVER(dev, "edid mode number:%d", num_modes);
 	mutex_unlock(&it6161->mode_lock);
@@ -1045,7 +1047,9 @@ static int it6161_attach_dsi(struct it6161 *it6161)
 	dsi->lanes = MIPI_RX_LANE_COUNT;
 	dsi->format = MIPI_DSI_FMT_RGB888;
 	dsi->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_SYNC_PULSE |
-	    MIPI_DSI_MODE_NO_EOT_PACKET | MIPI_DSI_MODE_VIDEO_HSE;
+	    MIPI_DSI_MODE_NO_EOT_PACKET | MIPI_DSI_MODE_VIDEO_HSE |
+	    MIPI_DSI_MODE_VIDEO_NO_HFP | MIPI_DSI_MODE_VIDEO_NO_HBP |
+	    MIPI_DSI_MODE_VIDEO_NO_HSA;
 
 	ret = mipi_dsi_attach(dsi);
 	if (ret < 0) {
@@ -1211,8 +1215,9 @@ static enum drm_connector_status it6161_bridge_detect(struct drm_bridge *bridge)
 	return status;
 }
 
-static struct edid *it6161_bridge_get_edid(struct drm_bridge *bridge,
-					   struct drm_connector *connector)
+static const struct drm_edid *
+it6161_bridge_edid_read(struct drm_bridge *bridge,
+			struct drm_connector *connector)
 {
 	struct it6161 *it6161 = bridge_to_it6161(bridge);
 
@@ -1227,7 +1232,7 @@ static const struct drm_bridge_funcs it6161_bridge_funcs = {
 	.enable = it6161_bridge_enable,
 	.disable = it6161_bridge_disable,
 	.detect = it6161_bridge_detect,
-	.get_edid = it6161_bridge_get_edid,
+	.edid_read = it6161_bridge_edid_read,
 };
 
 static bool it6161_check_device_ready(struct it6161 *it6161)
@@ -1584,11 +1589,9 @@ static void setHDMITX_LPCMAudio(u8 AudioSrcNum, u8 AudSWL, u8 bAudInterface)
 
 static void setHDMITX_NLPCMAudio(u8 bAudInterface)
 {
-	u8 AudioEnable, AudioFormat;
+	u8 AudioEnable;
 	u8 i;
 
-	/* NLPCM must use standard I2S mode. */
-	AudioFormat = 0x01;
 	if (bAudInterface == SPDIF)
 		AudioEnable = M_TX_AUD_24BIT | B_TX_AUD_SPDIF;
 	else
@@ -2293,8 +2296,7 @@ static int it6161_parse_dt(struct it6161 *it6161, struct device_node *np)
 	return 0;
 }
 
-static int it6161_i2c_probe(struct i2c_client *i2c_mipi_rx,
-			    const struct i2c_device_id *id)
+static int it6161_i2c_probe(struct i2c_client *i2c_mipi_rx)
 {
 	struct device *dev = &i2c_mipi_rx->dev;
 	int err, intp_irq;

@@ -29,49 +29,11 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
-
-
 #ifndef __STDLIB_EXT_H
 #define __STDLIB_EXT_H
 
-
-#if (defined(NCSW_LINUX)) && defined(__KERNEL__)
 #include "stdarg_ext.h"
 #include "std_ext.h"
-
-
-/**
- * strtoul - convert a string to an uint32_t
- * @cp: The start of the string
- * @endp: A pointer to the end of the parsed string will be placed here
- * @base: The number base to use
- */
-uint32_t strtoul(const char *cp,char **endp,uint32_t base);
-
-/**
- * strtol - convert a string to a int32_t
- * @cp: The start of the string
- * @endp: A pointer to the end of the parsed string will be placed here
- * @base: The number base to use
- */
-long strtol(const char *cp,char **endp,uint32_t base);
-
-/**
- * strtoull - convert a string to an uint64_t
- * @cp: The start of the string
- * @endp: A pointer to the end of the parsed string will be placed here
- * @base: The number base to use
- */
-uint64_t strtoull(const char *cp,char **endp,uint32_t base);
-
-/**
- * strtoll - convert a string to a int64 long
- * @cp: The start of the string
- * @endp: A pointer to the end of the parsed string will be placed here
- * @base: The number base to use
- */
-long long strtoll(const char *cp,char **endp,uint32_t base);
 
 /**
  * atoi - convert a character to a int
@@ -151,12 +113,6 @@ int vsnprintf(char *buf, size_t size, const char *fmt, va_list args);
  */
 int vsprintf(char *buf, const char *fmt, va_list args);
 
-#else
-#include <stdlib.h>
-#include <stdio.h>
-#endif /* defined(NCSW_LINUX) && defined(__KERNEL__) */
-
 #include "std_ext.h"
-
 
 #endif /* __STDLIB_EXT_H */

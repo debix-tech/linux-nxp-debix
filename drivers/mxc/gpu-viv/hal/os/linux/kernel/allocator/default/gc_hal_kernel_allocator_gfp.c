@@ -2,7 +2,7 @@
 *
 *    The MIT License (MIT)
 *
-*    Copyright (c) 2014 - 2023 Vivante Corporation
+*    Copyright (c) 2014 - 2024 Vivante Corporation
 *
 *    Permission is hereby granted, free of charge, to any person obtaining a
 *    copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@
 *
 *    The GPL License (GPL)
 *
-*    Copyright (C) 2014 - 2023 Vivante Corporation
+*    Copyright (C) 2014 - 2024 Vivante Corporation
 *
 *    This program is free software; you can redistribute it and/or
 *    modify it under the terms of the GNU General Public License
@@ -51,7 +51,6 @@
 *    version of this file.
 *
 *****************************************************************************/
-
 
 #include "gc_hal_kernel_linux.h"
 #include "gc_hal_kernel_allocator.h"
@@ -352,7 +351,11 @@ _NonContiguous1MPagesAlloc(IN struct gfp_mdl_priv *MdlPriv,
         if (MdlPriv->Pages1M[i] == gcvNULL) {
             int order = get_order(gcd1M_PAGE_SIZE);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 7, 0)
+            if (order >= MAX_PAGE_ORDER)
+#else
             if (order >= MAX_ORDER)
+#endif
                 gcmkONERROR(gcvSTATUS_OUT_OF_MEMORY);
 
             MdlPriv->Pages1M[i] = alloc_pages(Gfp, order);
@@ -389,7 +392,11 @@ _GFPAlloc(IN gckALLOCATOR  Allocator,
     gceSTATUS status;
     gctSIZE_T i          = 0;
     gctBOOL   contiguous = Flags & gcvALLOC_FLAG_CONTIGUOUS;
-    u32 normal_gfp = GFP_ATOMIC | __GFP_NORETRY | gcdNOWARN;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0) && LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
+    u32 normal_gfp = __GFP_HIGH | __GFP_ATOMIC | __GFP_NORETRY | gcdNOWARN;
+#else
+    u32 normal_gfp = __GFP_HIGH | __GFP_NORETRY | gcdNOWARN;
+#endif
     u32 gfp = (contiguous ? normal_gfp : GFP_KERNEL) | __GFP_HIGHMEM | gcdNOWARN;
 
     struct gfp_alloc    *priv    = (struct gfp_alloc *)Allocator->privateData;
@@ -475,7 +482,11 @@ Alloc:
         if (mdlPriv->contiguousPages == gcvNULL) {
             int order = get_order(bytes);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 7, 0)
+            if (order >= MAX_PAGE_ORDER) {
+#else
             if (order >= MAX_ORDER) {
+#endif
                 status = gcvSTATUS_OUT_OF_MEMORY;
                 goto OnError;
             }
@@ -489,7 +500,7 @@ Alloc:
             } else if (gfp & __GFP_HIGHMEM) {
                 gcmkONERROR(gcvSTATUS_OUT_OF_MEMORY);
             } else {
-#if defined(CONFIG_ZONE_DMA32) && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
+#if defined(CONFIG_ZONE_DMA32) && LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 37)
                 gfp &= ~__GFP_DMA32;
                 gfp |= __GFP_HIGHMEM;
 #else
@@ -537,7 +548,7 @@ Alloc:
             if (gcmIS_ERROR(status))
                 gcmkONERROR(_NonContiguousAlloc(mdlPriv, NumPages, gfp));
         }
-#if defined(CONFIG_ZONE_DMA32) && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
+#if defined(CONFIG_ZONE_DMA32) && LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 37)
         normal_gfp &= ~__GFP_DMA32;
 #endif
 #if gcdUSE_LINUX_SG_TABLE_API
@@ -771,7 +782,8 @@ _GFPMmap(IN gckALLOCATOR           Allocator,
 
     gcmkHEADER_ARG("Allocator=%p Mdl=%p vma=%p", Allocator, Mdl, vma);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 2, 0)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 2, 0)) || \
+    ((LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 26)) && defined(CONFIG_ANDROID))
     vm_flags_set(vma, gcdVM_FLAGS);
 #else
     vma->vm_flags |= gcdVM_FLAGS;
@@ -1161,6 +1173,7 @@ _GFPAlloctorInit(IN gckOS Os, IN gcsDEBUGFS_DIR *Parent, OUT gckALLOCATOR *Alloc
                           | gcvALLOC_FLAG_MEMLIMIT
                           | gcvALLOC_FLAG_ALLOC_ON_FAULT
                           | gcvALLOC_FLAG_DMABUF_EXPORTABLE
+                          | gcvALLOC_FLAG_FROM_USER
 #if (defined(CONFIG_ZONE_DMA32) || defined(CONFIG_ZONE_DMA)) && LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 37)
                           | gcvALLOC_FLAG_4GB_ADDR
 #endif

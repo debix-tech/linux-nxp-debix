@@ -73,6 +73,7 @@ struct mixel_dphy_devdata {
 	u8 reg_rxlprp;
 	u8 reg_rxcdrp;
 	u8 reg_rxhs_settle;
+	bool rx_clk_quirk;
 };
 
 static const struct mixel_dphy_devdata mixel_dphy_devdata[] = {
@@ -139,6 +140,7 @@ static const struct mixel_dphy_devdata mixel_dphy_devdata[] = {
 		.reg_rxlprp = 0x44,
 		.reg_rxcdrp = 0x48,
 		.reg_rxhs_settle = REG_NA,
+		.rx_clk_quirk = true,
 	},
 };
 
@@ -224,8 +226,7 @@ static int mixel_dphy_config_from_opts(struct phy *phy,
 	unsigned long ref_clk = clk_get_rate(priv->phy_ref_clk);
 	u32 lp_t, numerator, denominator;
 	unsigned long long tmp;
-	u32 n;
-	int i;
+	int n, i;
 
 	if (dphy_opts->hs_clk_rate > DATA_RATE_MAX_SPEED ||
 	    dphy_opts->hs_clk_rate < DATA_RATE_MIN_SPEED)
@@ -546,8 +547,13 @@ static int mixel_dphy_probe(struct platform_device *pdev)
 	if (IS_ERR(base))
 		return PTR_ERR(base);
 
-	priv->regmap = devm_regmap_init_mmio(&pdev->dev, base,
-					     &mixel_dphy_regmap_config);
+	if (priv->devdata->rx_clk_quirk)
+		priv->regmap =
+			devm_regmap_init_mmio_clk(&pdev->dev, "rx_esc", base,
+						  &mixel_dphy_regmap_config);
+	else
+		priv->regmap = devm_regmap_init_mmio(&pdev->dev, base,
+						     &mixel_dphy_regmap_config);
 	if (IS_ERR(priv->regmap)) {
 		dev_err(dev, "Couldn't create the DPHY regmap\n");
 		return PTR_ERR(priv->regmap);

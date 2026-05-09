@@ -2,7 +2,7 @@
 *
 *    The MIT License (MIT)
 *
-*    Copyright (c) 2014 - 2023 Vivante Corporation
+*    Copyright (c) 2014 - 2024 Vivante Corporation
 *
 *    Permission is hereby granted, free of charge, to any person obtaining a
 *    copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@
 *
 *    The GPL License (GPL)
 *
-*    Copyright (C) 2014 - 2023 Vivante Corporation
+*    Copyright (C) 2014 - 2024 Vivante Corporation
 *
 *    This program is free software; you can redistribute it and/or
 *    modify it under the terms of the GNU General Public License
@@ -51,7 +51,6 @@
 *    version of this file.
 *
 *****************************************************************************/
-
 
 #ifndef __gc_hal_base_h_
 #define __gc_hal_base_h_
@@ -275,6 +274,7 @@ typedef struct _gcsSystemInfo {
     0, /* contiguousSize     */               \
     0, /* contiguousPhysName */               \
     gcvNULL, /* contiguousLogical  */               \
+    gcvNULL, /* eglDeviceInfo      */               \
     gcvNULL, /* eglDisplayInfo     */               \
     gcvNULL, /* eglSurfaceInfo     */               \
     gcvSURF_A8R8G8B8, /* eglConfigFormat    */               \
@@ -284,7 +284,7 @@ typedef struct _gcsSystemInfo {
     gcvFALSE, /* exiting            */               \
     gcvFALSE, /* Special flag for NP2 texture. */    \
     gcvFALSE, /* device open.       */               \
-    gcvNULL, /* destructor         */               \
+    {gcvNULL}, /* destructor         */               \
     gcvNULL, /* accessLock         */               \
     gcvNULL, /* GL FE compiler lock*/               \
     gcvNULL, /* CL FE compiler lock*/               \
@@ -920,6 +920,7 @@ gcoHAL_CommandBufferAutoCommit(gcoHAL Hal, gctBOOL AutoCommit);
 
 gceSTATUS
 gcoHAL_CommandBufferAutoSync(gcoHAL Hal, gctBOOL AutoSync);
+
 
 #if gcdENABLE_MULTI_DEVICE_MANAGEMENT
 gceSTATUS
@@ -2377,6 +2378,7 @@ gcoHEAP_ProfileStart(IN gcoHEAP Heap);
 gceSTATUS
 gcoHEAP_ProfileEnd(IN gcoHEAP Heap, IN gctCONST_STRING Title);
 #endif
+
 
 /******************************************************************************
  ******************************* Debugging Macros *****************************

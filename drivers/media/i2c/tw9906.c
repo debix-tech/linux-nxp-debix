@@ -157,8 +157,7 @@ static const struct v4l2_subdev_ops tw9906_ops = {
 	.video = &tw9906_video_ops,
 };
 
-static int tw9906_probe(struct i2c_client *client,
-			     const struct i2c_device_id *id)
+static int tw9906_probe(struct i2c_client *client)
 {
 	struct tw9906 *dec;
 	struct v4l2_subdev *sd;
@@ -214,7 +213,7 @@ static void tw9906_remove(struct i2c_client *client)
 /* ----------------------------------------------------------------------- */
 
 static const struct i2c_device_id tw9906_id[] = {
-	{ "tw9906", 0 },
+	{ "tw9906" },
 	{ }
 };
 MODULE_DEVICE_TABLE(i2c, tw9906_id);

@@ -7,8 +7,6 @@
 #include <linux/kdev_t.h>
 #include <linux/pm_runtime.h>
 
-#include "fsl_xcvr.h"
-
 static ssize_t read(struct device *dev, struct device_attribute *attr, char *buf, unsigned int reg)
 {
 	struct fsl_xcvr *xcvr = dev_get_drvdata(dev);
@@ -103,7 +101,7 @@ static struct attribute_group fsl_xcvr_attr_group = {
 	.attrs = fsl_xcvr_attrs,
 };
 
-const struct attribute_group *fsl_xcvr_get_attr_grp()
+static struct attribute_group *fsl_xcvr_get_attr_grp(void)
 {
 	return &fsl_xcvr_attr_group;
 }

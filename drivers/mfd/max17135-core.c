@@ -117,8 +117,7 @@ static struct max17135_platform_data *max17135_i2c_parse_dt_pdata(
 }
 #endif	/* !CONFIG_OF */
 
-static int max17135_probe(struct i2c_client *client,
-			    const struct i2c_device_id *id)
+static int max17135_probe(struct i2c_client *client)
 {
 	struct max17135 *max17135;
 	struct max17135_platform_data *pdata = client->dev.platform_data;
@@ -222,7 +221,7 @@ static int max17135_detect(struct i2c_client *client,
 	}
 
 	if (info)
-		strlcpy(info->type, "max17135_sensor", I2C_NAME_SIZE);
+		strscpy(info->type, "max17135_sensor", I2C_NAME_SIZE);
 
 	return 0;
 }

@@ -39,6 +39,7 @@ static const struct of_device_id of_match_clk_mt6797_img[] = {
 		/* sentinel */
 	}
 };
+MODULE_DEVICE_TABLE(of, of_match_clk_mt6797_img);
 
 static struct platform_driver clk_mt6797_img_drv = {
 	.probe = mtk_clk_simple_probe,
@@ -48,5 +49,7 @@ static struct platform_driver clk_mt6797_img_drv = {
 		.of_match_table = of_match_clk_mt6797_img,
 	},
 };
+module_platform_driver(clk_mt6797_img_drv);
 
-builtin_platform_driver(clk_mt6797_img_drv);
+MODULE_DESCRIPTION("MediaTek MT6797 imgsys clocks driver");
+MODULE_LICENSE("GPL");

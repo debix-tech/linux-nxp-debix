@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright 2021 NXP
+ * Copyright 2021, 2024 NXP
  */
 
+#include <linux/of_address.h>
 #include <linux/dev_printk.h>
 #include <linux/errno.h>
-#include <linux/firmware/imx/ele_base_msg.h>
+#include <linux/firmware/imx/se_api.h>
 #include <linux/io.h>
+#include <linux/etherdevice.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
@@ -21,10 +23,13 @@
 #define UNIQ_ID		0x07
 #define OTFAD_CFG	0x17
 #define MAPPING_SIZE	0x20
+#define FUSE_ACC_DIS	0x28
 
 enum soc_type {
 	IMX8ULP,
 	IMX93,
+	IMX95,
+	IMX94,
 };
 
 struct bank_2_reg {
@@ -36,23 +41,32 @@ struct bank_2_reg {
 struct imx_fsb_s400_hw {
 	enum soc_type soc;
 	unsigned int fsb_otp_shadow;
+	uint32_t se_soc_id;
 	const struct bank_2_reg fsb_bank_reg[MAPPING_SIZE];
+	bool oscca_fuse_read;
+	bool reverse_mac_address;
+	bool increase_mac_address;
+	const u8 *pf_mac_offset_list;
 };
 
 struct imx_fsb_s400_fuse {
 	void __iomem *regs;
 	struct nvmem_config config;
 	struct mutex lock;
+	void *se_data;
 	const struct imx_fsb_s400_hw *hw;
+	bool fsb_read_dis;
+	u8 pfn;
 };
 
-static int read_words_via_s400_api(u32 *buf, unsigned int fuse_base, unsigned int num)
+static int read_words_via_s400_api(u32 *buf, unsigned int fuse_base,
+				   unsigned int num, void *se_data)
 {
 	unsigned int i;
 	int err = 0;
 
 	for (i = 0; i < num; i++)
-		err = read_common_fuse(fuse_base + i, buf + i);
+		err = imx_se_read_fuse(se_data, fuse_base + i, buf + i);
 
 	return err;
 }
@@ -95,62 +109,7 @@ static int read_nwords_via_fsb(void __iomem *regs, u32 *buf, u32 fuse_base, u32 
 
 	return 0;
 }
-static int is_write_lock = 1;
-static int fsb_s400_fuse_write(void *priv, unsigned int offset, void *val,
-			      size_t bytes)
-{
-	struct imx_fsb_s400_fuse *fuse = priv;
-	void __iomem *regs = fuse->regs + fuse->hw->fsb_otp_shadow;
-	u32 rbuf[32];
-	u8 *buf = (u8 *)rbuf; 
-	int ret = 0  ; 
-	//printk("GLS_FUSE %s offset(%d) bytes=(%ld) \n", __func__, offset,bytes);
-	if(is_write_lock==1){
-		if( bytes > 32){
-			printk("GLS_FUSE write err \n");	
-			return -1;
-		}
-		memset(buf,0 ,32*4);
-		memcpy(buf, val, bytes);
-		buf[bytes]='\0';
-		//printk("GLS_FUSE input : (%s) \n", buf);
-		if(strcmp(buf, "polyhex")!=0){
-			printk("GLS_FUSE input err \n");	
-			return -1;
-		}
-		is_write_lock = 0;
-	}else{
-		if(bytes == 17){
-			memset(buf,0 ,32*4);
-			memcpy(buf, val, bytes);
-			buf[bytes]='\0';
-			if(strcmp(buf,"polyhex_lock_fuse")==0){
-				printk("GLS_FUSE lock \n");
-				is_write_lock = 1;
-				return 0;
-			}
-		}
 
-		if(bytes == 4){
-			//int i = 0 ;
-			memset(buf,0 ,32*4);
-			memcpy(buf, val, bytes);
-			//printk("GLS_FUSE 0x%02x 0x%02x 0x%02x 0x%02x\n", buf[0],buf[1],buf[2],buf[3]);
-#if 1
-			mutex_lock(&fuse->lock);
-			//for (i = 0 ; i < 10; i++){	
-		        //writel_relaxed(rbuf[0] ,regs + (offset*4));
-			//}
-			ret = ele_write_fuse(offset, rbuf[0], false);
-			//printk("GLS_FUSE rbuf=0x%x offset=%d ret = %d\n", rbuf[0],offset, ret);
-			mutex_unlock(&fuse->lock);
-#endif
-			//printk("GLS_FUSE write mac \n");
-		}
-	
-	}
-	return ret;
-}
 static int fsb_s400_fuse_read(void *priv, unsigned int offset, void *val,
 			      size_t bytes)
 {
@@ -158,16 +117,15 @@ static int fsb_s400_fuse_read(void *priv, unsigned int offset, void *val,
 	void __iomem *regs = fuse->regs + fuse->hw->fsb_otp_shadow;
 	unsigned int num_bytes, bank;
 	u32 *buf;
-	int err;
+	int err, i;
 
-	num_bytes = round_up(2048, 4);
+	num_bytes = round_up(fuse->config.size, 4);
 	buf = kzalloc(num_bytes, GFP_KERNEL);
 	if (!buf)
 		return -ENOMEM;
 
 	err = -EINVAL;
 
-	//printk("GLS_FUSE offset(%d) bytes(%ld)\n", offset, bytes);
 	mutex_lock(&fuse->lock);
 	if (fuse->hw->soc == IMX8ULP) {
 		for (bank = 0; bank < 63; bank++) {
@@ -175,29 +133,35 @@ static int fsb_s400_fuse_read(void *priv, unsigned int offset, void *val,
 			case 0:
 				break;
 			case LOCK_CFG:
-				err = read_words_via_s400_api(&buf[8], 8, 8);
+				err = read_words_via_s400_api(&buf[8], 8, 8,
+							      fuse->se_data);
 				if (err)
 					goto ret;
 				break;
 			case ECID:
-				err = read_words_via_s400_api(&buf[16], 16, 8);
+				err = read_words_via_s400_api(&buf[16], 16, 8,
+							      fuse->se_data);
 				if (err)
 					goto ret;
 				break;
 			case UNIQ_ID:
-				err = read_common_fuse(OTP_UNIQ_ID, &buf[56]);
+				err = imx_se_read_fuse(fuse->se_data,
+						       OTP_UNIQ_ID,
+						       &buf[56]);
 				if (err)
 					goto ret;
 				break;
 			case OTFAD_CFG:
-				err = read_common_fuse(OTFAD_CONFIG, &buf[184]);
+				err = imx_se_read_fuse(fuse->se_data,
+						       OTFAD_CONFIG, &buf[184]);
 				if (err)
 					goto ret;
 				break;
 			case 25:
 			case 26:
 			case 27:
-				err = read_words_via_s400_api(&buf[200], 200, 24);
+				err = read_words_via_s400_api(&buf[200], 200, 24,
+							      fuse->se_data);
 				if (err)
 					goto ret;
 				break;
@@ -206,14 +170,16 @@ static int fsb_s400_fuse_read(void *priv, unsigned int offset, void *val,
 			case 34:
 			case 35:
 			case 36:
-				err = read_words_via_s400_api(&buf[256], 256, 40);
+				err = read_words_via_s400_api(&buf[256], 256, 40,
+							      fuse->se_data);
 				if (err)
 					goto ret;
 				break;
 			case 49:
 			case 50:
 			case 51:
-				err = read_words_via_s400_api(&buf[392], 392, 24);
+				err = read_words_via_s400_api(&buf[392], 392, 24,
+							      fuse->se_data);
 				if (err)
 					goto ret;
 				break;
@@ -223,32 +189,101 @@ static int fsb_s400_fuse_read(void *priv, unsigned int offset, void *val,
 			}
 		}
 	} else if (fuse->hw->soc == IMX93) {
-		for (bank = 0; bank < 6; bank++)
-			read_nwords_via_fsb(regs, &buf[bank * 8], bank * 8, 8);
+		for (bank = 0; bank < 6; bank++) {
+			if (fuse->fsb_read_dis)
+				read_words_via_s400_api(&buf[bank * 8], bank * 8,
+							8, fuse->se_data);
+			else
+				read_nwords_via_fsb(regs, &buf[bank * 8], bank * 8, 8);
+		}
 
-		read_nwords_via_fsb(regs, &buf[48], 48, 4); /* OTP_UNIQ_ID */
+		if (fuse->fsb_read_dis)
+			read_words_via_s400_api(&buf[48], 48, 4, fuse->se_data);
+		else
+			read_nwords_via_fsb(regs, &buf[48], 48, 4); /* OTP_UNIQ_ID */
 
-		err = read_words_via_s400_api(&buf[63], 63, 1);
+		err = read_words_via_s400_api(&buf[63], 63, 1, fuse->se_data);
 		if (err)
 			goto ret;
 
-		err = read_words_via_s400_api(&buf[128], 128, 16);
+		err = read_words_via_s400_api(&buf[128], 128, 16, fuse->se_data);
 		if (err)
 			goto ret;
 
-		err = read_words_via_s400_api(&buf[182], 182, 1);
+		err = read_words_via_s400_api(&buf[182], 182, 1, fuse->se_data);
 		if (err)
 			goto ret;
 
-		err = read_words_via_s400_api(&buf[188], 188, 1);
+		err = read_words_via_s400_api(&buf[188], 188, 1, fuse->se_data);
 		if (err)
 			goto ret;
 
-		for (bank = 39; bank < 64; bank++)
-			read_nwords_via_fsb(regs, &buf[bank * 8], bank * 8, 8);
+		for (bank = 39; bank < 64; bank++) {
+			if (fuse->fsb_read_dis)
+				read_words_via_s400_api(&buf[bank * 8], bank * 8,
+							8, fuse->se_data);
+			else
+				read_nwords_via_fsb(regs, &buf[bank * 8], bank * 8, 8);
+		}
+	} else if (fuse->hw->soc == IMX95) {
+		buf[0] = readl_relaxed(regs + 0 * 4) & 0xffff;
+		buf[7] = readl_relaxed(regs + 7 * 4) & 0xffff;
+		buf[9] = readl_relaxed(regs + 9 * 4) & 0xffff;
+		buf[10] = readl_relaxed(regs + 10 * 4) & 0xffff;
+		buf[11] = readl_relaxed(regs + 11 * 4) & 0xffff;
+		for (i = 12; i < 36; i++)
+			buf[i] = readl_relaxed(regs + i * 4);
+		buf[36] = readl_relaxed(regs + 36 * 4) & 0xffff;
+		buf[37] = readl_relaxed(regs + 37 * 4) & 0xffff;
+		for (i = 38; i < 52; i++)
+			buf[i] = readl_relaxed(regs + i * 4);
+		buf[317] = readl_relaxed(regs + 317 * 4) & 0xffff;
+		buf[318] = readl_relaxed(regs + 318 * 4) & 0xffff;
+		for (i = 320; i < 327; i++)
+			buf[i] = readl_relaxed(regs + i * 4);
+		for (i = 328; i < 392; i++)
+			buf[i] = readl_relaxed(regs + i * 4);
+		for (i = 448; i < 591; i++)
+			buf[i] = readl_relaxed(regs + i * 4);
+		buf[591] = readl_relaxed(regs + 591 * 4) & 0xffff;
+		for (i = 592; i < 608; i++)
+			buf[i] = readl_relaxed(regs + i * 4);
+
+		read_words_via_s400_api(&buf[128], 128, 16, fuse->se_data);
+		read_words_via_s400_api(&buf[188], 188, 1, fuse->se_data);
+
+		err = 0;
+
+		fuse->pfn = offset >> 12 & 0xf;
+		offset = offset & 0xfff;
+	} else if (fuse->hw->soc == IMX94) {
+		buf[0] = readl_relaxed(regs + 0 * 4) & 0xffff;
+		buf[7] = readl_relaxed(regs + 7 * 4) & 0xffff;
+		buf[9] = readl_relaxed(regs + 9 * 4) & 0xffff;
+		buf[10] = readl_relaxed(regs + 10 * 4) & 0xffff;
+		buf[11] = readl_relaxed(regs + 11 * 4) & 0xffff;
+		for (i = 12; i < 36; i++)
+			buf[i] = readl_relaxed(regs + i * 4);
+		buf[36] = readl_relaxed(regs + 36 * 4) & 0xffff;
+		buf[37] = readl_relaxed(regs + 37 * 4) & 0xffff;
+		for (i = 38; i < 52; i++)
+			buf[i] = readl_relaxed(regs + i * 4);
+
+		read_words_via_s400_api(&buf[59], 59, 1, fuse->se_data);
+
+		buf[525] = readl_relaxed(regs + 525 * 4) & 0xffff;
+		buf[526] = readl_relaxed(regs + 526 * 4) & 0xffff;
+		for (i = 528; i < 535; i++)
+			buf[i] = readl_relaxed(regs + i * 4);
+		for (i = 536; i < 816; i++)
+			buf[i] = readl_relaxed(regs + i * 4);
+		err = 0;
+
+		fuse->pfn = offset >> 12 & 0xf;
+		offset = offset & 0xfff;
 	}
 
-	memcpy(val, (u8 *)(buf + offset), bytes);
+	memcpy(val, (u8 *)(buf) + offset, bytes);
 
 ret:
 	kfree(buf);
@@ -257,45 +292,81 @@ ret:
 	return err;
 }
 
-struct imx_fsb_s400_fuse *my_fuse;
-int polyhex_get_mac(int index, char *addr)
+static int fsb_s400_fuse_post_process(void *priv, const char *id, int index,
+				      unsigned int offset, void *data,
+				      size_t bytes)
 {
-	u8 buf[12];
-	//printk("GLS_MAC haha eth%d polyhex_get_mac \n", index);
-	fsb_s400_fuse_read(my_fuse,315,buf,12);
-	//printk("GLS_MAC %pM ", buf);	
-	//printk("GLS_MAC %pM ", buf+6);	
-	if(index==1){
-		addr[0] = buf[5];
-		addr[1] = buf[4];
-		addr[2] = buf[3];
-		addr[3] = buf[2];
-		addr[4] = buf[1];
-		addr[5] = buf[0];
-	}else{
-		addr[0] = buf[7];
-		addr[1] = buf[6];
-		addr[2] = buf[11];
-		addr[3] = buf[10];
-		addr[4] = buf[9];
-		addr[5] = buf[8];
-	
+	struct imx_fsb_s400_fuse *fuse = priv;
+	u8 *buf = data;
+	int i;
+
+	if (!fuse)
+		return -EINVAL;
+
+	/* Deal with some post processing of nvmem cell data */
+	if (id && !strcmp(id, "mac-address")) {
+		if (fuse->hw->reverse_mac_address) {
+			for (i = 0; i < bytes / 2; i++)
+				swap(buf[i], buf[bytes - i - 1]);
+		}
+
+		if (fuse->hw->increase_mac_address &&
+		    fuse->hw->pf_mac_offset_list) {
+			if (fuse->pfn >= sizeof(fuse->hw->pf_mac_offset_list))
+				return -EINVAL;
+			if (is_zero_ether_addr(buf))
+				return 0;
+			eth_addr_add(buf,
+				     fuse->hw->pf_mac_offset_list[fuse->pfn]);
+		}
 	}
+
 	return 0;
 }
-EXPORT_SYMBOL(polyhex_get_mac);
+
+static int fsb_s400_fuse_write(void *priv, unsigned int offset, void *val, size_t bytes)
+{
+	struct imx_fsb_s400_fuse *fuse = priv;
+	u32 *buf = val;
+	u32 index;
+	int ret;
+
+	/* allow only writing one complete OTP word at a time */
+	if (bytes != 4)
+		return -EINVAL;
+
+	/* divide the offset by the word size to get the word count */
+	index = offset / 4;
+
+	mutex_lock(&fuse->lock);
+	ret = imx_se_write_fuse(fuse->se_data, index, *buf, false);
+	mutex_unlock(&fuse->lock);
+
+	return ret;
+}
+
+struct imx_fsb_s400_fuse *gfuse;
+static void imx_fsb_s400_fuse_fixup_cell_info(struct nvmem_device *nvmem,
+					      struct nvmem_cell_info *cell)
+{
+	cell->priv = gfuse;
+	cell->read_post_process = fsb_s400_fuse_post_process;
+}
 
 static int imx_fsb_s400_fuse_probe(struct platform_device *pdev)
 {
 	struct imx_fsb_s400_fuse *fuse;
 	struct nvmem_device *nvmem;
+	struct device_node *np;
+	void __iomem *reg;
+	u32 v;
 
 	fuse = devm_kzalloc(&pdev->dev, sizeof(*fuse), GFP_KERNEL);
 	if (!fuse)
 		return -ENOMEM;
 
-	my_fuse=fuse;
-	//printk("GLS_FUSE %s \n", __func__);
+	gfuse = fuse;
+
 	fuse->regs = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(fuse->regs))
 		return PTR_ERR(fuse->regs);
@@ -305,14 +376,40 @@ static int imx_fsb_s400_fuse_probe(struct platform_device *pdev)
 	fuse->config.id = NVMEM_DEVID_AUTO;
 	fuse->config.owner = THIS_MODULE;
 	fuse->config.size = 2048; /* 64 Banks */
+	if (of_device_is_compatible(pdev->dev.of_node, "fsl,imx94-ocotp"))
+		fuse->config.size = 3296; /* 103 Banks */
+	fuse->config.add_legacy_fixed_of_cells = true;
 	fuse->config.reg_read = fsb_s400_fuse_read;
-	//John_gao add for imx93 fuse mac
-	if(of_device_is_compatible(pdev->dev.of_node, "fsl,imx93-ocotp")){
+	if ((of_device_is_compatible(pdev->dev.of_node, "fsl,imx93-ocotp")) ||
+	    (of_device_is_compatible(pdev->dev.of_node, "fsl,imx95-ocotp")))
 		fuse->config.reg_write = fsb_s400_fuse_write;
-	}
 	fuse->config.priv = fuse;
 	mutex_init(&fuse->lock);
 	fuse->hw = of_device_get_match_data(&pdev->dev);
+
+	if (of_device_is_compatible(pdev->dev.of_node, "fsl,imx95-ocotp"))
+		fuse->config.size = 2440; /* 610 words */
+
+	if (fuse->hw->reverse_mac_address || fuse->hw->increase_mac_address)
+		fuse->config.fixup_dt_cell_info = &imx_fsb_s400_fuse_fixup_cell_info;
+
+	if (fuse->hw->oscca_fuse_read) {
+		np = of_find_compatible_node(NULL, NULL, "fsl,imx93-aonmix-ns-syscfg");
+		if (!np)
+			return -ENODEV;
+
+		reg = of_iomap(np, 0);
+		if (!reg)
+			return -ENOMEM;
+
+		v = readl_relaxed(reg + FUSE_ACC_DIS);
+		if (v & BIT(0))
+			fuse->fsb_read_dis = true;
+		else
+			fuse->fsb_read_dis = false;
+	} else {
+		fuse->fsb_read_dis = false;
+	}
 
 	nvmem = devm_nvmem_register(&pdev->dev, &fuse->config);
 	if (IS_ERR(nvmem)) {
@@ -320,14 +417,46 @@ static int imx_fsb_s400_fuse_probe(struct platform_device *pdev)
 		return PTR_ERR(nvmem);
 	}
 
-	printk("GLS_NVMEM read only : %d \n", fuse->config.read_only ? 1:0);
-	printk("GLS_NVMEM word_size : %d \n", fuse->config.word_size);
-	printk("GLS_NVMEM stride : %d \n", fuse->config.stride);
+	fuse->se_data = imx_get_se_data_info(fuse->hw->se_soc_id, 0);
+	if (IS_ERR_OR_NULL(fuse->se_data)) {
+		dev_err(&pdev->dev, "failed to get the se-fw2 device\n");
+		return -EPROBE_DEFER;
+	}
 
 	dev_dbg(&pdev->dev, "fuse nvmem device registered successfully\n");
 
 	return 0;
 }
+
+/*
+ * i.MX95 uses the following mac address offset list:
+ * | No. | Mac address user  |
+ * |-----|-------------------|
+ * | 0   | enetc mac pf0     |
+ * | 1   | enetc mac vf0     |
+ * | 2   | enetc mac vf1     |
+ * | 3   | enetc mac pf1     |
+ * | 4   | enetc mac vf2     |
+ * | 5   | enetc mac vf3     |
+ * | 6   | enetc mac pf2     |
+ * | 7   | enetc mac vf4     |
+ * | 8   | enetc mac vf5     |
+ */
+static const u8 imx95_pf_mac_offset_list[] = { 0, 3, 6 };
+
+/*
+ * i.MX94 uses the following mac address offset list:
+ * | No.    | Module      | Mac address user             |
+ * |--------|-------------|------------------------------|
+ * | 0 ~ 1  | ethercat    | port0/port1                  |
+ * | 2      | netc switch | internal enetc3 mac OR swp0  |
+ * | 3 ~ 6  |             | enetc3 vf1~3 AND swp1        |
+ * | 7      | enetc mac   | enetc0 pf                    |
+ * | 8      |             | enetc1 pf                    |
+ * | 9      |             | enetc2 pf                    |
+ * | 10     | netc switch | swp2                         |
+ */
+static const u8 imx94_pf_mac_offset_list[] = { 2, 7, 8, 9 };
 
 static const struct imx_fsb_s400_hw imx8ulp_fsb_s400_hw = {
 	.soc = IMX8ULP,
@@ -335,8 +464,8 @@ static const struct imx_fsb_s400_hw imx8ulp_fsb_s400_hw = {
 	.fsb_bank_reg = {
 		[0] = { 3, 0 },
 		[1] = { 4, 8 },
-		[2] = { 5, 16 },
-		[3] = { 6, 24 },
+		[2] = { 5, 64 },
+		[3] = { 6, 72 },
 		[4] = { 8, 80, true },
 		[5] = { 24, 84, true },
 		[6] = { 26, 88, true },
@@ -356,16 +485,48 @@ static const struct imx_fsb_s400_hw imx8ulp_fsb_s400_hw = {
 		[20] = { 45, 192 },
 		[21] = { 46, 200 },
 	},
+	.oscca_fuse_read = false,
+	.reverse_mac_address = false,
+	.increase_mac_address = false,
+	.pf_mac_offset_list = NULL,
+	.se_soc_id = SOC_ID_OF_IMX8ULP,
 };
 
 static const struct imx_fsb_s400_hw imx93_fsb_s400_hw = {
 	.soc = IMX93,
 	.fsb_otp_shadow = 0x8000,
+	.oscca_fuse_read = true,
+	.reverse_mac_address = true,
+	.increase_mac_address = false,
+	.pf_mac_offset_list = NULL,
+	.se_soc_id = SOC_ID_OF_IMX93,
+};
+
+static const struct imx_fsb_s400_hw imx95_fsb_s400_hw = {
+	.soc = IMX95,
+	.fsb_otp_shadow = 0x8000,
+	.oscca_fuse_read = false,
+	.reverse_mac_address = false,
+	.increase_mac_address = true,
+	.pf_mac_offset_list = imx95_pf_mac_offset_list,
+	.se_soc_id = SOC_ID_OF_IMX95,
+};
+
+static const struct imx_fsb_s400_hw imx94_fsb_s400_hw = {
+	.soc = IMX94,
+	.fsb_otp_shadow = 0x8000,
+	.oscca_fuse_read = false,
+	.reverse_mac_address = false,
+	.increase_mac_address = true,
+	.pf_mac_offset_list = imx94_pf_mac_offset_list,
+	.se_soc_id = SOC_ID_OF_IMX94,
 };
 
 static const struct of_device_id imx_fsb_s400_fuse_match[] = {
 	{ .compatible = "fsl,imx8ulp-ocotp", .data = &imx8ulp_fsb_s400_hw, },
 	{ .compatible = "fsl,imx93-ocotp", .data = &imx93_fsb_s400_hw, },
+	{ .compatible = "fsl,imx95-ocotp", .data = &imx95_fsb_s400_hw, },
+	{ .compatible = "fsl,imx94-ocotp", .data = &imx94_fsb_s400_hw, },
 	{},
 };
 

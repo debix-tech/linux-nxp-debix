@@ -641,7 +641,7 @@ static int dpaa2_eth_do_cls_rule(struct net_device *net_dev,
 		else
 			fs_act.flow_id = fs->ring_cookie;
 	}
-	for (i = 0; i < dpaa2_eth_tc_count(priv); i++) {
+	for (i = 0; i < dpaa2_eth_rx_tc_count(priv); i++) {
 		if (add)
 			err = dpni_add_fs_entry(priv->mc_io, 0, priv->mc_token,
 						i, fs->location, &rule_cfg,
@@ -794,7 +794,7 @@ int dpaa2_phc_index = -1;
 EXPORT_SYMBOL(dpaa2_phc_index);
 
 static int dpaa2_eth_get_ts_info(struct net_device *dev,
-				 struct ethtool_ts_info *info)
+				 struct kernel_ethtool_ts_info *info)
 {
 	if (!dpaa2_ptp)
 		return ethtool_op_get_ts_info(dev, info);

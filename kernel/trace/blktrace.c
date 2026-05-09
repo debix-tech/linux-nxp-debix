@@ -524,8 +524,7 @@ static int do_blk_trace_setup(struct request_queue *q, char *name, dev_t dev,
 	if (!buts->buf_size || !buts->buf_nr)
 		return -EINVAL;
 
-	strncpy(buts->name, name, BLKTRACE_BDEV_SIZE);
-	buts->name[BLKTRACE_BDEV_SIZE - 1] = '\0';
+	strscpy_pad(buts->name, name, BLKTRACE_BDEV_SIZE);
 
 	/*
 	 * some device names have larger paths - convert the slashes
@@ -721,7 +720,7 @@ EXPORT_SYMBOL_GPL(blk_trace_startstop);
  */
 
 /**
- * blk_trace_ioctl: - handle the ioctls associated with tracing
+ * blk_trace_ioctl - handle the ioctls associated with tracing
  * @bdev:	the block device
  * @cmd:	the ioctl cmd
  * @arg:	the argument data, if any
@@ -729,13 +728,9 @@ EXPORT_SYMBOL_GPL(blk_trace_startstop);
  **/
 int blk_trace_ioctl(struct block_device *bdev, unsigned cmd, char __user *arg)
 {
-	struct request_queue *q;
+	struct request_queue *q = bdev_get_queue(bdev);
 	int ret, start = 0;
 	char b[BDEVNAME_SIZE];
-
-	q = bdev_get_queue(bdev);
-	if (!q)
-		return -ENXIO;
 
 	mutex_lock(&q->debugfs_mutex);
 
@@ -769,7 +764,7 @@ int blk_trace_ioctl(struct block_device *bdev, unsigned cmd, char __user *arg)
 }
 
 /**
- * blk_trace_shutdown: - stop and cleanup trace structures
+ * blk_trace_shutdown - stop and cleanup trace structures
  * @q:    the request queue associated with the device
  *
  **/

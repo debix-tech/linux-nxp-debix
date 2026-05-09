@@ -162,8 +162,14 @@ static void hdmi_drm_info_set(struct cdns_mhdp_device *mhdp)
 
 	conn_state = mhdp->connector.base.state;
 
-	if (!conn_state->hdr_output_metadata)
+	if (!conn_state->hdr_output_metadata) {
+		/* Disable HDR info frame if it had enabled */
+		if (mhdp->hdmi.hdr_enable) {
+			cdns_mhdp_infoframe_remove(mhdp, 2, HDMI_INFOFRAME_TYPE_DRM);
+			mhdp->hdmi.hdr_enable = false;
+		}
 		return;
+	}
 
 	ret = drm_hdmi_infoframe_set_hdr_metadata(&frame, conn_state);
 	if (ret < 0) {
@@ -178,11 +184,36 @@ static void hdmi_drm_info_set(struct cdns_mhdp_device *mhdp)
 	}
 
 	buf[0] = 0;
-	cdns_mhdp_infoframe_set(mhdp, 3, sizeof(buf),
+	cdns_mhdp_infoframe_set(mhdp, 2, sizeof(buf),
 				buf, HDMI_INFOFRAME_TYPE_DRM);
+
+	mhdp->hdmi.hdr_enable = true;
 }
 
-void cdns_hdmi_mode_set(struct cdns_mhdp_device *mhdp)
+static void hdmi_spd_info_set(struct cdns_mhdp_device *mhdp)
+{
+	struct hdmi_spd_infoframe frame;
+	u8 buf[32];
+	int ret;
+
+	ret = hdmi_spd_infoframe_init(&frame, "NXP", "i.MX8 HDMI");
+	if (ret < 0) {
+		DRM_DEBUG_KMS("No SPD infoframe\n");
+		return;
+	}
+
+	ret = hdmi_spd_infoframe_pack(&frame, buf + 1, sizeof(buf) - 1);
+	if (ret < 0) {
+		DRM_DEBUG_KMS("couldn't pack SPD infoframe\n");
+		return;
+	}
+
+	buf[0] = 0;
+	cdns_mhdp_infoframe_set(mhdp, 4, sizeof(buf),
+				buf, HDMI_INFOFRAME_TYPE_SPD);
+}
+
+static void cdns_hdmi_mode_set(struct cdns_mhdp_device *mhdp)
 {
 	struct drm_display_mode *mode = &mhdp->mode;
 	int ret;
@@ -224,6 +255,8 @@ void cdns_hdmi_mode_set(struct cdns_mhdp_device *mhdp)
 	hdmi_vendor_info_set(mhdp, mode);
 
 	hdmi_drm_info_set(mhdp);
+
+	hdmi_spd_info_set(mhdp);
 
 	ret = cdns_hdmi_mode_config(mhdp, mode, &mhdp->video_info);
 	if (ret < 0) {
@@ -278,13 +311,7 @@ cdns_hdmi_connector_detect(struct drm_connector *connector, bool force)
 		result = connector_status_unknown;
 	}
 
-	mutex_lock(&mhdp->lock);
-	if (result != mhdp->last_connector_result) {
-		handle_plugged_change(mhdp,
-				      result == connector_status_connected);
-		mhdp->last_connector_result = result;
-	}
-	mutex_unlock(&mhdp->lock);
+	mhdp->last_connector_result = result;
 
 	return result;
 }
@@ -294,19 +321,14 @@ static int cdns_hdmi_connector_get_modes(struct drm_connector *connector)
 	struct cdns_mhdp_device *mhdp =
 				container_of(connector, struct cdns_mhdp_device, connector.base);
 	int num_modes = 0;
-	struct edid *edid;
+	const struct drm_edid *drm_edid;
 
-	edid = drm_do_get_edid(&mhdp->connector.base,
-				   cdns_hdmi_get_edid_block, mhdp);
-	if (edid) {
-		dev_info(mhdp->dev, "%x,%x,%x,%x,%x,%x,%x,%x\n",
-			 edid->header[0], edid->header[1],
-			 edid->header[2], edid->header[3],
-			 edid->header[4], edid->header[5],
-			 edid->header[6], edid->header[7]);
-		drm_connector_update_edid_property(connector, edid);
-		num_modes = drm_add_edid_modes(connector, edid);
-		kfree(edid);
+	drm_edid = drm_edid_read_custom(&mhdp->connector.base,
+					cdns_hdmi_get_edid_block, mhdp);
+	if (drm_edid) {
+		drm_edid_connector_update(connector, drm_edid);
+		num_modes = drm_edid_connector_add_modes(connector);
+		drm_edid_free(drm_edid);
 	}
 
 	if (num_modes == 0)
@@ -329,6 +351,7 @@ static void cdns_hdmi_bridge_disable(struct drm_bridge *bridge)
 	struct cdns_mhdp_device *mhdp = bridge->driver_private;
 
 	cdns_hdcp_disable(mhdp);
+	handle_plugged_change(mhdp, false);
 }
 
 static void cdns_hdmi_bridge_enable(struct drm_bridge *bridge)
@@ -338,6 +361,7 @@ static void cdns_hdmi_bridge_enable(struct drm_bridge *bridge)
 
 	if (conn_state->content_protection == DRM_MODE_CONTENT_PROTECTION_DESIRED)
 		cdns_hdcp_enable(mhdp);
+	handle_plugged_change(mhdp, true);
 }
 
 static int cdns_hdmi_connector_atomic_check(struct drm_connector *connector,
@@ -426,10 +450,8 @@ static int cdns_hdmi_bridge_attach(struct drm_bridge *bridge,
 					   config->hdr_output_metadata_property,
 					   0);
 
-		if (!drm_mode_create_hdmi_colorspace_property(connector))
-			drm_object_attach_property(&connector->base,
-						connector->colorspace_property,
-						0);
+		if (!drm_mode_create_hdmi_colorspace_property(connector, 0))
+			drm_connector_attach_colorspace_property(connector);
 	}
 
 	drm_connector_attach_encoder(connector, encoder);
@@ -494,9 +516,9 @@ static void cdns_hdmi_bridge_mode_set(struct drm_bridge *bridge,
 	mutex_unlock(&mhdp->lock);
 }
 
-bool cdns_hdmi_bridge_mode_fixup(struct drm_bridge *bridge,
-				 const struct drm_display_mode *mode,
-				 struct drm_display_mode *adjusted_mode)
+static bool cdns_hdmi_bridge_mode_fixup(struct drm_bridge *bridge,
+					const struct drm_display_mode *mode,
+					struct drm_display_mode *adjusted_mode)
 {
 	struct cdns_mhdp_device *mhdp = bridge->driver_private;
 	struct drm_connector_state *new_state = &mhdp->connector.new_state;
@@ -635,7 +657,6 @@ static void cdns_hdmi_parse_dt(struct cdns_mhdp_device *mhdp)
 	dev_info(mhdp->dev, "lane-mapping 0x%02x\n", mhdp->lane_mapping);
 }
 
-#ifdef CONFIG_DRM_CDNS_HDMI_CEC
 static void cdns_mhdp_cec_init(struct cdns_mhdp_device *mhdp)
 {
 	struct cdns_mhdp_cec *cec = &mhdp->hdmi.cec;
@@ -646,7 +667,6 @@ static void cdns_mhdp_cec_init(struct cdns_mhdp_device *mhdp)
 	cec->regs_sec = mhdp->regs_sec;
 	cec->bus_type = mhdp->bus_type;
 }
-#endif
 
 static int __cdns_hdmi_probe(struct platform_device *pdev,
 		  struct cdns_mhdp_device *mhdp)
@@ -663,6 +683,9 @@ static int __cdns_hdmi_probe(struct platform_device *pdev,
 	INIT_DELAYED_WORK(&mhdp->hotplug_work, hotplug_work_func);
 
 	iores = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (!iores)
+		return -ENODEV;
+
 	mhdp->regs_base = devm_ioremap(dev, iores->start, resource_size(iores));
 	if (IS_ERR(mhdp->regs_base)) {
 		dev_err(dev, "No regs_base memory\n");
@@ -671,6 +694,9 @@ static int __cdns_hdmi_probe(struct platform_device *pdev,
 
 	/* sec register base */
 	iores = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+	if (!iores)
+		return -ENODEV;
+
 	mhdp->regs_sec = devm_ioremap(dev, iores->start, resource_size(iores));
 	if (IS_ERR(mhdp->regs_sec)) {
 		dev_err(dev, "No regs_sec memory\n");
@@ -754,10 +780,8 @@ static int __cdns_hdmi_probe(struct platform_device *pdev,
 	cdns_mhdp_register_audio_driver(dev);
 
 	/* register cec driver */
-#ifdef CONFIG_DRM_CDNS_HDMI_CEC
 	cdns_mhdp_cec_init(mhdp);
 	cdns_mhdp_register_cec_driver(&mhdp->hdmi.cec);
-#endif
 
 	return 0;
 }
@@ -765,9 +789,7 @@ static int __cdns_hdmi_probe(struct platform_device *pdev,
 static void __cdns_hdmi_remove(struct cdns_mhdp_device *mhdp)
 {
 	/* unregister cec driver */
-#ifdef CONFIG_DRM_CDNS_HDMI_CEC
 	cdns_mhdp_unregister_cec_driver(&mhdp->hdmi.cec);
-#endif
 	cdns_mhdp_unregister_audio_driver(mhdp->dev);
 	cnds_hdcp_remove_device_files(mhdp);
 

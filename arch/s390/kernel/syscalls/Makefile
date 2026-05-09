@@ -4,15 +4,15 @@ gen	:= arch/$(ARCH)/include/generated
 kapi	:= $(gen)/asm
 uapi	:= $(gen)/uapi/asm
 
-syscall	:= $(srctree)/$(src)/syscall.tbl
-systbl	:= $(srctree)/$(src)/syscalltbl
+syscall	:= $(src)/syscall.tbl
+systbl	:= $(src)/syscalltbl
 
 gen-y := $(kapi)/syscall_table.h
 kapi-hdrs-y := $(kapi)/unistd_nr.h
 uapi-hdrs-y := $(uapi)/unistd_32.h
 uapi-hdrs-y += $(uapi)/unistd_64.h
 
-targets += $(addprefix ../../../,$(gen-y) $(kapi-hdrs-y) $(uapi-hdrs-y))
+targets += $(addprefix ../../../../,$(gen-y) $(kapi-hdrs-y) $(uapi-hdrs-y))
 
 PHONY += kapi uapi
 

@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0+ */
 /*
- * Copyright 2020 NXP
+ * Copyright 2020, 2024 NXP
  *
  * Header file containing the public API for the System Controller (SC)
  * Security Controller (SECO) function.
@@ -15,6 +15,10 @@
 
 #include <linux/errno.h>
 #include <linux/firmware/imx/sci.h>
+
+#define SECURE_RAM_BASE_ADDRESS         (0x31800000ULL)
+#define SECURE_RAM_SIZE                 (0x10000ULL)
+#define IMX_SC_RM_PERM_FULL             7U  /* Full access */
 
 /*
  * This type is used to indicate RPC RM function calls.
@@ -72,6 +76,7 @@ int imx_sc_seco_secvio_dgo_config(struct imx_sc_ipc *ipc, u8 id, u8 access,
 {
 	return -EOPNOTSUPP;
 }
+
 #endif /* IS_ENABLED(CONFIG_IMX_SCU) */
 
 #endif /* _SC_SECO_API_H */

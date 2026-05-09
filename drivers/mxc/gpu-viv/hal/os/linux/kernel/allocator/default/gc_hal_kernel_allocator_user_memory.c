@@ -2,7 +2,7 @@
 *
 *    The MIT License (MIT)
 *
-*    Copyright (c) 2014 - 2023 Vivante Corporation
+*    Copyright (c) 2014 - 2024 Vivante Corporation
 *
 *    Permission is hereby granted, free of charge, to any person obtaining a
 *    copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@
 *
 *    The GPL License (GPL)
 *
-*    Copyright (C) 2014 - 2023 Vivante Corporation
+*    Copyright (C) 2014 - 2024 Vivante Corporation
 *
 *    This program is free software; you can redistribute it and/or
 *    modify it under the terms of the GNU General Public License
@@ -51,7 +51,6 @@
 *    version of this file.
 *
 *****************************************************************************/
-
 
 #include "gc_hal_kernel_linux.h"
 #include "gc_hal_kernel_allocator.h"
@@ -317,13 +316,14 @@ import_pfn_map(gckOS Os, struct device *dev, struct um_desc *um,
     struct page          **pages     = gcvNULL;
     int                    result    = 0;
     size_t                 pageCount = 0;
+    unsigned int           data      = 0;
 
     if (!current->mm)
         return -ENOTTY;
 
     down_read(&current_mm_mmap_sem);
     vma = find_vma(current->mm, addr);
-#if !gcdUSING_PFN_FOLLOW
+#if !gcdUSING_PFN_FOLLOW && (LINUX_VERSION_CODE < KERNEL_VERSION(6, 5, 0))
     up_read(&current_mm_mmap_sem);
 #endif
 
@@ -350,13 +350,48 @@ import_pfn_map(gckOS Os, struct device *dev, struct um_desc *um,
     }
 
     for (i = 0; i < pfn_count; i++) {
-#if gcdUSING_PFN_FOLLOW
+#if gcdUSING_PFN_FOLLOW || (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0))
         int ret = 0;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+        struct follow_pfnmap_args args = { .vma = vma, .address = addr };
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)
+        pte_t *ptep;
+        spinlock_t *ptl;
+#endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+        ret = follow_pfnmap_start(&args);
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)
+        ret = follow_pte(vma, addr, &ptep, &ptl);
+#else
         ret = follow_pfn(vma, addr, &pfns[i]);
+#endif
         if (ret < 0) {
-            up_read(&current_mm_mmap_sem);
-            goto err;
+            /* Case maybe provides unmapped addr. */
+            ret = gckOS_ReadMappedPointer(Os, (gctPOINTER)addr, &data);
+            if (!ret) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+                args.address = addr;
+                ret = follow_pfnmap_start(&args);
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)
+                ret = follow_pte(vma, addr, &ptep, &ptl);
+#else
+                ret = follow_pfn(vma, addr, &pfns[i]);
+#endif
+            }
+
+            if (ret < 0) {
+                up_read(&current_mm_mmap_sem);
+                goto err;
+            }
         }
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+        pfns[i] = args.pfn;
+        follow_pfnmap_end(&args);
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)
+        pfns[i] = pte_pfn(ptep_get(ptep));
+        pte_unmap_unlock(ptep, ptl);
+#endif
 #else
         /* protect pfns[i] */
         spinlock_t  *ptl;
@@ -395,8 +430,17 @@ import_pfn_map(gckOS Os, struct device *dev, struct um_desc *um,
         pte = pte_offset_map_lock(current->mm, pmd, addr, &ptl);
 
         if (!pte_present(*pte)) {
-            pte_unmap_unlock(pte, ptl);
-            goto err;
+            if (pte)
+                pte_unmap_unlock(pte, ptl);
+
+            /* Case maybe provides unmapped addr. */
+            if (gcmIS_SUCCESS(gckOS_ReadMappedPointer(Os, (gctPOINTER)addr, &data)))
+                pte = pte_offset_map_lock(current->mm, pmd, addr, &ptl);
+
+            if (!pte_present(*pte)) {
+                pte_unmap_unlock(pte, ptl);
+                goto err;
+            }
         }
 
         pfns[i] = pte_pfn(*pte);
@@ -405,7 +449,7 @@ import_pfn_map(gckOS Os, struct device *dev, struct um_desc *um,
         /* Advance to next. */
         addr += PAGE_SIZE;
     }
-#if gcdUSING_PFN_FOLLOW
+#if gcdUSING_PFN_FOLLOW || (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0))
     up_read(&current_mm_mmap_sem);
 #endif
 

@@ -241,7 +241,6 @@ efi_status_t allocate_new_fdt_and_exit_boot(void *handle,
 		}
 	}
 
-	efi_info ("EFI command line = %s \n", cmdline_ptr);
 	/*
 	 * Unauthenticated device tree data is a security hazard, so ignore
 	 * 'dtb=' unless UEFI Secure Boot is disabled.  We assume that secure
@@ -254,7 +253,6 @@ efi_status_t allocate_new_fdt_and_exit_boot(void *handle,
 	} else {
 		status = efi_load_dtb(image, &fdt_addr, &fdt_size);
 
-		efi_info ("EFI status = %d \n", status);
 		if (status != EFI_SUCCESS && status != EFI_NOT_READY) {
 			efi_err("Failed to load device tree!\n");
 			goto fail;
@@ -337,8 +335,8 @@ fail_free_new_fdt:
 
 fail:
 	efi_free(fdt_size, fdt_addr);
-
-	efi_bs_call(free_pool, priv.runtime_map);
+	if (!efi_novamap)
+		efi_bs_call(free_pool, priv.runtime_map);
 
 	return EFI_LOAD_ERROR;
 }

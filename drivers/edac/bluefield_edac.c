@@ -180,7 +180,7 @@ static void bluefield_edac_check(struct mem_ctl_info *mci)
 static void bluefield_edac_init_dimms(struct mem_ctl_info *mci)
 {
 	struct bluefield_edac_priv *priv = mci->pvt_info;
-	int mem_ctrl_idx = mci->mc_idx;
+	u64 mem_ctrl_idx = mci->mc_idx;
 	struct dimm_info *dimm;
 	u64 smc_info, smc_arg;
 	int is_empty = 1, i;
@@ -323,14 +323,12 @@ err:
 
 }
 
-static int bluefield_edac_mc_remove(struct platform_device *pdev)
+static void bluefield_edac_mc_remove(struct platform_device *pdev)
 {
 	struct mem_ctl_info *mci = platform_get_drvdata(pdev);
 
 	edac_mc_del_mc(&pdev->dev);
 	edac_mc_free(mci);
-
-	return 0;
 }
 
 static const struct acpi_device_id bluefield_mc_acpi_ids[] = {
@@ -346,7 +344,7 @@ static struct platform_driver bluefield_edac_mc_driver = {
 		.acpi_match_table = bluefield_mc_acpi_ids,
 	},
 	.probe = bluefield_edac_mc_probe,
-	.remove = bluefield_edac_mc_remove,
+	.remove_new = bluefield_edac_mc_remove,
 };
 
 module_platform_driver(bluefield_edac_mc_driver);

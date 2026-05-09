@@ -1316,9 +1316,6 @@ static int vim2m_probe(struct platform_device *pdev)
 	vfd->v4l2_dev = &dev->v4l2_dev;
 
 	video_set_drvdata(vfd, dev);
-	v4l2_info(&dev->v4l2_dev,
-		  "Device registered as /dev/video%d\n", vfd->num);
-
 	platform_set_drvdata(pdev, dev);
 
 	dev->m2m_dev = v4l2_m2m_init(&m2m_ops);
@@ -1344,6 +1341,9 @@ static int vim2m_probe(struct platform_device *pdev)
 		v4l2_err(&dev->v4l2_dev, "Failed to register video device\n");
 		goto error_m2m;
 	}
+
+	v4l2_info(&dev->v4l2_dev,
+		  "Device registered as /dev/video%d\n", vfd->num);
 
 #ifdef CONFIG_MEDIA_CONTROLLER
 	ret = v4l2_m2m_register_media_controller(dev->m2m_dev, vfd,
@@ -1379,7 +1379,7 @@ error_free:
 	return ret;
 }
 
-static int vim2m_remove(struct platform_device *pdev)
+static void vim2m_remove(struct platform_device *pdev)
 {
 	struct vim2m_dev *dev = platform_get_drvdata(pdev);
 
@@ -1390,13 +1390,11 @@ static int vim2m_remove(struct platform_device *pdev)
 	v4l2_m2m_unregister_media_controller(dev->m2m_dev);
 #endif
 	video_unregister_device(&dev->vfd);
-
-	return 0;
 }
 
 static struct platform_driver vim2m_pdrv = {
 	.probe		= vim2m_probe,
-	.remove		= vim2m_remove,
+	.remove_new	= vim2m_remove,
 	.driver		= {
 		.name	= MEM2MEM_NAME,
 	},

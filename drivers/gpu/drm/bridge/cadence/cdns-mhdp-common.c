@@ -20,12 +20,11 @@
 #include <linux/iopoll.h>
 #include <linux/reset.h>
 
-#include <asm/unaligned.h>
-
 #include <drm/bridge/cdns-mhdp.h>
 #include <drm/drm_modes.h>
 #include <drm/drm_print.h>
 #include <linux/regmap.h>
+#include <linux/unaligned.h>
 
 #include "cdns-mhdp.h"
 
@@ -152,7 +151,7 @@ bool cdns_mhdp_check_alive(struct cdns_mhdp_device *mhdp)
 }
 EXPORT_SYMBOL(cdns_mhdp_check_alive);
 
-int mhdp_mailbox_read(struct cdns_mhdp_device *mhdp)
+static int mhdp_mailbox_read(struct cdns_mhdp_device *mhdp)
 {
 	int val, ret;
 

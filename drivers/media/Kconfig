@@ -182,7 +182,7 @@ config MEDIA_CONTROLLER
 #
 
 config DVB_CORE
-	tristate
+	tristate "DVB Core"
 	depends on MEDIA_DIGITAL_TV_SUPPORT
 	depends on (I2C || I2C=n)
 	default MEDIA_DIGITAL_TV_SUPPORT
@@ -224,6 +224,7 @@ comment "Media drivers"
 source "drivers/media/usb/Kconfig"
 source "drivers/media/pci/Kconfig"
 source "drivers/media/radio/Kconfig"
+source "drivers/media/virtio/Kconfig"
 
 if MEDIA_PLATFORM_SUPPORT
 source "drivers/media/platform/Kconfig"

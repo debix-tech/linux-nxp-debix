@@ -2,7 +2,7 @@
 *
 *    The MIT License (MIT)
 *
-*    Copyright (c) 2014 - 2023 Vivante Corporation
+*    Copyright (c) 2014 - 2024 Vivante Corporation
 *
 *    Permission is hereby granted, free of charge, to any person obtaining a
 *    copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@
 *
 *    The GPL License (GPL)
 *
-*    Copyright (C) 2014 - 2023 Vivante Corporation
+*    Copyright (C) 2014 - 2024 Vivante Corporation
 *
 *    This program is free software; you can redistribute it and/or
 *    modify it under the terms of the GNU General Public License
@@ -52,7 +52,6 @@
 *
 *****************************************************************************/
 
-
 #ifndef __gc_hal_h_
 #define __gc_hal_h_
 
@@ -77,6 +76,9 @@ typedef struct _gckDB              *gckDB;
 typedef struct _gckDVFS            *gckDVFS;
 typedef struct _gckMMU             *gckMMU;
 typedef struct _gcsDEVICE          *gckDEVICE;
+#if gcdENABLE_GPU_WORK_PERIOD_TRACE
+typedef struct _gcsGPUWORK         *gckGPUWORK;
+#endif
 
 /******************************************************************************
  ****************************** Alignment Macros ******************************
@@ -307,7 +309,9 @@ gckOS_LockPages(IN gckOS        Os,
 gceSTATUS
 gckOS_MapPagesEx(IN gckOS          Os,
                  IN gckKERNEL      Kernel,
+                 IN gckMMU         Mmu,
                  IN gctPHYS_ADDR   Physical,
+                 IN gctSIZE_T      Offset,
                  IN gctSIZE_T      PageCount,
                  IN gctADDRESS     Address,
                  IN gctPOINTER     PageTable,
@@ -318,6 +322,7 @@ gckOS_MapPagesEx(IN gckOS          Os,
 gceSTATUS
 gckOS_Map1MPages(IN gckOS          Os,
                  IN gckKERNEL      Kernel,
+                 IN gckMMU         Mmu,
                  IN gctPHYS_ADDR   Physical,
                  IN gctSIZE_T      PageCount,
                  IN gctADDRESS     Address,
@@ -514,6 +519,9 @@ gckOS_QueryCPUFrequency(IN gckOS Os, IN gctUINT32 CPUId, OUT gctUINT32 *Frequenc
 
 gceSTATUS
 gckOS_TraceGpuMemory(IN gckOS Os, IN gctINT32 ProcessID, IN gctINT64 Delta);
+
+gceSTATUS
+gckOS_NodeIdAssign(IN gckOS Os, IN gcuVIDMEM_NODE_PTR Node);
 
 /*******************************************************************************
  **
@@ -813,6 +821,11 @@ gckOS_GetProcessID(OUT gctUINT32_PTR ProcessID);
 
 gceSTATUS
 gckOS_GetCurrentProcessID(OUT gctUINT32_PTR ProcessID);
+
+#if gcdENABLE_GPU_WORK_PERIOD_TRACE
+gceSTATUS
+gckOS_GetUserID(IN gctUINT32 PID, OUT gctUINT32_PTR UserID);
+#endif
 
 /*******************************************************************************
  **

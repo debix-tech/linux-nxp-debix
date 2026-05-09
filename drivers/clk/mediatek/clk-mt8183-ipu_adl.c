@@ -38,6 +38,7 @@ static const struct of_device_id of_match_clk_mt8183_ipu_adl[] = {
 		/* sentinel */
 	}
 };
+MODULE_DEVICE_TABLE(of, of_match_clk_mt8183_ipu_adl);
 
 static struct platform_driver clk_mt8183_ipu_adl_drv = {
 	.probe = mtk_clk_simple_probe,
@@ -47,5 +48,7 @@ static struct platform_driver clk_mt8183_ipu_adl_drv = {
 		.of_match_table = of_match_clk_mt8183_ipu_adl,
 	},
 };
+module_platform_driver(clk_mt8183_ipu_adl_drv);
 
-builtin_platform_driver(clk_mt8183_ipu_adl_drv);
+MODULE_DESCRIPTION("MediaTek MT8183 Image Processing Unit ADL driver");
+MODULE_LICENSE("GPL");

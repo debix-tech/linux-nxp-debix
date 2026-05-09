@@ -24,6 +24,7 @@
 #include <linux/of.h>
 #include <linux/of_graph.h>
 #include <linux/of_platform.h>
+#include <linux/platform_device.h>
 
 struct seiko_adapter {
 	struct device		*dev;
@@ -239,9 +240,8 @@ static int seiko_adapter_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int seiko_adapter_remove(struct platform_device *pdev)
+static void seiko_adapter_remove(struct platform_device *pdev)
 {
-	return 0;
 }
 
 static const struct of_device_id seiko_adapter_dt_ids[] = {

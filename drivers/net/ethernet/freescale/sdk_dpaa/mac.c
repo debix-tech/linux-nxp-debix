@@ -41,88 +41,34 @@
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/of_address.h>
+#include <linux/of_device.h>
 #include <linux/of_platform.h>
 #include <linux/of_net.h>
 #include <linux/of_mdio.h>
 #include <linux/phy_fixed.h>
+#include <linux/platform_device.h>
 #include <linux/device.h>
 #include <linux/phy.h>
+#include <linux/phylink.h>
 #include <linux/io.h>
 
 #include "lnxwrp_fm_ext.h"
 
 #include "mac.h"
 
-#define DTSEC_SUPPORTED \
+#define MEMAC_SUPPORTED \
 	(SUPPORTED_10baseT_Half \
 	| SUPPORTED_10baseT_Full \
 	| SUPPORTED_100baseT_Half \
 	| SUPPORTED_100baseT_Full \
+	| SUPPORTED_1000baseKX_Full \
+	| SUPPORTED_10000baseKR_Full \
 	| SUPPORTED_Autoneg \
 	| SUPPORTED_Pause \
 	| SUPPORTED_Asym_Pause \
-	| SUPPORTED_MII)
-
-static const char phy_str[][11] = {
-	[PHY_INTERFACE_MODE_MII]	= "mii",
-	[PHY_INTERFACE_MODE_GMII]	= "gmii",
-	[PHY_INTERFACE_MODE_SGMII]	= "sgmii",
-	[PHY_INTERFACE_MODE_QSGMII]	= "qsgmii",
-	[PHY_INTERFACE_MODE_TBI]	= "tbi",
-	[PHY_INTERFACE_MODE_RMII]	= "rmii",
-	[PHY_INTERFACE_MODE_RGMII]	= "rgmii",
-	[PHY_INTERFACE_MODE_RGMII_ID]	= "rgmii-id",
-	[PHY_INTERFACE_MODE_RGMII_RXID]	= "rgmii-rxid",
-	[PHY_INTERFACE_MODE_RGMII_TXID]	= "rgmii-txid",
-	[PHY_INTERFACE_MODE_RTBI]	= "rtbi",
-	[PHY_INTERFACE_MODE_XGMII]	= "xgmii",
-	[PHY_INTERFACE_MODE_2500BASEX] = "sgmii-2500",
-};
-
-static phy_interface_t __pure __attribute__((nonnull)) str2phy(const char *str)
-{
-	int i;
-
-	for (i = 0; i < ARRAY_SIZE(phy_str); i++)
-		if (strcmp(str, phy_str[i]) == 0)
-			return (phy_interface_t)i;
-
-	return PHY_INTERFACE_MODE_MII;
-}
-
-static const uint16_t phy2speed[] = {
-	[PHY_INTERFACE_MODE_MII]	= SPEED_100,
-	[PHY_INTERFACE_MODE_GMII]	= SPEED_1000,
-	[PHY_INTERFACE_MODE_SGMII]	= SPEED_1000,
-	[PHY_INTERFACE_MODE_QSGMII]	= SPEED_1000,
-	[PHY_INTERFACE_MODE_TBI]	= SPEED_1000,
-	[PHY_INTERFACE_MODE_RMII]	= SPEED_100,
-	[PHY_INTERFACE_MODE_RGMII]	= SPEED_1000,
-	[PHY_INTERFACE_MODE_RGMII_ID]	= SPEED_1000,
-	[PHY_INTERFACE_MODE_RGMII_RXID]	= SPEED_1000,
-	[PHY_INTERFACE_MODE_RGMII_TXID]	= SPEED_1000,
-	[PHY_INTERFACE_MODE_RTBI]	= SPEED_1000,
-	[PHY_INTERFACE_MODE_XGMII]	= SPEED_10000,
-	[PHY_INTERFACE_MODE_2500BASEX] = SPEED_2500,
-};
-
-static struct mac_device * __cold
-alloc_macdev(struct device *dev, size_t sizeof_priv,
-		void (*setup)(struct mac_device *mac_dev))
-{
-	struct mac_device	*mac_dev;
-
-	mac_dev = devm_kzalloc(dev, sizeof(*mac_dev) + sizeof_priv, GFP_KERNEL);
-	if (unlikely(mac_dev == NULL))
-		mac_dev = ERR_PTR(-ENOMEM);
-	else {
-		mac_dev->dev = dev;
-		dev_set_drvdata(dev, mac_dev);
-		setup(mac_dev);
-	}
-
-	return mac_dev;
-}
+	| SUPPORTED_FIBRE \
+	| SUPPORTED_MII \
+	| SUPPORTED_Backplane)
 
 static int __cold free_macdev(struct mac_device *mac_dev)
 {
@@ -132,15 +78,7 @@ static int __cold free_macdev(struct mac_device *mac_dev)
 }
 
 static const struct of_device_id mac_match[] = {
-	[DTSEC] = {
-		.compatible	= "fsl,fman-dtsec"
-	},
-	[XGMAC] = {
-		.compatible	= "fsl,fman-xgec"
-	},
-	[MEMAC] = {
-		.compatible	= "fsl,fman-memac"
-	},
+	{ .compatible	= "fsl,fman-memac" },
 	{}
 };
 MODULE_DEVICE_TABLE(of, mac_match);
@@ -153,7 +91,6 @@ static int __cold mac_probe(struct platform_device *_of_dev)
 	struct mac_device	*mac_dev;
 	struct platform_device	*of_dev;
 	struct resource		 res;
-	const char		*char_prop;
 	int			nph;
 	u32			cell_index;
 	const struct of_device_id *match;
@@ -170,10 +107,10 @@ static int __cold mac_probe(struct platform_device *_of_dev)
 		;
 	BUG_ON(i >= ARRAY_SIZE(mac_match) - 1);
 
-	mac_dev = alloc_macdev(dev, mac_sizeof_priv[i], mac_setup[i]);
+	mac_dev = memac_alloc(dev);
 	if (IS_ERR(mac_dev)) {
 		_errno = PTR_ERR(mac_dev);
-		dev_err(dev, "alloc_macdev() = %d\n", _errno);
+		dev_err(dev, "memac_alloc() = %d\n", _errno);
 		goto _return;
 	}
 
@@ -323,24 +260,23 @@ static int __cold mac_probe(struct platform_device *_of_dev)
 	}
 
 	/* Get the PHY connection type */
-	_errno = of_property_read_string(mac_node, "phy-connection-type",
-			&char_prop);
+	_errno = of_get_phy_mode(mac_node, &mac_dev->phy_if);
 	if (unlikely(_errno)) {
 		dev_warn(dev,
 			 "Cannot read PHY connection type of mac node %s from device tree. Defaulting to MII\n",
 			 mac_node->full_name);
 		mac_dev->phy_if = PHY_INTERFACE_MODE_MII;
-	} else
-		mac_dev->phy_if = str2phy(char_prop);
+	}
 
 	mac_dev->link		= false;
 	mac_dev->half_duplex	= false;
-	mac_dev->speed		= phy2speed[mac_dev->phy_if];
+	mac_dev->speed		= phylink_interface_max_speed(mac_dev->phy_if);
 	mac_dev->max_speed	= mac_dev->speed;
-	mac_dev->if_support = DTSEC_SUPPORTED;
+	mac_dev->if_support = MEMAC_SUPPORTED;
 	/* We don't support half-duplex in SGMII mode */
-	if (strstr(char_prop, "sgmii") || strstr(char_prop, "qsgmii") ||
-	    strstr(char_prop, "sgmii-2500"))
+	if (mac_dev->phy_if == PHY_INTERFACE_MODE_SGMII ||
+	    mac_dev->phy_if == PHY_INTERFACE_MODE_QSGMII ||
+	    mac_dev->phy_if == PHY_INTERFACE_MODE_2500SGMII)
 		mac_dev->if_support &= ~(SUPPORTED_10baseT_Half |
 					SUPPORTED_100baseT_Half);
 
@@ -350,8 +286,17 @@ static int __cold mac_probe(struct platform_device *_of_dev)
 		mac_dev->if_support |= SUPPORTED_1000baseT_Full;
 
 	/* The 10G interface only supports one mode */
-	if (strstr(char_prop, "xgmii"))
+	if (mac_dev->phy_if == PHY_INTERFACE_MODE_XGMII)
 		mac_dev->if_support = SUPPORTED_10000baseT_Full;
+
+	/* The adjust_link() methods in this driver do not support the
+	 * 1G <-> 10G MAC reconfiguration. Advertise a single technology
+	 * ability through clause 73 auto-negotiation.
+	 */
+	if (mac_dev->phy_if == PHY_INTERFACE_MODE_10GKR)
+		mac_dev->if_support &= ~SUPPORTED_1000baseKX_Full;
+	if (mac_dev->phy_if == PHY_INTERFACE_MODE_1000BASEKX)
+		mac_dev->if_support &= ~SUPPORTED_10000baseKR_Full;
 
 	/* Get the rest of the PHY information */
 	mac_dev->phy_node = of_parse_phandle(mac_node, "phy-handle", 0);
@@ -419,11 +364,11 @@ _return:
 	return _errno;
 }
 
-static int __cold mac_remove(struct platform_device *of_dev)
+static void __cold mac_remove(struct platform_device *of_dev)
 {
-	int			 i, _errno;
 	struct device		*dev;
 	struct mac_device	*mac_dev;
+	int			 i;
 
 	dev = &of_dev->dev;
 	mac_dev = (struct mac_device *)dev_get_drvdata(dev);
@@ -433,9 +378,7 @@ static int __cold mac_remove(struct platform_device *of_dev)
 
 	fm_unbind(mac_dev->fm_dev);
 
-	_errno = free_macdev(mac_dev);
-
-	return _errno;
+	free_macdev(mac_dev);
 }
 
 static struct platform_driver mac_driver = {

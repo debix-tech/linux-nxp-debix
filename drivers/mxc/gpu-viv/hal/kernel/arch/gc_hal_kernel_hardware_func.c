@@ -2,7 +2,7 @@
 *
 *    The MIT License (MIT)
 *
-*    Copyright (c) 2014 - 2023 Vivante Corporation
+*    Copyright (c) 2014 - 2024 Vivante Corporation
 *
 *    Permission is hereby granted, free of charge, to any person obtaining a
 *    copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@
 *
 *    The GPL License (GPL)
 *
-*    Copyright (C) 2014 - 2023 Vivante Corporation
+*    Copyright (C) 2014 - 2024 Vivante Corporation
 *
 *    This program is free software; you can redistribute it and/or
 *    modify it under the terms of the GNU General Public License
@@ -51,7 +51,6 @@
 *    version of this file.
 *
 *****************************************************************************/
-
 
 #include "gc_hal.h"
 #include "gc_hal_kernel.h"
@@ -2311,7 +2310,7 @@ _FuncRelease(IN OUT gcsFUNCTION_EXECUTION_PTR Execution)
                     if (data->address) {
                         /* Synchroneous unlock. */
                         gcmkVERIFY_OK(gckVIDMEM_NODE_Unlock(hardware->kernel,
-                                                            data->bufVidMem, 0, gcvNULL));
+                                                            data->bufVidMem, hardware->kernel->mmu, gcvNULL));
                         data->address = 0;
                     }
 
@@ -2337,7 +2336,7 @@ _FuncRelease(IN OUT gcsFUNCTION_EXECUTION_PTR Execution)
             if (command->address) {
                 /* Synchroneous unlock. */
                 gcmkVERIFY_OK(gckVIDMEM_NODE_Unlock(hardware->kernel,
-                                                    command->funcVidMem, 0, gcvNULL));
+                                                    command->funcVidMem, hardware->kernel->mmu, gcvNULL));
                 command->address = 0;
             }
 
@@ -2704,8 +2703,7 @@ _ProgramMMUStates(IN gckHARDWARE Hardware, IN gckMMU Mmu, IN gceMMU_MODE Mode,
  32) ? ~0U : (~(~0U << ((1 ? 22:22) - (0 ? 22:22) + 1))))))) << (0 ? 22:22))) | (((gctUINT32) ((gctUINT32) (1) & ((gctUINT32) ((((1 ? 22:22) - (0 ? 22:22) + 1) ==
  32) ? ~0U : (~(~0U << ((1 ? 22:22) - (0 ? 22:22) + 1))))))) << (0 ? 22:22)));
 
-        for (i = 0; i < probeSelectCount; i++)
-        {
+        for (i = 0; i < probeSelectCount; i++) {
             *buffer++ =
                 ((((gctUINT32) (0)) & ~(((gctUINT32) (((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) ==
  32) ? ~0U : (~(~0U << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27))) | (((gctUINT32) (0x01 & ((gctUINT32) ((((1 ? 31:27) - (0 ? 31:27) + 1) ==
@@ -3527,7 +3525,7 @@ _FuncRelease_Flush(IN gcsFUNCTION_EXECUTION_PTR Execution)
                     /* Synchroneous unlock. */
                     gcmkVERIFY_OK(gckVIDMEM_NODE_Unlock(hardware->kernel,
                                                         Execution->funcCmd[i].funcVidMem,
-                                                        0, gcvNULL));
+                                                        hardware->kernel->mmu, gcvNULL));
                     Execution->funcCmd[i].address = 0;
                 }
 
@@ -3849,7 +3847,7 @@ _FuncRelease_PPU(IN gcsFUNCTION_EXECUTION_PTR Execution)
                         if (Execution->funcCmd[j].data[i].address) {
                             gckVIDMEM_NODE_Unlock(hardware->kernel,
                                                   Execution->funcCmd[j].data[i].bufVidMem,
-                                                  0, gcvNULL);
+                                                  hardware->kernel->mmu, gcvNULL);
                             Execution->funcCmd[j].data[i].address = 0;
                         }
 
@@ -3867,7 +3865,7 @@ _FuncRelease_PPU(IN gcsFUNCTION_EXECUTION_PTR Execution)
                     /* Synchroneous unlock. */
                     gcmkVERIFY_OK(gckVIDMEM_NODE_Unlock(hardware->kernel,
                                                         Execution->funcCmd[j].funcVidMem,
-                                                        0, gcvNULL));
+                                                        hardware->kernel->mmu, gcvNULL));
                     Execution->funcCmd[j].address = 0;
                 }
 
@@ -4018,7 +4016,7 @@ OnError:
                 if (Execution->funcCmd[0].data[i].address) {
                     gckVIDMEM_NODE_Unlock(hardware->kernel,
                                           Execution->funcCmd[0].data[i].bufVidMem,
-                                          0, gcvNULL);
+                                          hardware->kernel->mmu, gcvNULL);
                     Execution->funcCmd[0].data[i].address = 0;
                 }
 
@@ -5178,7 +5176,7 @@ _FuncRelease_PPU_0xA0(IN gcsFUNCTION_EXECUTION_PTR Execution)
                         }
                         if (Execution->funcCmd[j].data[i].address) {
                             gckVIDMEM_NODE_Unlock(hardware->kernel,
-                                                  Execution->funcCmd[j].data[i].bufVidMem, 0,
+                                                  Execution->funcCmd[j].data[i].bufVidMem, hardware->kernel->mmu,
                                                   gcvNULL);
                             Execution->funcCmd[j].data[i].address = 0;
                         }
@@ -5197,7 +5195,7 @@ _FuncRelease_PPU_0xA0(IN gcsFUNCTION_EXECUTION_PTR Execution)
                     /* Synchroneous unlock. */
                     gcmkVERIFY_OK(gckVIDMEM_NODE_Unlock(hardware->kernel,
                                                         Execution->funcCmd[j].funcVidMem,
-                                                        0, gcvNULL));
+                                                        hardware->kernel->mmu, gcvNULL));
                     Execution->funcCmd[j].address = 0;
                 }
 
@@ -5310,7 +5308,7 @@ OnError:
                 if (funcCmd->data[i].address) {
                     gckVIDMEM_NODE_Unlock(hardware->kernel,
                                           funcCmd->data[i].bufVidMem,
-                                          0, gcvNULL);
+                                          hardware->kernel->mmu, gcvNULL);
                     funcCmd->data[i].address = 0;
                 }
 
@@ -6104,7 +6102,7 @@ OnError:
                 if (Execution->funcCmd[0].data[i].address) {
                     gckVIDMEM_NODE_Unlock(hardware->kernel,
                                           Execution->funcCmd[0].data[i].bufVidMem,
-                                          0, gcvNULL);
+                                          hardware->kernel->mmu, gcvNULL);
                     Execution->funcCmd[0].data[i].address = 0;
                 }
 
@@ -6176,7 +6174,7 @@ _FuncRelease_USC(IN gcsFUNCTION_EXECUTION_PTR Execution)
                         if (Execution->funcCmd[j].data[i].address) {
                             gckVIDMEM_NODE_Unlock(hardware->kernel,
                                                   Execution->funcCmd[j].data[i].bufVidMem,
-                                                  0, gcvNULL);
+                                                  hardware->kernel->mmu, gcvNULL);
                             Execution->funcCmd[j].data[i].address = 0;
                         }
 
@@ -6194,7 +6192,7 @@ _FuncRelease_USC(IN gcsFUNCTION_EXECUTION_PTR Execution)
                     /* Synchroneous unlock. */
                     gcmkVERIFY_OK(gckVIDMEM_NODE_Unlock(hardware->kernel,
                                                         Execution->funcCmd[j].funcVidMem,
-                                                        0, gcvNULL));
+                                                        hardware->kernel->mmu, gcvNULL));
                     Execution->funcCmd[j].address = 0;
                 }
 
@@ -6706,7 +6704,7 @@ OnError:
                 if (Execution->funcCmd[0].data[i].address) {
                     gckVIDMEM_NODE_Unlock(hardware->kernel,
                                           Execution->funcCmd[0].data[i].bufVidMem,
-                                          0, gcvNULL);
+                                          hardware->kernel->mmu, gcvNULL);
                     Execution->funcCmd[0].data[i].address = 0;
                 }
 
@@ -6763,7 +6761,7 @@ _FuncRelease_USC2(IN gcsFUNCTION_EXECUTION_PTR Execution)
                         if (Execution->funcCmd[j].data[i].address) {
                             gckVIDMEM_NODE_Unlock(hardware->kernel,
                                                   Execution->funcCmd[j].data[i].bufVidMem,
-                                                  0, gcvNULL);
+                                                  hardware->kernel->mmu, gcvNULL);
                             Execution->funcCmd[j].data[i].address = 0;
                         }
 
@@ -6781,7 +6779,7 @@ _FuncRelease_USC2(IN gcsFUNCTION_EXECUTION_PTR Execution)
                     /* Synchroneous unlock. */
                     gcmkVERIFY_OK(gckVIDMEM_NODE_Unlock(hardware->kernel,
                                                         Execution->funcCmd[j].funcVidMem,
-                                                        0, gcvNULL));
+                                                        hardware->kernel->mmu, gcvNULL));
                     Execution->funcCmd[j].address = 0;
                 }
 

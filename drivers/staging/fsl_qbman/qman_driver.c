@@ -29,12 +29,13 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "qman_private.h"
-
 #include <asm/smp.h>	/* hard_smp_processor_id() if !CONFIG_SMP */
 #ifdef CONFIG_HOTPLUG_CPU
 #include <linux/cpu.h>
 #endif
+#include <linux/platform_device.h>
+
+#include "qman_private.h"
 
 /* Global variable containing revision id (even on non-control plane systems
  * where CCSR isn't available) */
@@ -498,84 +499,10 @@ static struct qm_portal_config *get_pcfg_idx(struct list_head *list, u32 idx)
 
 static void portal_set_cpu(struct qm_portal_config *pcfg, int cpu)
 {
-#ifdef CONFIG_FSL_PAMU
-	int ret;
-	int window_count = 1;
-	struct iommu_domain_geometry geom_attr;
-	struct pamu_stash_attribute stash_attr;
-
-	pcfg->iommu_domain = iommu_domain_alloc(&platform_bus_type);
-	if (!pcfg->iommu_domain) {
-		pr_err(KBUILD_MODNAME ":%s(): iommu_domain_alloc() failed",
-			   __func__);
-		goto _no_iommu;
-	}
-	geom_attr.aperture_start = 0;
-	geom_attr.aperture_end =
-		((dma_addr_t)1 << min(8 * sizeof(dma_addr_t), (size_t)36)) - 1;
-	geom_attr.force_aperture = true;
-	ret = iommu_domain_set_attr(pcfg->iommu_domain, DOMAIN_ATTR_GEOMETRY,
-				    &geom_attr);
-	if (ret < 0) {
-		pr_err(KBUILD_MODNAME ":%s(): iommu_domain_set_attr() = %d",
-			   __func__, ret);
-		goto _iommu_domain_free;
-	}
-	ret = iommu_domain_set_attr(pcfg->iommu_domain, DOMAIN_ATTR_WINDOWS,
-				    &window_count);
-	if (ret < 0) {
-		pr_err(KBUILD_MODNAME ":%s(): iommu_domain_set_attr() = %d",
-			   __func__, ret);
-		goto _iommu_domain_free;
-	}
-	stash_attr.cpu = cpu;
-	stash_attr.cache = PAMU_ATTR_CACHE_L1;
-	/* set stash information for the window */
-	ret = iommu_domain_set_attr(pcfg->iommu_domain,
-				    DOMAIN_ATTR_FSL_PAMU_STASH,
-				    &stash_attr);
-	if (ret < 0) {
-		pr_err(KBUILD_MODNAME ":%s(): iommu_domain_set_attr() = %d",
-			   __func__, ret);
-		goto _iommu_domain_free;
-	}
-	ret = iommu_domain_window_enable(pcfg->iommu_domain, 0, 0, 1ULL << 36,
-					 IOMMU_READ | IOMMU_WRITE);
-	if (ret < 0) {
-		pr_err(KBUILD_MODNAME ":%s(): iommu_domain_window_enable() = %d",
-			   __func__, ret);
-		goto _iommu_domain_free;
-	}
-	ret = iommu_attach_device(pcfg->iommu_domain, &pcfg->dev);
-	if (ret < 0) {
-		pr_err(KBUILD_MODNAME ":%s(): iommu_device_attach() = %d",
-			   __func__, ret);
-		goto _iommu_domain_free;
-	}
-	ret = iommu_domain_set_attr(pcfg->iommu_domain,
-				    DOMAIN_ATTR_FSL_PAMU_ENABLE,
-				    &window_count);
-	if (ret < 0) {
-		pr_err(KBUILD_MODNAME ":%s(): iommu_domain_set_attr() = %d",
-			   __func__, ret);
-		goto _iommu_detach_device;
-	}
-
-_no_iommu:
-#endif
 #ifdef CONFIG_FSL_QMAN_CONFIG
 	if (qman_set_sdest(pcfg->public_cfg.channel, cpu))
 #endif
 		pr_warn("Failed to set QMan portal's stash request queue\n");
-
-	return;
-
-#ifdef CONFIG_FSL_PAMU
-_iommu_detach_device:
-	iommu_detach_device(pcfg->iommu_domain, NULL);
-_iommu_domain_free:
-	iommu_domain_free(pcfg->iommu_domain);
-#endif
 }
 
 struct qm_portal_config *qm_get_unused_portal_idx(u32 idx)
@@ -612,13 +539,14 @@ void qm_put_unused_portal(struct qm_portal_config *pcfg)
 	spin_unlock(&unused_pcfgs_lock);
 }
 
-static struct qman_portal *init_pcfg(struct qm_portal_config *pcfg)
+static struct qman_portal *init_pcfg(struct qm_portal_config *pcfg,
+				     bool need_cleanup)
 {
 	struct qman_portal *p;
 
 	pcfg->iommu_domain = NULL;
 	portal_set_cpu(pcfg, pcfg->public_cfg.cpu);
-	p = qman_create_affine_portal(pcfg, NULL);
+	p = qman_create_affine_portal(pcfg, NULL, need_cleanup);
 	if (p) {
 		u32 irq_sources = 0;
 		/* Determine what should be interrupt-vs-poll driven */
@@ -667,22 +595,6 @@ __setup("qportals=", parse_qportals);
 static void qman_portal_update_sdest(const struct qm_portal_config *pcfg,
 							unsigned int cpu)
 {
-#ifdef CONFIG_FSL_PAMU
-	struct pamu_stash_attribute stash_attr;
-	int ret;
-
-	if (pcfg->iommu_domain) {
-		stash_attr.cpu = cpu;
-		stash_attr.cache = PAMU_ATTR_CACHE_L1;
-		/* set stash information for the window */
-		ret = iommu_domain_set_attr(pcfg->iommu_domain,
-				DOMAIN_ATTR_FSL_PAMU_STASH, &stash_attr);
-		if (ret < 0) {
-			pr_err("Failed to update pamu stash setting\n");
-			return;
-		}
-	}
-#endif
 #ifdef CONFIG_FSL_QMAN_CONFIG
 	if (qman_set_sdest(pcfg->public_cfg.channel, cpu))
 		pr_warn("Failed to update portal's stash request queue\n");
@@ -732,13 +644,14 @@ __init int qman_init(void)
 	struct device_node *dn;
 	struct qm_portal_config *pcfg;
 	struct qman_portal *p;
-	int cpu, ret;
+	int cpu, ret, i;
 	const u32 *clk;
 	struct cpumask offline_cpus;
+	bool need_cleanup = false;
 
 	/* Initialise the Qman (CCSR) device */
 	for_each_compatible_node(dn, NULL, "fsl,qman") {
-		if (!qman_init_ccsr(dn))
+		if (!qman_init_ccsr(dn, &need_cleanup))
 			pr_info("Qman err interrupt handler present\n");
 		else
 			pr_err("Qman CCSR setup failed\n");
@@ -849,7 +762,7 @@ __init int qman_init(void)
 	}
 	list_for_each_entry(pcfg, &unshared_pcfgs, list) {
 		pcfg->public_cfg.is_shared = 0;
-		p = init_pcfg(pcfg);
+		p = init_pcfg(pcfg, need_cleanup);
 		if (!p) {
 			pr_crit("Unable to configure portals\n");
 			return 0;
@@ -857,7 +770,7 @@ __init int qman_init(void)
 	}
 	list_for_each_entry(pcfg, &shared_pcfgs, list) {
 		pcfg->public_cfg.is_shared = 1;
-		p = init_pcfg(pcfg);
+		p = init_pcfg(pcfg, need_cleanup);
 		if (p)
 			shared_portals[num_shared_portals++] = p;
 	}
@@ -877,6 +790,24 @@ __init int qman_init(void)
 		return ret;
 	}
 #endif
+
+	if (need_cleanup) {
+		size_t num_fqs = get_qman_fqd_size() / 64;
+
+		pr_info("QMan wasn't reset prior to boot, shutting down %zu FQs\n",
+			num_fqs);
+
+		for (i = 0; i < num_fqs; i++) {
+			ret = qman_shutdown_fq(i);
+			if (ret) {
+				pr_err("QMan: Failed to shutdown frame queue %d: %pe\n",
+				       i, ERR_PTR(ret));
+			}
+		}
+		pr_info("QMan: shutdown finished, enabling IRQs\n");
+		qman_enable_irqs();
+	}
+
 	return 0;
 }
 

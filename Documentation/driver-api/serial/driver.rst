@@ -24,7 +24,7 @@ console support.
 Console Support
 ---------------
 
-The serial core provides a few helper functions.  This includes identifing
+The serial core provides a few helper functions.  This includes identifying
 the correct port structure (via uart_get_console()) and decoding command line
 arguments (uart_parse_options()).
 
@@ -78,6 +78,9 @@ Other functions
            uart_get_lsr_info uart_handle_dcd_change uart_handle_cts_change
            uart_try_toggle_sysrq uart_get_console
 
+.. kernel-doc:: include/linux/serial_core.h
+   :identifiers: uart_port_tx_limited uart_port_tx
+
 Other notes
 -----------
 
@@ -100,4 +103,4 @@ Some helpers are provided in order to set/get modem control lines via GPIO.
 .. kernel-doc:: drivers/tty/serial/serial_mctrl_gpio.c
    :identifiers: mctrl_gpio_init mctrl_gpio_free mctrl_gpio_to_gpiod
            mctrl_gpio_set mctrl_gpio_get mctrl_gpio_enable_ms
-           mctrl_gpio_disable_ms
+           mctrl_gpio_disable_ms_sync mctrl_gpio_disable_ms_no_sync

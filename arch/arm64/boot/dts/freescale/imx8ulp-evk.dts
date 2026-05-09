@@ -62,7 +62,12 @@
 			linux,cma-default;
 		};
 
-		rsc_table: rsc-table@1fff8000{
+		m33_reserved: noncacheable-section@a8600000 {
+			reg = <0 0xa8600000 0 0x1000000>;
+			no-map;
+		};
+
+		rsc_table: rsc-table@1fff8000 {
 			reg = <0 0x1fff8000 0 0x1000>;
 			no-map;
 		};
@@ -71,7 +76,7 @@
 			reg = <0 0x8e000000 0 0x1000000>;
 			no-map;
 		};
-		dsp_reserved_heap: dsp_reserved_heap {
+		dsp_reserved_heap: dsp_reserved_heap@8f000000 {
 			reg = <0 0x8f000000 0 0xef0000>;
 			no-map;
 		};
@@ -115,6 +120,12 @@
 			no-map;
 		};
 
+		micfil_reserved: micfil-rpmsg@a8300000 {
+			compatible = "shared-dma-pool";
+			reg = <0 0xa8300000 0 0x100000>;
+			no-map;
+		};
+
 		vdevbuffer: vdevbuffer@a8400000 {
 			compatible = "shared-dma-pool";
 			reg = <0 0xa8400000 0 0x100000>;
@@ -125,11 +136,6 @@
 			compatible = "shared-dma-pool";
 			no-map;
 			reg = <0 0xa8500000 0 0x100000>;
-		};
-
-		m33_reserved: m33_noncacheable_section@a8600000 {
-			no-map;
-			reg = <0 0xa8600000 0 0x1000000>;
 		};
 	};
 
@@ -156,9 +162,26 @@
 		regulator-always-on;
 	};
 
+	reg_usdhc2_vmmc: regulator-usdhc2 {
+		compatible = "regulator-fixed";
+		regulator-name = "WLAN_EN";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&pcal6408 2 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+	};
+
 	usdhc2_pwrseq: usdhc2_pwrseq {
 		compatible = "mmc-pwrseq-simple";
-		reset-gpios = <&pcal6408 2 GPIO_ACTIVE_LOW>;
+		reset-gpios = <&pcal6408 0 GPIO_ACTIVE_LOW>;
+	};
+
+	reg_audio_pwr: regulator-audio-pwr {
+		compatible = "regulator-fixed";
+		regulator-name = "audio-pwr";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		enable-active-high;
 	};
 
 	bt_sco_codec: bt_sco_codec {
@@ -197,6 +220,7 @@
 	rpmsg_audio: rpmsg-audio {
 		compatible = "fsl,imx8ulp-rpmsg-audio";
 		model = "wm8960-audio";
+		fsl,rpmsg-channel-name = "rpmsg-audio-channel";
 		fsl,rpmsg-out;
 		fsl,rpmsg-in;
 		audio-codec = <&wm8960>;
@@ -206,6 +230,25 @@
 			"LINPUT3", "MICB";
 		status = "okay";
 	};
+
+	rpmsg_micfil: rpmsg_micfil {
+		compatible = "fsl,imx8ulp-rpmsg-audio";
+		model = "micfil-audio";
+		fsl,rpmsg-channel-name = "rpmsg-micfil-channel";
+		fsl,rpmsg-in;
+		memory-region = <&micfil_reserved>;
+		status = "okay";
+	};
+};
+
+&cm33 {
+	mbox-names = "tx", "rx", "rxdb";
+	mboxes = <&mu 0 1>,
+		 <&mu 1 1>,
+		 <&mu 3 1>;
+	memory-region = <&vdevbuffer>, <&vdev0vring0>, <&vdev0vring1>,
+			<&vdev1vring0>, <&vdev1vring1>, <&rsc_table>;
+	status = "okay";
 };
 
 &dcnano {
@@ -244,10 +287,8 @@
 	status = "okay";
 
 	mx25uw51345gxdi00: flash@0 {
-		reg = <0>;
-		#address-cells = <1>;
-		#size-cells = <1>;
 		compatible = "jedec,spi-nor";
+		reg = <0>;
 		spi-max-frequency = <200000000>;
 		spi-tx-bus-width = <8>;
 		spi-rx-bus-width = <8>;
@@ -272,11 +313,19 @@
 	};
 
 	wm8960: wm8960@1a {
-		compatible = "wlf,wm8960,lpa";
+		#sound-dai-cells = <0>;
+		compatible = "wlf,wm8960";
 		reg = <0x1a>;
 		wlf,shared-lrclk;
+		wlf,hp-cfg = <3 2 3>;
+		wlf,gpio-cfg = <1 3>;
 		clocks = <&wm8960_mclk>;
 		clock-names = "mclk";
+		DCVDD-supply = <&reg_audio_pwr>;
+		DBVDD-supply = <&reg_audio_pwr>;
+		AVDD-supply = <&reg_audio_pwr>;
+		SPKVDD1-supply = <&reg_audio_pwr>;
+		SPKVDD2-supply = <&reg_audio_pwr>;
 	};
 
 	ov5640_mipi: ov5640_mipi@3c {
@@ -285,13 +334,13 @@
 		clocks = <&cgc2 IMX8ULP_CLK_DSI_PHY_REF>;
 		clock-names = "xclk";
 		powerdown-gpios = <&pca6416_1 8 GPIO_ACTIVE_HIGH>;
-		reset-gpios = <&pca6416_1 7 GPIO_ACTIVE_LOW>;
 		status = "okay";
+
 		port {
-			ov5640_mipi_ep: endpoint {
-				remote-endpoint = <&mipi_csi0_ep>;
+			ov5640_mipi_out: endpoint {
+				remote-endpoint = <&mipi_csi_in>;
 				data-lanes = <1 2>;
-				clocks-lanes = <0>;
+				clock-lanes = <0>;
 			};
 		};
 	};
@@ -316,18 +365,6 @@
 &i2c_rpbus_1 {
 	#address-cells = <1>;
 	#size-cells = <0>;
-	status = "okay";
-};
-
-&imx8ulp_cm33 {
-	ipc-only;
-	rsc-da=<0x1fff8000>;
-	mbox-names = "tx", "rx", "rxdb";
-	mboxes = <&mu 0 1
-			&mu 1 1
-			&mu 3 1>;
-	memory-region = <&vdevbuffer>, <&vdev0vring0>, <&vdev0vring1>,
-			<&vdev1vring0>, <&vdev1vring1>, <&rsc_table>;
 	status = "okay";
 };
 
@@ -384,20 +421,30 @@
 	pinctrl-1 = <&pinctrl_lpi2c7>;
 	status = "okay";
 
+	ptn5150_1: typec@1d {
+		compatible = "nxp,ptn5150";
+		reg = <0x1d>;
+		int-gpios = <&gpiof 3 IRQ_TYPE_EDGE_FALLING>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_typec1>;
+		status = "disabled";
+	};
+
 	pcal6408: gpio@21 {
 		compatible = "nxp,pcal9554b";
 		reg = <0x21>;
 		gpio-controller;
 		#gpio-cells = <2>;
 	};
-};
 
-&mu {
-	status = "okay";
-};
-
-&mu3 {
-	status = "okay";
+	ptn5150_2: typec@3d {
+		compatible = "nxp,ptn5150";
+		reg = <0x3d>;
+		int-gpios = <&gpiof 5 IRQ_TYPE_EDGE_FALLING>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_typec2>;
+		status = "disabled";
+	};
 };
 
 &sai5 {
@@ -425,9 +472,8 @@
 };
 
 &usbotg1 {
-	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&pinctrl_otgid1>;
-	pinctrl-1 = <&pinctrl_otgid1>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_usb1>;
 	dr_mode = "otg";
 	hnp-disable;
 	srp-disable;
@@ -437,8 +483,8 @@
 };
 
 &usbphy1 {
-	status = "okay";
 	fsl,tx-d-cal = <110>;
+	status = "okay";
 };
 
 &usbmisc1 {
@@ -446,9 +492,8 @@
 };
 
 &usbotg2 {
-	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&pinctrl_otgid2>;
-	pinctrl-1 = <&pinctrl_otgid2>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_usb2>;
 	dr_mode = "otg";
 	hnp-disable;
 	srp-disable;
@@ -458,8 +503,8 @@
 };
 
 &usbphy2 {
-	status = "okay";
 	fsl,tx-d-cal = <110>;
+	status = "okay";
 };
 
 &usbmisc2 {
@@ -474,6 +519,7 @@
 	pinctrl-3 = <&pinctrl_usdhc0>;
 	non-removable;
 	bus-width = <8>;
+	fsl,tuning-step = <1>;
 	status = "okay";
 };
 
@@ -484,12 +530,12 @@
 	pinctrl-2 = <&pinctrl_usdhc2_pte>;
 	pinctrl-3 = <&pinctrl_usdhc2_pte>;
 	mmc-pwrseq = <&usdhc2_pwrseq>;
+	vmmc-supply = <&reg_usdhc2_vmmc>;
 	max-frequency = <100000000>;
 	bus-width = <4>;
 	keep-power-in-suspend;
 	non-removable;
 	wakeup-source;
-	fsl,sdio-async-interrupt-enabled;
 	status = "okay";
 
 	wifi_wake_host {
@@ -500,7 +546,7 @@
 	};
 };
 
-&ele_mu {
+&ele_fw2 {
 	memory-region = <&ele_reserved>;
 };
 
@@ -530,6 +576,14 @@
 	};
 };
 
+&mu {
+	status = "okay";
+};
+
+&mu3 {
+	status = "okay";
+};
+
 &iomuxc1 {
 	pinctrl_dsi: dsigrp {
 		fsl,pins = <
@@ -539,15 +593,15 @@
 
 	pinctrl_enet: enetgrp {
 		fsl,pins = <
-			MX8ULP_PAD_PTE15__ENET0_MDC     0x43
-			MX8ULP_PAD_PTE14__ENET0_MDIO    0x43
-			MX8ULP_PAD_PTE17__ENET0_RXER    0x43
+			MX8ULP_PAD_PTE15__ENET0_MDC     0x7
+			MX8ULP_PAD_PTE14__ENET0_MDIO    0x7
+			MX8ULP_PAD_PTE17__ENET0_RXER    0x7
 			MX8ULP_PAD_PTE18__ENET0_CRS_DV  0x43
 			MX8ULP_PAD_PTF1__ENET0_RXD0     0x43
 			MX8ULP_PAD_PTE20__ENET0_RXD1    0x43
-			MX8ULP_PAD_PTE16__ENET0_TXEN    0x43
-			MX8ULP_PAD_PTE23__ENET0_TXD0    0x43
-			MX8ULP_PAD_PTE22__ENET0_TXD1    0x43
+			MX8ULP_PAD_PTE16__ENET0_TXEN    0x7
+			MX8ULP_PAD_PTE23__ENET0_TXD0    0x7
+			MX8ULP_PAD_PTE22__ENET0_TXD1    0x7
 			MX8ULP_PAD_PTE19__ENET0_REFCLK  0x43
 			MX8ULP_PAD_PTF10__ENET0_1588_CLKIN 0x43
 		>;
@@ -615,14 +669,26 @@
 		>;
 	};
 
-	pinctrl_otgid1: usb1grp {
+	pinctrl_typec1: typec1grp {
+		fsl,pins = <
+			MX8ULP_PAD_PTF3__PTF3           0x3
+		>;
+	};
+
+	pinctrl_typec2: typec2grp {
+		fsl,pins = <
+			MX8ULP_PAD_PTF5__PTF5           0x3
+		>;
+	};
+
+	pinctrl_usb1: usb1grp {
 		fsl,pins = <
 			MX8ULP_PAD_PTF2__USB0_ID	0x10003
 			MX8ULP_PAD_PTF4__USB0_OC	0x10003
 		>;
 	};
 
-	pinctrl_otgid2: usb2grp {
+	pinctrl_usb2: usb2grp {
 		fsl,pins = <
 			MX8ULP_PAD_PTD23__USB1_ID	0x10003
 			MX8ULP_PAD_PTF6__USB1_OC	0x10003
@@ -674,29 +740,46 @@
 
 };
 
-&cameradev {
-	status = "okay";
-};
-
-&isi_0 {
+&isi {
 	status = "okay";
 
-	cap_device {
-		status = "okay";
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@0 {
+			reg = <0>;
+
+			isi_in: endpoint {
+				remote-endpoint = <&mipi_csi_out>;
+			};
+		};
 	};
 };
 
-&mipi_csi0 {
-	#address-cells = <1>;
-	#size-cells = <0>;
-
+&mipi_csi {
 	status = "okay";
-	port@0 {
-		reg = <0>;
-		mipi_csi0_ep: endpoint {
-			remote-endpoint = <&ov5640_mipi_ep>;
-			data-lanes = <1 2>;
-			bus-type = <4>;
+
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@0 {
+			reg = <0>;
+
+			mipi_csi_in: endpoint {
+				remote-endpoint = <&ov5640_mipi_out>;
+				data-lanes = <1 2>;
+				clock-lanes = <0>;
+			};
+		};
+
+		port@1 {
+			reg = <1>;
+
+			mipi_csi_out: endpoint {
+				remote-endpoint = <&isi_in>;
+			};
 		};
 	};
 };

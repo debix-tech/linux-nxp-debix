@@ -24,16 +24,24 @@ enum imx_rproc_method {
 	IMX_RPROC_SMC,
 	/* Through System Control Unit API */
 	IMX_RPROC_SCU_API,
+	/* Through System Manager */
+	IMX_RPROC_SM,
 };
+
+/* dcfg flags */
+#define IMX_RPROC_NEED_SYSTEM_OFF	BIT(0)
 
 struct imx_rproc_dcfg {
 	u32				src_reg;
 	u32				src_mask;
 	u32				src_start;
 	u32				src_stop;
+	u32				gpr_reg;
+	u32				gpr_wait;
 	const struct imx_rproc_att	*att;
 	size_t				att_size;
 	enum imx_rproc_method		method;
+	u32				flags;
 };
 
 #endif /* _IMX_RPROC_H */

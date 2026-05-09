@@ -79,7 +79,7 @@ static void mt7663u_copy(struct mt76_dev *dev, u32 offset,
 	mutex_unlock(&usb->usb_ctrl_mtx);
 }
 
-static void mt7663u_stop(struct ieee80211_hw *hw)
+static void mt7663u_stop(struct ieee80211_hw *hw, bool suspend)
 {
 	struct mt7615_phy *phy = mt7615_hw_phy(hw);
 	struct mt7615_dev *dev = hw->priv;
@@ -120,10 +120,10 @@ static int mt7663u_probe(struct usb_interface *usb_intf,
 		.tx_status_data = mt7663_usb_sdio_tx_status_data,
 		.rx_skb = mt7615_queue_rx_skb,
 		.rx_check = mt7615_rx_check,
-		.sta_ps = mt7615_sta_ps,
 		.sta_add = mt7615_mac_sta_add,
 		.sta_remove = mt7615_mac_sta_remove,
 		.update_survey = mt7615_update_channel,
+		.set_channel = mt7615_set_channel,
 	};
 	static struct mt76_bus_ops bus_ops = {
 		.rr = mt7663u_rr,
@@ -282,4 +282,5 @@ module_usb_driver(mt7663u_driver);
 
 MODULE_AUTHOR("Sean Wang <sean.wang@mediatek.com>");
 MODULE_AUTHOR("Lorenzo Bianconi <lorenzo@kernel.org>");
+MODULE_DESCRIPTION("MediaTek MT7663U (USB) wireless driver");
 MODULE_LICENSE("Dual BSD/GPL");

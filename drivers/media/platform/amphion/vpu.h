@@ -12,6 +12,7 @@
 #include <linux/mailbox_client.h>
 #include <linux/mailbox_controller.h>
 #include <linux/kfifo.h>
+#include <linux/imx_memory_usage.h>
 
 #define VPU_TIMEOUT_WAKEUP	msecs_to_jiffies(200)
 #define VPU_TIMEOUT		msecs_to_jiffies(1000)
@@ -47,6 +48,8 @@ struct vpu_buffer {
 	u32 length;
 	u32 bytesused;
 	struct device *dev;
+	struct imx_mur_node *recorder;
+	const char *label;
 };
 
 struct vpu_func {
@@ -81,6 +84,8 @@ struct vpu_dev {
 	atomic_t ref_dec;
 
 	struct dentry *debugfs;
+
+	struct imx_mur_node *recorder;
 };
 
 struct vpu_format {
@@ -154,7 +159,6 @@ struct vpu_core {
 	struct vpu_mbox tx_type;
 	struct vpu_mbox tx_data;
 	struct vpu_mbox rx;
-	unsigned long cmd_seq;
 
 	wait_queue_head_t ack_wq;
 	struct completion cmp;
@@ -224,6 +228,8 @@ struct vpu_inst_ops {
 	int (*get_debug_info)(struct vpu_inst *inst, char *str, u32 size, u32 i);
 	void (*wait_prepare)(struct vpu_inst *inst);
 	void (*wait_finish)(struct vpu_inst *inst);
+	void (*attach_frame_store)(struct vpu_inst *inst, struct vb2_buffer *vb);
+	void (*reset_frame_store)(struct vpu_inst *inst);
 };
 
 struct vpu_inst {
@@ -253,6 +259,8 @@ struct vpu_inst {
 
 	struct list_head cmd_q;
 	void *pending;
+	unsigned long cmd_seq;
+	atomic_long_t last_response_cmd;
 
 	struct vpu_inst_ops *ops;
 	const struct vpu_format *formats;
@@ -269,6 +277,7 @@ struct vpu_inst {
 	u8 xfer_func;
 	u32 sequence;
 	u32 extra_size;
+	u32 changes;
 
 	u32 flows[16];
 	u32 flow_idx;
@@ -276,6 +285,8 @@ struct vpu_inst {
 	pid_t pid;
 	pid_t tgid;
 	struct dentry *debugfs;
+
+	struct imx_mur_node *recorder;
 
 	void *priv;
 };
@@ -295,7 +306,8 @@ enum {
 	VPU_BUF_STATE_DECODED,
 	VPU_BUF_STATE_READY,
 	VPU_BUF_STATE_SKIP,
-	VPU_BUF_STATE_ERROR
+	VPU_BUF_STATE_ERROR,
+	VPU_BUF_STATE_CHANGED
 };
 
 struct vpu_vb2_buffer {
@@ -304,7 +316,8 @@ struct vpu_vb2_buffer {
 	dma_addr_t chroma_u;
 	dma_addr_t chroma_v;
 	unsigned int state;
-	u32 tag;
+	u32 average_qp;
+	s32 fs_id;
 };
 
 void vpu_writel(struct vpu_dev *vpu, u32 reg, u32 val);
@@ -354,6 +367,9 @@ void vpu_inst_record_flow(struct vpu_inst *inst, u32 flow);
 
 int vpu_core_driver_init(void);
 void vpu_core_driver_exit(void);
+
+const char *vpu_id_name(u32 id);
+const char *vpu_codec_state_name(enum vpu_codec_state state);
 
 extern bool debug;
 #define vpu_trace(dev, fmt, arg...)					\

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /* Microchip LAN937X switch driver main logic
- * Copyright (C) 2019-2022 Microchip Technology Inc.
+ * Copyright (C) 2019-2024 Microchip Technology Inc.
  */
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -15,17 +15,18 @@
 
 #include "lan937x_reg.h"
 #include "ksz_common.h"
+#include "ksz9477.h"
 #include "lan937x.h"
 
 static int lan937x_cfg(struct ksz_device *dev, u32 addr, u8 bits, bool set)
 {
-	return regmap_update_bits(dev->regmap[0], addr, bits, set ? bits : 0);
+	return regmap_update_bits(ksz_regmap_8(dev), addr, bits, set ? bits : 0);
 }
 
 static int lan937x_port_cfg(struct ksz_device *dev, int port, int offset,
 			    u8 bits, bool set)
 {
-	return regmap_update_bits(dev->regmap[0], PORT_CTRL_ADDR(port, offset),
+	return regmap_update_bits(ksz_regmap_8(dev), PORT_CTRL_ADDR(port, offset),
 				  bits, set ? bits : 0);
 }
 
@@ -53,6 +54,9 @@ static int lan937x_vphy_ind_addr_wr(struct ksz_device *dev, int addr, int reg)
 {
 	u16 addr_base = REG_PORT_T1_PHY_CTRL_BASE;
 	u16 temp;
+
+	if (is_lan937x_tx_phy(dev, addr))
+		addr_base = REG_PORT_TX_PHY_CTRL_BASE;
 
 	/* get register address based on the logical port */
 	temp = PORT_CTRL_ADDR(addr, (addr_base + (reg << 2)));
@@ -85,7 +89,7 @@ static int lan937x_internal_phy_write(struct ksz_device *dev, int addr, int reg,
 	if (ret < 0)
 		return ret;
 
-	ret = regmap_read_poll_timeout(dev->regmap[1], REG_VPHY_IND_CTRL__2,
+	ret = regmap_read_poll_timeout(ksz_regmap_16(dev), REG_VPHY_IND_CTRL__2,
 				       value, !(value & VPHY_IND_BUSY), 10,
 				       1000);
 	if (ret < 0) {
@@ -115,7 +119,7 @@ static int lan937x_internal_phy_read(struct ksz_device *dev, int addr, int reg,
 	if (ret < 0)
 		return ret;
 
-	ret = regmap_read_poll_timeout(dev->regmap[1], REG_VPHY_IND_CTRL__2,
+	ret = regmap_read_poll_timeout(ksz_regmap_16(dev), REG_VPHY_IND_CTRL__2,
 				       value, !(value & VPHY_IND_BUSY), 10,
 				       1000);
 	if (ret < 0) {
@@ -180,6 +184,9 @@ void lan937x_port_setup(struct ksz_device *dev, int port, bool cpu_port)
 		lan937x_port_cfg(dev, port, REG_PORT_CTRL_0,
 				 PORT_TAIL_TAG_ENABLE, true);
 
+	/* Enable the Port Queue split */
+	ksz9477_port_queue_split(dev, port);
+
 	/* set back pressure for half duplex */
 	lan937x_port_cfg(dev, port, REG_PORT_MAC_CTRL_1, PORT_BACK_PRESSURE,
 			 true);
@@ -242,16 +249,76 @@ int lan937x_change_mtu(struct ksz_device *dev, int port, int new_mtu)
 	}
 
 	/* Write the frame size in PORT_MAX_FR_SIZE register */
-	ksz_pwrite16(dev, port, PORT_MAX_FR_SIZE, new_mtu);
+	ret = ksz_pwrite16(dev, port, PORT_MAX_FR_SIZE, new_mtu);
+	if (ret) {
+		dev_err(ds->dev, "failed to update mtu for port %d\n", port);
+		return ret;
+	}
 
 	return 0;
 }
 
 int lan937x_set_ageing_time(struct ksz_device *dev, unsigned int msecs)
 {
-	u32 secs = msecs / 1000;
-	u32 value;
+	u8 data, mult, value8;
+	bool in_msec = false;
+	u32 max_val, value;
+	u32 secs = msecs;
 	int ret;
+
+#define MAX_TIMER_VAL	((1 << 20) - 1)
+
+	/* The aging timer comprises a 3-bit multiplier and a 20-bit second
+	 * value.  Either of them cannot be zero.  The maximum timer is then
+	 * 7 * 1048575 = 7340025 seconds.  As this value is too large for
+	 * practical use it can be interpreted as microseconds, making the
+	 * maximum timer 7340 seconds with finer control.  This allows for
+	 * maximum 122 minutes compared to 29 minutes in KSZ9477 switch.
+	 */
+	if (msecs % 1000)
+		in_msec = true;
+	else
+		secs /= 1000;
+	if (!secs)
+		secs = 1;
+
+	/* Return error if too large. */
+	else if (secs > 7 * MAX_TIMER_VAL)
+		return -EINVAL;
+
+	/* Configure how to interpret the number value. */
+	ret = ksz_rmw8(dev, REG_SW_LUE_CTRL_2, SW_AGE_CNT_IN_MICROSEC,
+		       in_msec ? SW_AGE_CNT_IN_MICROSEC : 0);
+	if (ret < 0)
+		return ret;
+
+	ret = ksz_read8(dev, REG_SW_LUE_CTRL_0, &value8);
+	if (ret < 0)
+		return ret;
+
+	/* Check whether there is need to update the multiplier. */
+	mult = FIELD_GET(SW_AGE_CNT_M, value8);
+	max_val = MAX_TIMER_VAL;
+	if (mult > 0) {
+		/* Try to use the same multiplier already in the register as
+		 * the hardware default uses multiplier 4 and 75 seconds for
+		 * 300 seconds.
+		 */
+		max_val = DIV_ROUND_UP(secs, mult);
+		if (max_val > MAX_TIMER_VAL || max_val * mult != secs)
+			max_val = MAX_TIMER_VAL;
+	}
+
+	data = DIV_ROUND_UP(secs, max_val);
+	if (mult != data) {
+		value8 &= ~SW_AGE_CNT_M;
+		value8 |= FIELD_PREP(SW_AGE_CNT_M, data);
+		ret = ksz_write8(dev, REG_SW_LUE_CTRL_0, value8);
+		if (ret < 0)
+			return ret;
+	}
+
+	secs = DIV_ROUND_UP(secs, data);
 
 	value = FIELD_GET(SW_AGE_PERIOD_7_0_M, secs);
 
@@ -312,6 +379,9 @@ void lan937x_phylink_get_caps(struct ksz_device *dev, int port,
 		/* MII/RMII/RGMII ports */
 		config->mac_capabilities |= MAC_ASYM_PAUSE | MAC_SYM_PAUSE |
 					    MAC_100HD | MAC_10 | MAC_1000FD;
+	} else if (is_lan937x_tx_phy(dev, port)) {
+		config->mac_capabilities |= MAC_ASYM_PAUSE | MAC_SYM_PAUSE |
+					    MAC_100HD | MAC_10;
 	}
 }
 
@@ -330,6 +400,11 @@ void lan937x_setup_rgmii_delay(struct ksz_device *dev, int port)
 		dev_info(dev->dev, "Applied rgmii rx delay for the port %d\n",
 			 port);
 	}
+}
+
+int lan937x_tc_cbs_set_cinc(struct ksz_device *dev, int port, u32 val)
+{
+	return ksz_pwrite32(dev, port, REG_PORT_MTI_CREDIT_INCREMENT, val);
 }
 
 int lan937x_switch_init(struct ksz_device *dev)
@@ -357,23 +432,33 @@ int lan937x_setup(struct dsa_switch *ds)
 	ds->vlan_filtering_is_global = true;
 
 	/* Enable aggressive back off for half duplex & UNH mode */
-	lan937x_cfg(dev, REG_SW_MAC_CTRL_0,
-		    (SW_PAUSE_UNH_MODE | SW_NEW_BACKOFF | SW_AGGR_BACKOFF),
-		    true);
+	ret = lan937x_cfg(dev, REG_SW_MAC_CTRL_0, (SW_PAUSE_UNH_MODE |
+						   SW_NEW_BACKOFF |
+						   SW_AGGR_BACKOFF), true);
+	if (ret < 0)
+		return ret;
 
 	/* If NO_EXC_COLLISION_DROP bit is set, the switch will not drop
 	 * packets when 16 or more collisions occur
 	 */
-	lan937x_cfg(dev, REG_SW_MAC_CTRL_1, NO_EXC_COLLISION_DROP, true);
+	ret = lan937x_cfg(dev, REG_SW_MAC_CTRL_1, NO_EXC_COLLISION_DROP, true);
+	if (ret < 0)
+		return ret;
 
 	/* enable global MIB counter freeze function */
-	lan937x_cfg(dev, REG_SW_MAC_CTRL_6, SW_MIB_COUNTER_FREEZE, true);
+	ret = lan937x_cfg(dev, REG_SW_MAC_CTRL_6, SW_MIB_COUNTER_FREEZE, true);
+	if (ret < 0)
+		return ret;
 
 	/* disable CLK125 & CLK25, 1: disable, 0: enable */
-	lan937x_cfg(dev, REG_SW_GLOBAL_OUTPUT_CTRL__1,
-		    (SW_CLK125_ENB | SW_CLK25_ENB), true);
+	ret = lan937x_cfg(dev, REG_SW_GLOBAL_OUTPUT_CTRL__1,
+			  (SW_CLK125_ENB | SW_CLK25_ENB), true);
+	if (ret < 0)
+		return ret;
 
-	return 0;
+	/* Disable global VPHY support. Related to CPU interface only? */
+	return ksz_rmw32(dev, REG_SW_CFG_STRAP_OVR, SW_VPHY_DISABLE,
+			 SW_VPHY_DISABLE);
 }
 
 void lan937x_teardown(struct dsa_switch *ds)

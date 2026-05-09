@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-// Copyright 2019-2021 NXP
+// Copyright 2019 NXP
 
 #include <linux/init.h>
 #include <linux/module.h>
@@ -332,6 +332,26 @@ static int __cold dpaa2_qdma_setup(struct fsl_mc_device *ls_dev)
 		goto exit;
 	}
 
+	if (priv->dpdmai_attr.version.major > DPDMAI_VER_MAJOR) {
+		err = -EINVAL;
+		dev_err(dev, "DPDMAI major version mismatch\n"
+			     "Found %u.%u, supported version is %u.%u\n",
+				priv->dpdmai_attr.version.major,
+				priv->dpdmai_attr.version.minor,
+				DPDMAI_VER_MAJOR, DPDMAI_VER_MINOR);
+		goto exit;
+	}
+
+	if (priv->dpdmai_attr.version.minor > DPDMAI_VER_MINOR) {
+		err = -EINVAL;
+		dev_err(dev, "DPDMAI minor version mismatch\n"
+			     "Found %u.%u, supported version is %u.%u\n",
+				priv->dpdmai_attr.version.major,
+				priv->dpdmai_attr.version.minor,
+				DPDMAI_VER_MAJOR, DPDMAI_VER_MINOR);
+		goto exit;
+	}
+
 	priv->num_pairs = min(priv->dpdmai_attr.num_of_priorities, prio_def);
 	ppriv = kcalloc(priv->num_pairs, sizeof(*ppriv), GFP_KERNEL);
 	if (!ppriv) {
@@ -522,7 +542,8 @@ static int __cold dpaa2_dpdmai_bind(struct dpaa2_qdma_priv *priv)
 		rx_queue_cfg.dest_cfg.dest_id = ppriv->nctx.dpio_id;
 		rx_queue_cfg.dest_cfg.priority = ppriv->prio;
 		err = dpdmai_set_rx_queue(priv->mc_io, 0, ls_dev->mc_handle,
-					  i, 0, &rx_queue_cfg);
+					  rx_queue_cfg.dest_cfg.priority, 0,
+					  &rx_queue_cfg);
 		if (err) {
 			dev_err(dev, "dpdmai_set_rx_queue() failed\n");
 			return err;
@@ -584,7 +605,6 @@ static void dpaa2_dpdmai_free_comp(struct dpaa2_qdma_chan *qchan,
 static void dpaa2_dpdmai_free_channels(struct dpaa2_qdma_engine *dpaa2_qdma)
 {
 	struct dpaa2_qdma_chan *qchan;
-	struct dma_chan	*chan;
 	int num, i;
 
 	num = dpaa2_qdma->n_chans;
@@ -595,9 +615,6 @@ static void dpaa2_dpdmai_free_channels(struct dpaa2_qdma_engine *dpaa2_qdma)
 		dma_pool_destroy(qchan->fd_pool);
 		dma_pool_destroy(qchan->fl_pool);
 		dma_pool_destroy(qchan->sdd_pool);
-		chan = &qchan->vchan.chan;
-		if (chan->client_count)
-			chan->client_count--;
 	}
 }
 
@@ -750,7 +767,7 @@ err_mcportal:
 	return err;
 }
 
-static int dpaa2_qdma_remove(struct fsl_mc_device *ls_dev)
+static void dpaa2_qdma_remove(struct fsl_mc_device *ls_dev)
 {
 	struct dpaa2_qdma_engine *dpaa2_qdma;
 	struct dpaa2_qdma_priv *priv;
@@ -772,8 +789,6 @@ static int dpaa2_qdma_remove(struct fsl_mc_device *ls_dev)
 	dma_async_device_unregister(&dpaa2_qdma->dma_dev);
 	kfree(priv);
 	kfree(dpaa2_qdma);
-
-	return 0;
 }
 
 static void dpaa2_qdma_shutdown(struct fsl_mc_device *ls_dev)
@@ -801,7 +816,6 @@ static const struct fsl_mc_device_id dpaa2_qdma_id_table[] = {
 static struct fsl_mc_driver dpaa2_qdma_driver = {
 	.driver		= {
 		.name	= "dpaa2-qdma",
-		.owner  = THIS_MODULE,
 	},
 	.probe          = dpaa2_qdma_probe,
 	.remove		= dpaa2_qdma_remove,

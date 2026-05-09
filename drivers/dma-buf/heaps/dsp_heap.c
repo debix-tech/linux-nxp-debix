@@ -81,8 +81,8 @@ static const struct dma_buf_ops dsp_heap_buf_ops = {
 
 static struct dma_buf * dsp_heap_allocate(struct dma_heap *heap,
 					  unsigned long len,
-					  unsigned long fd_flags,
-					  unsigned long heap_flags)
+					  u32 fd_flags,
+					  u64 heap_flags)
 {
 	struct dsp_heap *dsp_heap = dma_heap_get_drvdata(heap);
 	DEFINE_DMA_BUF_EXPORT_INFO(exp_info);
@@ -123,11 +123,17 @@ static int dsp_heap_create(void)
 	struct dma_heap_export_info exp_info;
 	struct dsp_heap *dsp_heap;
 	struct reserved_mem *rmem;
-	struct device_node np;
+	struct device_node *np;
 
-	np.full_name = "dsp_reserved_heap";
-	np.name = "dsp_reserved_heap";
-	rmem = of_reserved_mem_lookup(&np);
+	np = of_find_node_by_path("/reserved-memory");
+	if (!np)
+		return 0;
+
+	np = of_find_node_by_name(np, "dsp_reserved_heap");
+	if (!np)
+		return 0;
+
+	rmem = of_reserved_mem_lookup(np);
 	if (!rmem) {
 		pr_err("of_reserved_mem_lookup() returned NULL\n");
 		return 0;
@@ -160,3 +166,4 @@ static int dsp_heap_create(void)
 }
 module_init(dsp_heap_create);
 MODULE_LICENSE("GPL v2");
+MODULE_IMPORT_NS(DMA_BUF);

@@ -40,7 +40,7 @@
 		rohm,reset-snvs-powered;
 
 		#clock-cells = <0>;
-		clocks = <&osc_32k 0>;
+		clocks = <&osc_32k>;
 		clock-output-names = "clk-32k-out";
 
 		regulators {
@@ -144,4 +144,10 @@
 	assigned-clock-rates = <0>, <0>, <800000000>, <400000000>, <1200000000>,
 			<400000000>, <400000000>;
 	status= "okay";
+};
+
+&i2c3 {
+	camera@3c {
+		DOVDD-supply = <&buck5_reg>;
+	};
 };

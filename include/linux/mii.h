@@ -43,6 +43,16 @@
 #define C73_BASE_PAGE_10G_BASER_FEC_ABL		BIT_ULL(46)
 #define C73_BASE_PAGE_10G_BASER_FEC_REQ		BIT_ULL(47)
 
+#define C73_NEXT_PAGE_MESSAGE_CODE(x)		((x) & GENMASK(10, 0))
+#define C73_NEXT_PAGE_TOGGLE			BIT(11)
+#define C73_NEXT_PAGE_ACK2			BIT(12)
+#define C73_NEXT_PAGE_MP			BIT(13)
+#define C73_NEXT_PAGE_ACK			BIT(14)
+#define C73_NEXT_PAGE_NP			BIT(15)
+#define C73_NEXT_PAGE_U_MSK			GENMASK(47, 16)
+#define C73_NEXT_PAGE_U_X(x)			(((x) & C73_NEXT_PAGE_U_MSK) >> 16)
+#define C73_NEXT_PAGE_U(x)			(((x) << 16) & C73_NEXT_PAGE_U_MSK)
+
 struct ethtool_cmd;
 
 struct mii_if_info {
@@ -80,6 +90,7 @@ extern int generic_mii_ioctl(struct mii_if_info *mii_if,
 extern int
 linkmode_c73_priority_resolution(const unsigned long *modes,
 				 enum ethtool_link_mode_bit_indices *resolved);
+extern void linkmode_support_c73(unsigned long *modes);
 
 
 static inline struct mii_ioctl_data *if_mii(struct ifreq *rq)
@@ -174,7 +185,7 @@ static inline u32 ethtool_adv_to_mii_adv_t(u32 ethadv)
  * settings to phy autonegotiation advertisements for the
  * MII_ADVERTISE register.
  */
-static inline u32 linkmode_adv_to_mii_adv_t(unsigned long *advertising)
+static inline u32 linkmode_adv_to_mii_adv_t(const unsigned long *advertising)
 {
 	u32 result = 0;
 
@@ -249,7 +260,8 @@ static inline u32 ethtool_adv_to_mii_ctrl1000_t(u32 ethadv)
  * settings to phy autonegotiation advertisements for the
  * MII_CTRL1000 register when in 1000T mode.
  */
-static inline u32 linkmode_adv_to_mii_ctrl1000_t(unsigned long *advertising)
+static inline u32
+linkmode_adv_to_mii_ctrl1000_t(const unsigned long *advertising)
 {
 	u32 result = 0;
 
@@ -487,7 +499,7 @@ static inline void mii_ctrl1000_mod_linkmode_adv_t(unsigned long *advertising,
  * A small helper function that translates linkmode advertising to LVL
  * pause capabilities.
  */
-static inline u32 linkmode_adv_to_lcl_adv_t(unsigned long *advertising)
+static inline u32 linkmode_adv_to_lcl_adv_t(const unsigned long *advertising)
 {
 	u32 lcl_adv = 0;
 

@@ -435,12 +435,6 @@ static int fsl_hdmi_soc_prepare(struct snd_pcm_substream *substream,
 	return 0;
 }
 
-static struct snd_soc_dai_ops fsl_hdmi_soc_dai_ops = {
-	.startup = fsl_hdmi_soc_startup,
-	.shutdown = fsl_hdmi_soc_shutdown,
-	.prepare = fsl_hdmi_soc_prepare,
-};
-
 /* IEC60958 status functions */
 static int fsl_hdmi_iec_info(struct snd_kcontrol *kcontrol,
 		struct snd_ctl_elem_info *uinfo)
@@ -608,8 +602,14 @@ static int fsl_hdmi_soc_dai_probe(struct snd_soc_dai *dai)
 	return 0;
 }
 
+static struct snd_soc_dai_ops fsl_hdmi_soc_dai_ops = {
+	.probe = fsl_hdmi_soc_dai_probe,
+	.startup = fsl_hdmi_soc_startup,
+	.shutdown = fsl_hdmi_soc_shutdown,
+	.prepare = fsl_hdmi_soc_prepare,
+};
+
 static struct snd_soc_dai_driver fsl_hdmi_dai = {
-	.probe = &fsl_hdmi_soc_dai_probe,
 	.playback = {
 		.channels_min = 2,
 		.channels_max = 8,
@@ -738,15 +738,13 @@ fail:
 	return ret;
 }
 
-static int fsl_hdmi_dai_remove(struct platform_device *pdev)
+static void fsl_hdmi_dai_remove(struct platform_device *pdev)
 {
 	struct imx_hdmi *hdmi_data = platform_get_drvdata(pdev);
 
 	platform_device_unregister(hdmi_data->dma_dev);
 	platform_device_unregister(hdmi_data->codec_dev);
 	snd_soc_unregister_component(&pdev->dev);
-
-	return 0;
 }
 
 static const struct of_device_id fsl_hdmi_dai_dt_ids[] = {

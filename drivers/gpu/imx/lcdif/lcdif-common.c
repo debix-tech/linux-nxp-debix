@@ -18,7 +18,9 @@
 #include <linux/media-bus-format.h>
 #include <linux/mfd/syscon.h>
 #include <linux/module.h>
+#include <linux/of.h>
 #include <linux/of_device.h>
+#include <linux/of_platform.h>
 #include <linux/of_graph.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
@@ -757,11 +759,9 @@ static int imx_lcdif_probe(struct platform_device *pdev)
 	return lcdif_add_client_devices(lcdif);
 }
 
-static int imx_lcdif_remove(struct platform_device *pdev)
+static void imx_lcdif_remove(struct platform_device *pdev)
 {
 	pm_runtime_disable(&pdev->dev);
-
-	return 0;
 }
 
 #ifdef CONFIG_PM_SLEEP

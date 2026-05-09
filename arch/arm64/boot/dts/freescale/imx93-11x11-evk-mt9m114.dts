@@ -4,6 +4,11 @@
  */
 
 #include "imx93-11x11-evk.dts"
+#include <dt-bindings/media/video-interfaces.h>
+
+/delete-node/ &mipi_csi;
+/delete-node/ &dphy_rx;
+/delete-node/ &ap1302;
 
 / {
 	reg_mt9m114_dovdd: regulator-mt9m114-dovdd {
@@ -42,8 +47,8 @@
 	reg_mt9m114_extclk: regulator-mt9m114-extclk {
 		compatible = "regulator-fixed";
 		regulator-name = "mt9m114-extclk";
-		startup-delay-us = <1000>;
-		off-on-delay-us  = <0>;
+		startup-delay-us = <10000>;
+		off-on-delay-us  = <200>;
 		gpio = <&pca9538 3 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
 	};
@@ -59,9 +64,10 @@
 	reg_mt9m114_ctrl_4t245: regulator-mt9m114-ctrl-4t245 {
 		compatible = "regulator-fixed";
 		regulator-name = "mt9m114-ctrl-4t245";
+		startup-delay-us = <10000>;
+		off-on-delay-us  = <200>;
 		gpio = <&pca9538 5 GPIO_ACTIVE_HIGH>;
 		enable-active-low;
-		regulator-always-on;
 	};
 
 	reg_mt9m114_ctrl_16t245: regulator-mt9m114-ctrl-16t245 {
@@ -103,45 +109,43 @@
 	};
 };
 
-&cameradev {
-	parallel_csi;
-	status = "okay";
-};
-
-&isi_0 {
-	interface = <6 0 2>;
+&isi{
 	status = "okay";
 
-	cap_device {
-		status = "okay";
-	};
-};
-
-&parallel_csi {
-	#address-cells = <1>;
-	#size-cells = <0>;
-	status = "okay";
-
-	port@0 {
-		reg = <0>;
-		parallel_csi_ep: endpoint {
-			remote-endpoint = <&mt9m114_ep>;
+	port {
+		isi_in: endpoint {
+			remote-endpoint = <&parallel_csi_out>;
 		};
 	};
 };
 
-&mipi_csi {
-	status = "disabled";
+&parallel_csi {
+	status = "okay";
+
+	ports {
+		port@0 {
+			reg = <0>;
+
+			parallel_csi_in: endpoint {
+				remote-endpoint = <&mt9m114_ep>;
+			};
+		};
+
+		port@1 {
+			reg = <1>;
+
+			parallel_csi_out: endpoint {
+				remote-endpoint = <&isi_in>;
+			};
+		};
+	};
 };
 
 &lpi2c8 {
-	#address-cells = <1>;
-	#size-cells = <0>;
 	clock-frequency = <400000>;
-	pinctrl-names = "default", "sleep";
+	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpi2c8>;
-	pinctrl-1 = <&pinctrl_lpi2c8>;
-	pinctrl-assert-gpios = <&adp5585gpio 4 GPIO_ACTIVE_HIGH>;
+	pinctrl-assert-gpios = <&adp5585 4 GPIO_ACTIVE_HIGH>;
 	status = "okay";
 
 	pca9538: gpio@70 {
@@ -155,21 +159,22 @@
 	mt9m114: mt9m114@48 {
 		compatible = "on,mt9m114";
 		reg = <0x48>;
-		pinctrl-names    = "default";
-		pinctrl-0        = <&pinctrl_parallel_csi>;
-		reset-gpios      = <&gpio2 4 GPIO_ACTIVE_HIGH>;
-		powerdown-gpios  = <&gpio2 5 GPIO_ACTIVE_HIGH>;
-		DOVDD-supply     = <&reg_mt9m114_dovdd>;
-		AVDD-supply      = <&reg_mt9m114_avdd>;
-		DVDD-supply      = <&reg_mt9m114_dvdd>;
-		EXTCLK-supply    = <&reg_mt9m114_extclk>;
-		mclk             = <27000000>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_parallel_csi>;
+		reset-gpios = <&gpio2 4 GPIO_ACTIVE_HIGH>;
+		powerdown-gpios = <&gpio2 5 GPIO_ACTIVE_HIGH>;
+		DOVDD-supply = <&reg_mt9m114_dovdd>;
+		AVDD-supply = <&reg_mt9m114_avdd>;
+		DVDD-supply = <&reg_mt9m114_dvdd>;
+		EXTCLK-supply = <&reg_mt9m114_extclk>;
+		CTRL_4T245-supply = <&reg_mt9m114_ctrl_4t245>;
+		mclk = <27000000>;
 		status = "okay";
 
 		port {
 			mt9m114_ep: endpoint {
-				remote-endpoint = <&parallel_csi_ep>;
-				bus-type = <5>; /* V4L2_FWNODE_BUS_TYPE_PARALLEL */
+				remote-endpoint = <&parallel_csi_in>;
+				bus-type = <MEDIA_BUS_TYPE_PARALLEL>;
 				bus-width = <8>;
 				vsync-active = <1>;
 				hsync-active = <1>;
@@ -177,20 +182,4 @@
 			};
 		};
 	};
-};
-
-&adp5585_isp {
-	status = "disabled";
-};
-
-&ap1302 {
-	status = "disabled";
-};
-
-&sai3 {
-	status = "disabled";
-};
-
-&flexcan2 {
-	status = "disabled";
 };

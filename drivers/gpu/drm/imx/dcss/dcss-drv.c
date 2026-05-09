@@ -47,23 +47,22 @@ static int dcss_drv_init(struct device *dev, bool componentized)
 	struct dcss_drv *mdrv;
 	int err = 0;
 
-	mdrv = kzalloc(sizeof(*mdrv), GFP_KERNEL);
+	mdrv = devm_kzalloc(dev, sizeof(*mdrv), GFP_KERNEL);
 	if (!mdrv)
 		return -ENOMEM;
 
 	mdrv->is_componentized = componentized;
 
 	mdrv->dcss = dcss_dev_create(dev, componentized);
-	if (IS_ERR(mdrv->dcss)) {
-		err = PTR_ERR(mdrv->dcss);
-		goto err;
-	}
+	if (IS_ERR(mdrv->dcss))
+		return PTR_ERR(mdrv->dcss);
 
 	dev_set_drvdata(dev, mdrv);
 
 	mdrv->kms = dcss_kms_attach(mdrv->dcss, componentized);
 	if (IS_ERR(mdrv->kms)) {
 		err = PTR_ERR(mdrv->kms);
+		dev_err_probe(dev, err, "Failed to initialize KMS\n");
 		goto dcss_shutoff;
 	}
 
@@ -72,10 +71,6 @@ static int dcss_drv_init(struct device *dev, bool componentized)
 dcss_shutoff:
 	dcss_dev_destroy(mdrv->dcss);
 
-	dev_set_drvdata(dev, NULL);
-
-err:
-	kfree(mdrv);
 	return err;
 }
 
@@ -83,15 +78,8 @@ static void dcss_drv_deinit(struct device *dev, bool componentized)
 {
 	struct dcss_drv *mdrv = dev_get_drvdata(dev);
 
-	if (!mdrv)
-		return;
-
 	dcss_kms_detach(mdrv->kms, componentized);
 	dcss_dev_destroy(mdrv->dcss);
-
-	dev_set_drvdata(dev, NULL);
-
-	kfree(mdrv);
 }
 
 static int dcss_drv_bind(struct device *dev)
@@ -138,7 +126,7 @@ static int dcss_drv_platform_probe(struct platform_device *pdev)
 	return component_master_add_with_match(dev, &dcss_master_ops, match);
 }
 
-static int dcss_drv_platform_remove(struct platform_device *pdev)
+static void dcss_drv_platform_remove(struct platform_device *pdev)
 {
 	struct dcss_drv *mdrv = dev_get_drvdata(&pdev->dev);
 
@@ -146,8 +134,13 @@ static int dcss_drv_platform_remove(struct platform_device *pdev)
 		component_master_del(&pdev->dev, &dcss_master_ops);
 	else
 		dcss_drv_deinit(&pdev->dev, false);
+}
 
-	return 0;
+static void dcss_drv_platform_shutdown(struct platform_device *pdev)
+{
+	struct dcss_drv *mdrv = dev_get_drvdata(&pdev->dev);
+
+	dcss_kms_shutdown(mdrv->kms);
 }
 
 static struct dcss_type_data dcss_types[] = {
@@ -174,19 +167,14 @@ static const struct of_device_id dcss_of_match[] = {
 
 MODULE_DEVICE_TABLE(of, dcss_of_match);
 
-static const struct dev_pm_ops dcss_dev_pm = {
-	SET_SYSTEM_SLEEP_PM_OPS(dcss_dev_suspend, dcss_dev_resume)
-	SET_RUNTIME_PM_OPS(dcss_dev_runtime_suspend,
-			   dcss_dev_runtime_resume, NULL)
-};
-
 static struct platform_driver dcss_platform_driver = {
 	.probe	= dcss_drv_platform_probe,
-	.remove	= dcss_drv_platform_remove,
+	.remove_new = dcss_drv_platform_remove,
+	.shutdown = dcss_drv_platform_shutdown,
 	.driver	= {
 		.name = "imx-dcss",
 		.of_match_table	= dcss_of_match,
-		.pm = &dcss_dev_pm,
+		.pm = pm_ptr(&dcss_dev_pm_ops),
 	},
 };
 

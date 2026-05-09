@@ -6,7 +6,8 @@
 #include "space-info.h"
 #include "transaction.h"
 #include "block-group.h"
-#include "disk-io.h"
+#include "fs.h"
+#include "accessors.h"
 
 /*
  * HOW DO BLOCK RESERVES WORK
@@ -219,23 +220,21 @@ int btrfs_block_rsv_add(struct btrfs_fs_info *fs_info,
 	if (num_bytes == 0)
 		return 0;
 
-	ret = btrfs_reserve_metadata_bytes(fs_info, block_rsv, num_bytes, flush);
+	ret = btrfs_reserve_metadata_bytes(fs_info, block_rsv->space_info,
+					   num_bytes, flush);
 	if (!ret)
 		btrfs_block_rsv_add_bytes(block_rsv, num_bytes, true);
 
 	return ret;
 }
 
-int btrfs_block_rsv_check(struct btrfs_block_rsv *block_rsv, int min_factor)
+int btrfs_block_rsv_check(struct btrfs_block_rsv *block_rsv, int min_percent)
 {
 	u64 num_bytes = 0;
 	int ret = -ENOSPC;
 
-	if (!block_rsv)
-		return 0;
-
 	spin_lock(&block_rsv->lock);
-	num_bytes = div_factor(block_rsv->size, min_factor);
+	num_bytes = mult_perc(block_rsv->size, min_percent);
 	if (block_rsv->reserved >= num_bytes)
 		ret = 0;
 	spin_unlock(&block_rsv->lock);
@@ -244,17 +243,15 @@ int btrfs_block_rsv_check(struct btrfs_block_rsv *block_rsv, int min_factor)
 }
 
 int btrfs_block_rsv_refill(struct btrfs_fs_info *fs_info,
-			   struct btrfs_block_rsv *block_rsv, u64 min_reserved,
+			   struct btrfs_block_rsv *block_rsv, u64 num_bytes,
 			   enum btrfs_reserve_flush_enum flush)
 {
-	u64 num_bytes = 0;
 	int ret = -ENOSPC;
 
 	if (!block_rsv)
 		return 0;
 
 	spin_lock(&block_rsv->lock);
-	num_bytes = min_reserved;
 	if (block_rsv->reserved >= num_bytes)
 		ret = 0;
 	else
@@ -264,7 +261,8 @@ int btrfs_block_rsv_refill(struct btrfs_fs_info *fs_info,
 	if (!ret)
 		return 0;
 
-	ret = btrfs_reserve_metadata_bytes(fs_info, block_rsv, num_bytes, flush);
+	ret = btrfs_reserve_metadata_bytes(fs_info, block_rsv->space_info,
+					   num_bytes, flush);
 	if (!ret) {
 		btrfs_block_rsv_add_bytes(block_rsv, num_bytes, false);
 		return 0;
@@ -282,10 +280,10 @@ u64 btrfs_block_rsv_release(struct btrfs_fs_info *fs_info,
 	struct btrfs_block_rsv *target = NULL;
 
 	/*
-	 * If we are the delayed_rsv then push to the global rsv, otherwise dump
-	 * into the delayed rsv if it is not full.
+	 * If we are a delayed block reserve then push to the global rsv,
+	 * otherwise dump into the global delayed reserve if it is not full.
 	 */
-	if (block_rsv == delayed_rsv)
+	if (block_rsv->type == BTRFS_BLOCK_RSV_DELOPS)
 		target = global_rsv;
 	else if (block_rsv != global_rsv && !btrfs_block_rsv_full(delayed_rsv))
 		target = delayed_rsv;
@@ -324,31 +322,6 @@ void btrfs_block_rsv_add_bytes(struct btrfs_block_rsv *block_rsv,
 	spin_unlock(&block_rsv->lock);
 }
 
-int btrfs_cond_migrate_bytes(struct btrfs_fs_info *fs_info,
-			     struct btrfs_block_rsv *dest, u64 num_bytes,
-			     int min_factor)
-{
-	struct btrfs_block_rsv *global_rsv = &fs_info->global_block_rsv;
-	u64 min_bytes;
-
-	if (global_rsv->space_info != dest->space_info)
-		return -ENOSPC;
-
-	spin_lock(&global_rsv->lock);
-	min_bytes = div_factor(global_rsv->size, min_factor);
-	if (global_rsv->reserved < min_bytes + num_bytes) {
-		spin_unlock(&global_rsv->lock);
-		return -ENOSPC;
-	}
-	global_rsv->reserved -= num_bytes;
-	if (global_rsv->reserved < global_rsv->size)
-		global_rsv->full = false;
-	spin_unlock(&global_rsv->lock);
-
-	btrfs_block_rsv_add_bytes(dest, num_bytes, true);
-	return 0;
-}
-
 void btrfs_update_global_block_rsv(struct btrfs_fs_info *fs_info)
 {
 	struct btrfs_block_rsv *block_rsv = &fs_info->global_block_rsv;
@@ -368,28 +341,40 @@ void btrfs_update_global_block_rsv(struct btrfs_fs_info *fs_info)
 	read_lock(&fs_info->global_root_lock);
 	rbtree_postorder_for_each_entry_safe(root, tmp, &fs_info->global_root_tree,
 					     rb_node) {
-		if (root->root_key.objectid == BTRFS_EXTENT_TREE_OBJECTID ||
-		    root->root_key.objectid == BTRFS_CSUM_TREE_OBJECTID ||
-		    root->root_key.objectid == BTRFS_FREE_SPACE_TREE_OBJECTID) {
+		if (btrfs_root_id(root) == BTRFS_EXTENT_TREE_OBJECTID ||
+		    btrfs_root_id(root) == BTRFS_CSUM_TREE_OBJECTID ||
+		    btrfs_root_id(root) == BTRFS_FREE_SPACE_TREE_OBJECTID) {
 			num_bytes += btrfs_root_used(&root->root_item);
 			min_items++;
 		}
 	}
 	read_unlock(&fs_info->global_root_lock);
 
+	if (btrfs_fs_compat_ro(fs_info, BLOCK_GROUP_TREE)) {
+		num_bytes += btrfs_root_used(&fs_info->block_group_root->root_item);
+		min_items++;
+	}
+
+	if (btrfs_fs_incompat(fs_info, RAID_STRIPE_TREE)) {
+		num_bytes += btrfs_root_used(&fs_info->stripe_root->root_item);
+		min_items++;
+	}
+
 	/*
 	 * But we also want to reserve enough space so we can do the fallback
-	 * global reserve for an unlink, which is an additional 5 items (see the
-	 * comment in __unlink_start_trans for what we're modifying.)
+	 * global reserve for an unlink, which is an additional
+	 * BTRFS_UNLINK_METADATA_UNITS items.
 	 *
 	 * But we also need space for the delayed ref updates from the unlink,
-	 * so its 10, 5 for the actual operation, and 5 for the delayed ref
-	 * updates.
+	 * so add BTRFS_UNLINK_METADATA_UNITS units for delayed refs, one for
+	 * each unlink metadata item.
 	 */
-	min_items += 10;
+	min_items += BTRFS_UNLINK_METADATA_UNITS;
 
 	num_bytes = max_t(u64, num_bytes,
-			  btrfs_calc_insert_metadata_size(fs_info, min_items));
+			  btrfs_calc_insert_metadata_size(fs_info, min_items) +
+			  btrfs_calc_delayed_ref_bytes(fs_info,
+					       BTRFS_UNLINK_METADATA_UNITS));
 
 	spin_lock(&sinfo->lock);
 	spin_lock(&block_rsv->lock);
@@ -421,11 +406,12 @@ void btrfs_init_root_block_rsv(struct btrfs_root *root)
 {
 	struct btrfs_fs_info *fs_info = root->fs_info;
 
-	switch (root->root_key.objectid) {
+	switch (btrfs_root_id(root)) {
 	case BTRFS_CSUM_TREE_OBJECTID:
 	case BTRFS_EXTENT_TREE_OBJECTID:
 	case BTRFS_FREE_SPACE_TREE_OBJECTID:
 	case BTRFS_BLOCK_GROUP_TREE_OBJECTID:
+	case BTRFS_RAID_STRIPE_TREE_OBJECTID:
 		root->block_rsv = &fs_info->delayed_refs_rsv;
 		break;
 	case BTRFS_ROOT_TREE_OBJECTID:
@@ -482,8 +468,7 @@ static struct btrfs_block_rsv *get_block_rsv(
 
 	if (test_bit(BTRFS_ROOT_SHAREABLE, &root->state) ||
 	    (root == fs_info->uuid_root) ||
-	    (trans->adding_csums &&
-	     root->root_key.objectid == BTRFS_CSUM_TREE_OBJECTID))
+	    (trans->adding_csums && btrfs_root_id(root) == BTRFS_CSUM_TREE_OBJECTID))
 		block_rsv = trans->block_rsv;
 
 	if (!block_rsv)
@@ -507,7 +492,7 @@ struct btrfs_block_rsv *btrfs_use_block_rsv(struct btrfs_trans_handle *trans,
 
 	block_rsv = get_block_rsv(trans, root);
 
-	if (unlikely(block_rsv->size == 0))
+	if (unlikely(btrfs_block_rsv_size(block_rsv) == 0))
 		goto try_reserve;
 again:
 	ret = btrfs_block_rsv_use_bytes(block_rsv, blocksize);
@@ -538,8 +523,8 @@ again:
 				block_rsv->type, ret);
 	}
 try_reserve:
-	ret = btrfs_reserve_metadata_bytes(fs_info, block_rsv, blocksize,
-					   BTRFS_RESERVE_NO_FLUSH);
+	ret = btrfs_reserve_metadata_bytes(fs_info, block_rsv->space_info,
+					   blocksize, BTRFS_RESERVE_NO_FLUSH);
 	if (!ret)
 		return block_rsv;
 	/*
@@ -553,5 +538,36 @@ try_reserve:
 		if (!ret)
 			return global_rsv;
 	}
+
+	/*
+	 * All hope is lost, but of course our reservations are overly
+	 * pessimistic, so instead of possibly having an ENOSPC abort here, try
+	 * one last time to force a reservation if there's enough actual space
+	 * on disk to make the reservation.
+	 */
+	ret = btrfs_reserve_metadata_bytes(fs_info, block_rsv->space_info, blocksize,
+					   BTRFS_RESERVE_FLUSH_EMERGENCY);
+	if (!ret)
+		return block_rsv;
+
 	return ERR_PTR(ret);
+}
+
+int btrfs_check_trunc_cache_free_space(const struct btrfs_fs_info *fs_info,
+				       struct btrfs_block_rsv *rsv)
+{
+	u64 needed_bytes;
+	int ret;
+
+	/* 1 for slack space, 1 for updating the inode */
+	needed_bytes = btrfs_calc_insert_metadata_size(fs_info, 1) +
+		btrfs_calc_metadata_size(fs_info, 1);
+
+	spin_lock(&rsv->lock);
+	if (rsv->reserved < needed_bytes)
+		ret = -ENOSPC;
+	else
+		ret = 0;
+	spin_unlock(&rsv->lock);
+	return ret;
 }

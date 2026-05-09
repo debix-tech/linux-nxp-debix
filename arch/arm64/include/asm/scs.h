@@ -5,6 +5,7 @@
 #ifdef __ASSEMBLY__
 
 #include <asm/asm-offsets.h>
+#include <asm/sysreg.h>
 
 #ifdef CONFIG_SHADOW_CALL_STACK
 	scs_sp	.req	x18
@@ -24,6 +25,29 @@
 	.macro scs_save tsk
 	.endm
 #endif /* CONFIG_SHADOW_CALL_STACK */
+
+
+#else
+
+#include <linux/scs.h>
+#include <asm/cpufeature.h>
+
+#ifdef CONFIG_UNWIND_PATCH_PAC_INTO_SCS
+static inline void dynamic_scs_init(void)
+{
+	extern bool __pi_dynamic_scs_is_enabled;
+
+	if (__pi_dynamic_scs_is_enabled) {
+		pr_info("Enabling dynamic shadow call stack\n");
+		static_branch_enable(&dynamic_scs_enabled);
+	}
+}
+#else
+static inline void dynamic_scs_init(void) {}
+#endif
+
+int __pi_scs_patch(const u8 eh_frame[], int size);
+asmlinkage void __pi_scs_patch_vmlinux(void);
 
 #endif /* __ASSEMBLY __ */
 

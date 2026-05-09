@@ -38,13 +38,12 @@ static int memstick_dev_match(struct memstick_dev *card,
 	return 0;
 }
 
-static int memstick_bus_match(struct device *dev, struct device_driver *drv)
+static int memstick_bus_match(struct device *dev, const struct device_driver *drv)
 {
 	struct memstick_dev *card = container_of(dev, struct memstick_dev,
 						 dev);
-	struct memstick_driver *ms_drv = container_of(drv,
-						      struct memstick_driver,
-						      driver);
+	const struct memstick_driver *ms_drv = container_of_const(drv, struct memstick_driver,
+								  driver);
 	struct memstick_device_id *ids = ms_drv->id_table;
 
 	if (ids) {
@@ -57,10 +56,10 @@ static int memstick_bus_match(struct device *dev, struct device_driver *drv)
 	return 0;
 }
 
-static int memstick_uevent(struct device *dev, struct kobj_uevent_env *env)
+static int memstick_uevent(const struct device *dev, struct kobj_uevent_env *env)
 {
-	struct memstick_dev *card = container_of(dev, struct memstick_dev,
-						  dev);
+	const struct memstick_dev *card = container_of_const(dev, struct memstick_dev,
+							     dev);
 
 	if (add_uevent_var(env, "MEMSTICK_TYPE=%02X", card->id.type))
 		return -ENOMEM;
@@ -164,7 +163,7 @@ static struct attribute *memstick_dev_attrs[] = {
 };
 ATTRIBUTE_GROUPS(memstick_dev);
 
-static struct bus_type memstick_bus_type = {
+static const struct bus_type memstick_bus_type = {
 	.name           = "memstick",
 	.dev_groups	= memstick_dev_groups,
 	.match          = memstick_bus_match,
@@ -323,7 +322,7 @@ EXPORT_SYMBOL(memstick_init_req);
 static int h_memstick_read_dev_id(struct memstick_dev *card,
 				  struct memstick_request **mrq)
 {
-	struct ms_id_register id_reg;
+	struct ms_id_register id_reg = {};
 
 	if (!(*mrq)) {
 		memstick_init_req(&card->current_mrq, MS_TPC_READ_REG, &id_reg,
@@ -548,7 +547,6 @@ EXPORT_SYMBOL(memstick_add_host);
  */
 void memstick_remove_host(struct memstick_host *host)
 {
-	host->removing = 1;
 	flush_workqueue(workqueue);
 	mutex_lock(&host->lock);
 	if (host->card)
