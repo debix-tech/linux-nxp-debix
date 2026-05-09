@@ -16,13 +16,17 @@ debix@polyhex:$ tar xpf arm-gnu-toolchain-14.3.rel1-x86_64-aarch64-none-linux-gn
 ```
 
 ### Configure the compilation environment
-> export PATH=$PATH:/opt/toolchain/arm-gnu-toolchain-14.2.rel1-x86_64-aarch64-none-linux-gnu/bin
-> export ARCH=arm64
-> export CROSS_COMPILE=aarch64-none-linux-gnu-
+```
+export PATH=$PATH:/opt/toolchain/arm-gnu-toolchain-14.2.rel1-x86_64-aarch64-none-linux-gnu/bin
+export ARCH=arm64
+export CROSS_COMPILE=aarch64-none-linux-gnu-
+```
   
 ### build dtb Image
-> make imx_v8_defconfig
-> make -j32
+```
+make imx_v8_defconfig
+make -j32
+```
  
 compiled and generated
 arch/arm64/boot/dts/freescale/imx93-bmb-13-a1.dtb
