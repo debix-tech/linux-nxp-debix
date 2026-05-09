@@ -53,3 +53,9 @@ hci_uart-$(CONFIG_BT_HCIUART_AG6XX)	+= hci_ag6xx.o
 hci_uart-$(CONFIG_BT_HCIUART_MRVL)	+= hci_mrvl.o
 hci_uart-$(CONFIG_BT_HCIUART_AML)	+= hci_aml.o
 hci_uart-objs				:= $(hci_uart-y)
+##John_gao add for seekware bt
+obj-$(CONFIG_SKW_BT)        += skwbt.o
+skwbt-y                     := skw_btdriver.o
+skwbt-y                     += skw_btsnoop.o
+skwbt-y                     += skw_log.o
+skwbt-y                     += skw_common.o

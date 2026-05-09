@@ -505,4 +505,15 @@ config BT_INTEL_PCIE
 
 	  Say Y here to compiler support for Intel Bluetooth PCIe device into
 	  the kernel or say M to compile it as module (btintel_pcie)
+
+##John_gao add for seekware bt
+config SKW_BT
+        tristate "Seekwave BT driver"
+        depends on (SEEKWAVE_BSP_DRIVERS || SEEKWAVE_BSP_DRIVERS_V20) && MMC
+        help
+          The driver for seekwave Bluetooth chipsets .
+
+          Say Y here to compile support for Seekwave BT driver
+          into the kernel or say M to compile it as module.
+
 endmenu

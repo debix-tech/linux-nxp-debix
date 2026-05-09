@@ -1,0 +1,176 @@
+config WLAN_VENDOR_SEEKWAVE
+	tristate "Seekwave chipset 802.11ax support"
+	depends on CFG80211
+	select CFG80211_WEXT_EXPORT
+	help
+	This module adds support for SeekWave 802.11ax wireless adapter chipset.
+
+	If you have a wireless card belonging to this class, say Y.
+
+	Note that the answer to this question doesn't directly affect the
+	kernel: saying N will just cause the configurator to skip all the
+	questions about these cards. If you say Y, you will be asked for
+	your specific card in the following questions.
+
+if WLAN_VENDOR_SEEKWAVE
+config SKW_STA_SME_EXT
+	bool "Seekwave STA Mode External SME"
+	default y
+	help
+	Say Y here to enable external SME for STA mode
+
+config SKW_SAP_SME_EXT
+	bool "Seekwave Softap Mode External SME"
+	default y
+	help
+	Say Y here to enable external SME for SAP mode
+
+config SKW_SCAN_RANDOM_MAC
+	bool "Seekwave SCAN Random MAC"
+	default y
+	help
+	Say Y here to support random mac scan
+
+config SKW_LEGACY_P2P
+	bool "Seekwave Legacy P2P"
+	default n
+	help
+	Say Y here to create interface p2p0 default
+
+config SKW_TX_WORKQUEUE
+	bool "Seekwave TX Workqueue"
+	default y
+	help
+	Say Y here to support TX workqueue
+
+config SKW_REPEATER_MODE
+        bool "Seekwave Repeater Mode"
+        default n
+        help
+        Say Y here to support repeater mode
+
+config SKW_HIGH_PRIORITY
+	bool "Seekwave thread priority"
+	default y
+	help
+	Say Y here to set high priority
+
+config SKW_VENDOR
+	bool "Seekwave Vendor Command"
+	default y
+	help
+	Say Y here to enable vendor command
+
+config SKW_REGD_SELF_MANAGED
+	bool "Seekwave Regdomain"
+	depends on !SKW_DFS_MASTER
+	default y
+	help
+	Say Y here to support regdomain database in driver
+
+config SKW_TDLS
+	bool "Seekwave TDLS"
+	default n
+	help
+	Say Y here to enable TDLS
+
+config SKW_DFS_MASTER
+	bool "Seekwave DFS Master"
+	default n
+	help
+	Say Y here to support DFS master
+
+config SKW_EDMA
+	bool "Seekwave EDMA"
+	default n
+	help
+	Say Y here to support EDMA
+
+config SKW_OFFCHAN_TX
+	bool "Seekwave OFFCHAN TX"
+	default n
+	help
+	Say Y here to support off-channel TX
+
+config SKW_CALIB_DPD
+	bool "Seekwave DPD"
+	default n
+	help
+	Say Y here to support DPD
+
+config SKW_CALIB_APPEND_BUS_ID
+	bool "Seekwave Calib file name append BUS ID"
+	default y
+	help
+	Say Y here to append BUS ID
+
+config SKW_CALIB_APPEND_MODULE_ID
+	bool "Seekwave calib file name append module ID"
+	default y
+	help
+	Say Y here to append module ID
+
+
+config SKW_DEFAULT_COUNTRY
+	string "Seekwave Default Country Code"
+	default ""
+	help
+	Set Default Country Code
+
+config SKW_CHIP_ID
+	string "Seekwave Chip ID"
+	default ""
+	help
+	Set Chip ID
+
+config SKW_PROJECT_NAME
+	string "Seekwave Default Project Name"
+	default "SEEKWAVE"
+	help
+	Set Default Project Name
+
+config SKW_RX_REORDER_TIMEOUT
+	int "Seekwave reorder timeout (50-500)"
+	range 50 500
+	default 100
+
+choice
+	prompt "Seekwave Log Level"
+	default SKW_LOG_DEBUG
+	help
+	SEEKWAVE Log Level
+
+config SKW_LOG_ERROR
+	bool "ERROR"
+	help
+	This feature set Error log level
+
+config SKW_LOG_WARN
+	bool "WARN"
+	help
+	This feature set Warnning log level
+
+config SKW_LOG_INFO
+	bool "INFO"
+	help
+	This feature set INFO log level
+
+config SKW_LOG_DEBUG
+	bool "DEBUG"
+	help
+	This feature set DEBUG log level
+
+config SKW_LOG_DETAIL
+	bool "DETAIL"
+	help
+	This feature set DETAIL log level
+
+endchoice
+
+config SKW_SKB_RECYCLE
+	bool "SKW6316 skb recycle"
+	default y
+	help
+	Say Y here to support skb recycle
+
+endif

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0
-
+ifdef CONFIG_NXP_ALL_DTS
 dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-ls1012a-2g5rdb.dtb
 dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-ls1012a-frdm.dtb
 dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-ls1012a-frwy.dtb
@@ -958,3 +958,6 @@ dtb-$(CONFIG_ARCH_S32) += s32v234-evb.dtb \
 			  s32v234-sbc.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx8qm-mek-sof-cs42888.dtb imx8qm-mek-sof-wm8960.dtb \
 			  imx8qm-mek-revd-sof-wm8962.dtb imx8qm-mek-sof.dtb
+endif
+dtb-$(CONFIG_ARCH_MXC) += imx91-emb-13-a1.dtb
+dtb-$(CONFIG_ARCH_MXC) += imx93-emb-13-a1.dtb
