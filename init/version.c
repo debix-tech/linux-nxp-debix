@@ -35,7 +35,7 @@ early_param("hostname", early_hostname);
 
 #if 1
 //Debix John_gao set linux version
-#define polyhex_version "V1.0.1"
+#define polyhex_version "V1.0.2"
 
 const char linux_proc_banner[] =
         "%s version %s"
