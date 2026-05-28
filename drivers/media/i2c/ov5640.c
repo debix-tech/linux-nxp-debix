@@ -238,7 +238,9 @@ struct ov5640_dev {
 	struct v4l2_subdev sd;
 	struct media_pad pad;
 	struct v4l2_fwnode_endpoint ep; /* the parsed DT endpoint info */
+#if 0 // use exit clk
 	struct clk *xclk; /* system clock to OV5640 */
+#endif
 	u32 xclk_freq;
 
 	struct regulator_bulk_data supplies[OV5640_NUM_SUPPLIES];
@@ -2134,13 +2136,14 @@ static int ov5640_set_power_on(struct ov5640_dev *sensor)
 	struct i2c_client *client = sensor->i2c_client;
 	int ret;
 
+#if 0 // use exit clk
 	ret = clk_prepare_enable(sensor->xclk);
 	if (ret) {
 		dev_err(&client->dev, "%s: failed to enable clock\n",
 			__func__);
 		return ret;
 	}
-
+#endif
 	ret = regulator_bulk_enable(OV5640_NUM_SUPPLIES,
 				    sensor->supplies);
 	if (ret) {
@@ -2162,7 +2165,9 @@ power_off:
 	ov5640_power(sensor, false);
 	regulator_bulk_disable(OV5640_NUM_SUPPLIES, sensor->supplies);
 xclk_off:
+#if 0 // use exit clk
 	clk_disable_unprepare(sensor->xclk);
+#endif
 	return ret;
 }
 
@@ -2170,7 +2175,9 @@ static void ov5640_set_power_off(struct ov5640_dev *sensor)
 {
 	ov5640_power(sensor, false);
 	regulator_bulk_disable(OV5640_NUM_SUPPLIES, sensor->supplies);
+#if 0 // use exit clk
 	clk_disable_unprepare(sensor->xclk);
+#endif
 	sensor->streaming = false;
 }
 
@@ -3393,7 +3400,7 @@ static int ov5640_probe(struct i2c_client *client)
 		dev_err(dev, "Unsupported bus type %d\n", sensor->ep.bus_type);
 		return -EINVAL;
 	}
-
+#if 0 // use exit clk
 	/* get system clock (xclk) */
 	sensor->xclk = devm_clk_get(dev, "xclk");
 	if (IS_ERR(sensor->xclk)) {
@@ -3401,14 +3408,17 @@ static int ov5640_probe(struct i2c_client *client)
 		return PTR_ERR(sensor->xclk);
 	}
 
+	printk("GLS_CAM get rate %d Hz \n", clk_get_rate(sensor->xclk));
 	sensor->xclk_freq = clk_get_rate(sensor->xclk);
+#else
+	sensor->xclk_freq = 24000000;//clk_get_rate(sensor->xclk);
+#endif
 	if (sensor->xclk_freq < OV5640_XCLK_MIN ||
 	    sensor->xclk_freq > OV5640_XCLK_MAX) {
 		dev_err(dev, "xclk frequency out of range: %d Hz\n",
 			sensor->xclk_freq);
 		return -EINVAL;
 	}
-
 	/* request optional power down pin */
 	sensor->pwdn_gpio = devm_gpiod_get_optional(dev, "powerdown",
 						    GPIOD_OUT_HIGH);

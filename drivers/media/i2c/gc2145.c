@@ -81,8 +81,10 @@ struct gc2145_dev {
 	struct v4l2_subdev		sd;
 
 	struct media_pad		pad;
+#if 0 //use exit clk
 	struct clk			*xclk;
 	u32				xclk_freq;
+#endif
 //	struct regulator_bulk_data	supplies[gc2145_NUM_SUPPLIES];
 
 	//struct gpio_desc		*reset_gpio;
@@ -1422,7 +1424,9 @@ GLS("%s >>> \n",__func__);
 	//if (!sensor->is_enabled)
 	//	return 0;
 
+#if 0 //use exit clk
 	clk_disable_unprepare(sensor->xclk);  //fix soar at 20210906
+#endif
 	gc2145_power_down(sensor);
 	//regulator_bulk_disable(gc2145_NUM_SUPPLIES, sensor->supplies);
 	//sensor->is_enabled = false;
@@ -1447,11 +1451,13 @@ GLS("%s >>> \n",__func__);
 	} */
 
 
+#if 0 //use exit clk
 	ret = clk_prepare_enable(sensor->xclk);   //fix soar at 20210906
 	if (ret < 0){
 		printk("gc2415 open clk err\n");
 		return ret;
 	}
+#endif
 
 	//gc2145_power_down(sensor);
 	gc2145_power_up(sensor);
@@ -2042,7 +2048,8 @@ GLS("%s >>> \n",__func__);
         	return ret;
         }
     }
-#if 1
+
+#if 0 //use exit clk
 /* get system clock (xclk) */
         sensor->xclk = devm_clk_get(dev, "xclk");
         if (IS_ERR(sensor->xclk)) {
