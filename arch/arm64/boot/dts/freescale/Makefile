@@ -374,6 +374,9 @@ dtb-$(CONFIG_ARCH_MXC) += imx93-11x11-evk.dtb \
 			  imx93-debix-WF101JSYAHMNB0.dtb \
 			  imx93-debix-TD080B_Debix200A.dtb \
 			  imx93-debix-TD080B_Debix500A.dtb \
+			  imx93-debix-embas16.dtb \
+			  imx93-debix-embas16-500a.dtb \
+			  imx93-debix-embas16-200a.dtb \
 			  #imx93-debix-HC080IY28026-D60.C_Debix500A.dtb \
 			  imx93-debix-HC101IK25050-D59V.C_Debix500A.dtb \
 			  imx93-debix-HC101IK25050-D59V.C.dtb
