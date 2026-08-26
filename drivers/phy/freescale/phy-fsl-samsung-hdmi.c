@@ -129,6 +129,11 @@ static const struct phy_config phy_pll_cfg[] = {
 	}, {
 		.pixclk = 30888000,
 		.pll_div_regs = { 0x66, 0xf4, 0x99, 0x18, 0x88, 0x45 },
+	//John_gao add 3390000
+        }, {
+                .pixclk = 33900000, 
+		.pll_div_regs = { 0x70, 0xf4, 0x82, 0x01, 0x80, 0x40 },
+                        //end John_gao add 3390000
 	}, {
 		.pixclk = 33750000,
 		.pll_div_regs = { 0x70, 0xf4, 0x82, 0x01, 0x80, 0x40 },
@@ -159,6 +164,11 @@ static const struct phy_config phy_pll_cfg[] = {
 	}, {
 		.pixclk = 47500000,
 		.pll_div_regs = { 0x63, 0x96, 0xa1, 0x82, 0x80, 0x40 },
+	//John_gao add  50.250 MHz
+        }, {
+                .pixclk = 50250000, 
+		.pll_div_regs = { 0x54, 0x7c, 0xc3, 0x8f, 0x80, 0x40 },
+//end  John_gao add 50.250 MHz
 	}, {
 		.pixclk = 50349650,
 		.pll_div_regs = { 0x54, 0x7c, 0xc3, 0x8f, 0x80, 0x40 },

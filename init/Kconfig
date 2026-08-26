@@ -1,4 +1,10 @@
 # SPDX-License-Identifier: GPL-2.0-only
+config DEBIX_VERSION
+	string "debix board version"
+	default "1.0.0"
+	help 
+		This is Debix board version 
+
 config CC_VERSION_TEXT
 	string
 	default "$(CC_VERSION_TEXT)"

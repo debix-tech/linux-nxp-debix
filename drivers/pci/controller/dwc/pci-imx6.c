@@ -164,6 +164,11 @@ struct imx_lut_data {
 struct imx_pcie {
 	struct dw_pcie		*pci;
 	struct gpio_desc	*reset_gpiod;
+	/*Debix add for 4G AIO*/
+	struct gpio_desc	*vdd2v5_en;
+	struct gpio_desc	*vdd1v1_en;
+	struct gpio_desc	*vdd3v3_en;
+	/*end Debix add for 4G AIO*/
 	int			host_wake_irq;
 	bool			link_is_up;
 	bool			enable_ext_refclk;
@@ -1879,6 +1884,24 @@ static int imx_pcie_probe(struct platform_device *pdev)
 		return dev_err_probe(dev, PTR_ERR(imx_pcie->reset_gpiod),
 				     "unable to get reset gpio\n");
 	gpiod_set_consumer_name(imx_pcie->reset_gpiod, "PCIe reset");
+
+/*Debix add for 4G AIO*/
+	imx_pcie->vdd2v5_en = devm_gpiod_get_optional(dev, "vdd2v5_en", GPIOD_OUT_HIGH);
+	if (imx_pcie->vdd2v5_en) {
+		//printk("Debix_4g vdd2v5\n");
+		gpiod_set_value_cansleep(imx_pcie->vdd2v5_en,1);
+	}
+	imx_pcie->vdd1v1_en = devm_gpiod_get_optional(dev, "vdd1v1_en", GPIOD_OUT_HIGH);
+	if (imx_pcie->vdd1v1_en) {
+		//printk("Debix_4g vdd1v1\n");
+		gpiod_set_value_cansleep(imx_pcie->vdd1v1_en,1);
+	}
+	imx_pcie->vdd3v3_en = devm_gpiod_get_optional(dev, "vdd3v3_en", GPIOD_OUT_HIGH);
+	if (imx_pcie->vdd3v3_en) {
+		//printk("Debix_4g vdd3v3\n");
+		gpiod_set_value_cansleep(imx_pcie->vdd3v3_en,GPIOD_OUT_HIGH);
+	}
+/*end Debix add for 4G AIO*/
 
 	/* Fetch clocks */
 	imx_pcie->num_clks = devm_clk_bulk_get_all(dev, &imx_pcie->clks);

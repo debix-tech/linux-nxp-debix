@@ -29,10 +29,13 @@ make -j32
 ```
  
 compiled and generated
-arch/arm64/boot/dts/freescale/imx93-bmb-13-a1.dtb
-arch/arm64/boot/dts/freescale/imx91-bmb-13-a1.dtb
+arch/arm64/boot/dts/polyhex/imx8mp-debix-model-a.dtb
+arch/arm64/boot/dts/polyhex/debix-model-a/*.dtbo
 arch/arm64/boot/Image
 
 cp dtb and Image to Debix /boot/ complete kernel update
 
  
+### Configure dtbo through the/boot/debix.cfg file
+The overlays in the configuration are a. dtbo b. dtbo, which enables the combination of different devices
+

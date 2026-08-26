@@ -12,7 +12,7 @@
 #include <dt-bindings/interrupt-controller/arm-gic.h>
 #include <dt-bindings/thermal/thermal.h>
 
-#include "imx8mp-pinfunc.h"
+#include "../freescale/imx8mp-pinfunc.h"
 
 / {
 	interrupt-parent = <&gic>;
@@ -264,7 +264,7 @@
 		};
 
 		gpu_reserved: gpu_reserved@100000000 {
-			no-map;
+			no-map; 
 			reg = <0x1 0x00000000 0 0x10000000>;
 		};
 

@@ -1,0 +1,167 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2019 NXP
+ */
+
+/dts-v1/;
+/plugin/;
+#include "../../freescale/imx8mp-pinfunc.h"
+#include <dt-bindings/clock/imx8mp-clock.h>
+#include <dt-bindings/power/imx8mp-power.h>
+#include <dt-bindings/reset/imx8mp-reset.h>
+#include <dt-bindings/power/imx8mp-power.h>
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/interrupt-controller/arm-gic.h>
+#include <dt-bindings/thermal/thermal.h>
+#include <dt-bindings/usb/pd.h>
+
+&{/} {
+	gpio_leds:gpio-leds {
+		compatible = "gpio-leds";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_gpio_led>;
+
+		status {
+			label = "yellow:status";
+			gpios = <&gpio3 16 GPIO_ACTIVE_HIGH>;
+			default-state = "on";
+		};
+		lora_green {
+			label = "lora_green";
+			gpios = <&gpio5 28 GPIO_ACTIVE_HIGH>;
+			default-state = "on";
+		};
+		lora_red {
+			label = "lora_red";
+			gpios = <&gpio5 29 GPIO_ACTIVE_HIGH>;
+			default-state = "on";
+		};
+	};
+	
+  gpio-keys {
+		compatible = "gpio-keys";
+                pinctrl-names = "default";
+                pinctrl-0 = <&pinctrl_gpiokeys>;
+
+		BT_KEY {
+                        label = "BT_KEY";
+                        gpios = <&gpio3 23 GPIO_ACTIVE_LOW>;
+                        linux,code = <KEY_BLUETOOTH>;
+                        debounce-interval = <10>;
+                };
+
+  };
+  
+	reg_lora_board_3v3: regulator-lora {
+		compatible = "regulator-fixed";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_lora_board_3v3>;
+		regulator-name = "LORA_VDD_3V3";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&gpio3 20 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		regulator-always-on;
+	};
+
+	lora_en {
+		compatible = "polyhex-gpio";
+		status = "okay";
+		gpios_mode = <2>;
+		gpios_port_num = <1>;
+		gpios_pin0 = <&gpio3 22 GPIO_ACTIVE_HIGH>; /* lora en */
+		gpios_name = "lora_en";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_lora_en>;
+	};
+
+	lora_reset {
+		compatible = "polyhex-gpio";
+		status = "okay";
+		gpios_mode = <1>;
+		gpios_port_num = <1>;
+		gpios_pin0 = <&gpio1 11 GPIO_ACTIVE_HIGH>; /* lora reset */
+		gpios_name = "lora_reset";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_lora_reset>;
+	};
+	lora_rf_pwr {
+		compatible = "polyhex-gpio";
+		status = "okay";
+		gpios_mode = <1>;
+		gpios_port_num = <1>;
+		gpios_pin0 = <&gpio1 12 GPIO_ACTIVE_HIGH>; /* lora reset */
+		gpios_name = "lora_rf_pwr";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_lora_rf_pwr>;
+	};
+};
+
+&flexcan1 {
+	status = "disabled";//CAN1-TXD Used as LORA-PWR-EN And CAN1-RXD Used as BT_KEY
+	
+};
+
+&i2c4 {
+	status = "okay";
+	#address-cells = <1>;   // 显式覆盖继承值
+    	#size-cells = <0>;      // I2C 设备不需要 size 字段	
+	eeprom1: eeprom@50 {
+		status = "okay";
+		compatible = "atmel,24c02";
+		reg = <0x50>;
+		//reg = <0x0 0x50 0x1>;
+		pagesize = <16>;
+		vcc-supply = <&reg_lora_board_3v3>;
+	};
+};
+
+&i2c6 {
+	status = "disabled"; // i2c6_scl used as dx83e08 reset
+};
+
+&uart4 {
+	status = "disabled"; // uart4-txd used as green led, uart4-txd used as red led
+};
+
+&iomuxc {
+	pinctrl_gpiokeys: gpiokeygrp {
+		  fsl,pins = <
+			  MX8MP_IOMUXC_SAI5_RXD2__GPIO3_IO23 0x154
+			  >;
+	};
+	
+	pinctrl_gpio_led: gpioledgrp {
+		fsl,pins = <
+			MX8MP_IOMUXC_NAND_READY_B__GPIO3_IO16	0x140
+			MX8MP_IOMUXC_UART4_RXD__GPIO5_IO28 0x49
+			MX8MP_IOMUXC_UART4_TXD__GPIO5_IO29 0x49
+		>;
+	};
+
+	pinctrl_lora_board_3v3: lora3v3grp {
+		fsl,pins = <
+			MX8MP_IOMUXC_SAI5_RXC__GPIO3_IO20		0x16
+		>;
+	};
+	
+	pinctrl_lora_en: loraengrp {
+		fsl,pins = <
+			MX8MP_IOMUXC_SAI5_RXD1__GPIO3_IO22 	  0x19 // lora power
+		>;
+	};
+	
+	pinctrl_lora_reset: lorarstgrp {
+		fsl,pins = <
+			MX8MP_IOMUXC_GPIO1_IO11__GPIO1_IO11		0x19 // lora reset
+		>;
+	};
+	
+	pinctrl_lora_rf_pwr: lorarfpwrgrp {
+		fsl,pins = <
+			MX8MP_IOMUXC_GPIO1_IO12__GPIO1_IO12		0x19 // lora reset
+		>;
+	};
+	
+};

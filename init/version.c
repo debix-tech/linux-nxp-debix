@@ -31,15 +31,11 @@ static int __init early_hostname(char *arg)
 	return 0;
 }
 early_param("hostname", early_hostname);
-
-
-#if 1
-//Debix John_gao set linux version
-#define polyhex_version "V1.0.1"
+#ifdef CONFIG_DEBIX_VERSION
 
 const char linux_proc_banner[] =
         "%s version %s"
-        " (" polyhex_version ")"
+        " (" CONFIG_DEBIX_VERSION ")"
         " (" LINUX_COMPILER ") %s\n";
 
 #else

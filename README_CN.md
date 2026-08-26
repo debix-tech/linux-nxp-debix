@@ -29,10 +29,13 @@ make -j32
 ```
  
 生成文件
-arch/arm64/boot/dts/freescale/imx93-bmb-13-a1.dtb
-arch/arm64/boot/dts/freescale/imx91-bmb-13-a1.dtb
+arch/arm64/boot/dts/polyhex/imx8mp-debix-model-a.dtb
+arch/arm64/boot/dts/polyhex/debix-model-a/*.dtbo
 arch/arm64/boot/Image
 
 拷贝 dtb 和 Image 到Debix设备 /boot/ 目录里完成新内核更换。
+
+### 通过/boot/debix.cfg文件配置dtbo
+配置里面的overlays= a.dtbo b.dtbo实现不同设备的组合
 
  
