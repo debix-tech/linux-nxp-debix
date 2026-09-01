@@ -777,27 +777,11 @@ static int rad_panel_get_modes(struct drm_panel *panel,
 	return 1;
 }
 
-static int rad_bl_get_brightness(struct backlight_device *bl)
-{
-	struct mipi_dsi_device *dsi = bl_get_data(bl);
-	struct rad_panel *rad = mipi_dsi_get_drvdata(dsi);
-	u16 brightness;
-	int ret;
-
-	if (!rad->prepared)
-		return 0;
-
-	dsi->mode_flags &= ~MIPI_DSI_MODE_LPM;
-
-	ret = mipi_dsi_dcs_get_display_brightness(dsi, &brightness);
-	if (ret < 0)
-		return ret;
-
-	bl->props.brightness = brightness;
-
-	return brightness & 0xff;
-}
-static int delayBright = 1;
+/* #2026-09-01 rad_bl_get_brightness() removed: this panel answers the DCS
+ * "get display brightness" read with 0, and the op wrote that 0 back into
+ * bl->props.brightness, which is how the board came up at 12/255 and drifted
+ * to 0. Keep the cached props value instead.
+ */
 static int rad_bl_update_status(struct backlight_device *bl)
 {
 	struct mipi_dsi_device *dsi = bl_get_data(bl);
@@ -814,24 +798,20 @@ static int rad_bl_update_status(struct backlight_device *bl)
 	if (ret < 0)
 		return ret;
 
-	if (rad->backlight2) {
-		if(delayBright==1){
-			delayBright = 0;
-			msleep(1000);
-		}
-                rad->backlight2->props.power = FB_BLANK_UNBLANK;
-		
-		rad->backlight2->props.brightness = bl->props.brightness;
-                backlight_update_status(rad->backlight2);
-        }
-
+	/* #2026-09-01 do NOT copy this device's brightness into the pwm-backlight
+	 * (backlight2). rad_panel_enable()/disable() call backlight_enable() and
+	 * backlight_disable() on this device, so the copy ran on every panel
+	 * blank and unblank and overwrote whatever userspace (gsd-power) had set
+	 * on mipi_backlight - the "brightness resets after the screen sleeps"
+	 * bug. Power state for backlight2 is handled by the explicit
+	 * backlight_enable()/backlight_disable() calls in the panel ops.
+	 */
 
 	return 0;
 }
 
 static const struct backlight_ops rad_bl_ops = {
 	.update_status = rad_bl_update_status,
-	.get_brightness = rad_bl_get_brightness,
 };
 
 static const struct drm_panel_funcs rad_panel_funcs = {
